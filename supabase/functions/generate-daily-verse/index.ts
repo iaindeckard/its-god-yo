@@ -42,6 +42,19 @@ function similarity(a: string, b: string): number {
 
 const AGREEMENT_THRESHOLD = 0.35;
 
+// Cheap sentence-completeness heuristic. A single verse pulled out of context
+// can be a fragment that only makes sense with its neighbor. We can't detect
+// that with certainty, so we catch the common, detectable case: source verses
+// that do NOT end in terminal sentence punctuation (period/!/?) are very likely
+// mid-thought (a trailing comma/semicolon/colon -- colons especially almost
+// always introduce something continuing into the next verse). When this fails
+// we force needs_review regardless of AI agreement, and let a human judge.
+// Applied to the SOURCE verse text (KJV / RV1909), not the AI slang output.
+function endsWithTerminalPunctuation(text: string): boolean {
+  const trimmed = text.trim();
+  return /[.!?]["')]?$/.test(trimmed);
+}
+
 function buildPromptEn(verseRef: string, verseText: string): string {
   return `Translate this Bible verse (KJV) into language a teenager would actually text a friend -- current, authentic slang, but respectful of the meaning. Keep it short, like a real text message. Do not add commentary, just the translated verse.
 
@@ -156,7 +169,13 @@ Deno.serve(async (req: Request) => {
 
     const simScore = similarity(outputA, outputB);
     const agreementStatus = simScore >= AGREEMENT_THRESHOLD ? "agreed" : "disagreed";
-    const statusEs = agreementStatus === "agreed" ? "agreed" : "needs_review";
+    // Independent review triggers -- either one forces needs_review; a slot can
+    // have both. AI agreement does NOT override the completeness check: two AIs
+    // agreeing on a translation of an incomplete thought doesn't complete it.
+    const reasons: string[] = [];
+    if (agreementStatus === "disagreed") reasons.push("ai_disagreement");
+    if (!endsWithTerminalPunctuation(esVerse.text)) reasons.push("incomplete_sentence");
+    const statusEs = reasons.length > 0 ? "needs_review" : "agreed";
 
     const { data: updated, error: updErr } = await supa
       .from("daily_slots")
@@ -165,6 +184,7 @@ Deno.serve(async (req: Request) => {
         ai_output_b_es: outputB,
         agreement_status_es: agreementStatus,
         status_es: statusEs,
+        needs_review_reasons_es: reasons,
         updated_at: new Date().toISOString(),
       })
       .eq("scheduled_date", targetDate)
@@ -185,6 +205,7 @@ Deno.serve(async (req: Request) => {
       similarity_score: simScore,
       agreement_status_es: agreementStatus,
       slot_status_es: statusEs,
+      needs_review_reasons_es: reasons,
       daily_slot_id: updated.id,
     });
   }
@@ -233,7 +254,11 @@ Deno.serve(async (req: Request) => {
 
   const simScore = similarity(outputA, outputB);
   const agreementStatus = simScore >= AGREEMENT_THRESHOLD ? "agreed" : "disagreed";
-  const status = agreementStatus === "agreed" ? "agreed" : "needs_review";
+  // Independent review triggers -- see the Spanish path above for rationale.
+  const reasons: string[] = [];
+  if (agreementStatus === "disagreed") reasons.push("ai_disagreement");
+  if (!endsWithTerminalPunctuation(verseRow!.text)) reasons.push("incomplete_sentence");
+  const status = reasons.length > 0 ? "needs_review" : "agreed";
 
   const { data: slot, error: slotErr } = await supa
     .from("daily_slots")
@@ -244,6 +269,7 @@ Deno.serve(async (req: Request) => {
       ai_output_a: outputA,
       ai_output_b: outputB,
       agreement_status: agreementStatus,
+      needs_review_reasons: reasons,
       updated_at: new Date().toISOString(),
     }, { onConflict: "scheduled_date" })
     .select()
@@ -261,6 +287,7 @@ Deno.serve(async (req: Request) => {
     similarity_score: simScore,
     agreement_status: agreementStatus,
     slot_status: status,
+    needs_review_reasons: reasons,
     daily_slot_id: slot.id,
   });
 });
