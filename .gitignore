@@ -4,3 +4,12 @@ __pycache__/
 spa-rv1909.usfx.xml
 verses.json
 .env
+
+# --- Next.js web app ---
+node_modules/
+.next/
+out/
+.vercel/
+next-env.d.ts
+.env.local
+*.tsbuildinfo
