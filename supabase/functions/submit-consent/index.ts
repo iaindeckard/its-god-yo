@@ -80,6 +80,8 @@ interface Payload {
   dm_addon_price_id?: string;
   referral_code?: string;
   referral_discount_applied?: boolean;
+  promo_code?: string;
+  promo_promotion_code_id?: string;
   purchaser_email?: string;
   teen?: { first_name?: string; phone?: string };
   plus_one?: PlusOne | null;
@@ -173,6 +175,8 @@ Deno.serve(async (req: Request) => {
     dm_addon_price_id: p.dm_addon ? (p.dm_addon_price_id ?? null) : null,
     referral_code: p.referral_code?.trim() || null,
     referral_discount_applied: !!p.referral_discount_applied,
+    promo_code: p.promo_code?.trim() || null,
+    promo_promotion_code_id: p.promo_promotion_code_id?.trim() || null,
     purchaser_email: p.purchaser_email?.trim() || null,
     teen_consent_id: teenRow.id,
     plus_one_consent_id: plusOneId,

@@ -20,6 +20,8 @@ export interface ConsentPayload {
   dm_addon_price_id?: string | null;
   referral_code?: string | null;
   referral_discount_applied?: boolean;
+  promo_code?: string | null;
+  promo_promotion_code_id?: string | null;
   purchaser_email?: string | null;
   teen: { first_name: string; phone: string };
   plus_one?: {

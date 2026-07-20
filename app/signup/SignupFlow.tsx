@@ -64,6 +64,14 @@ export default function SignupFlow({
   const [referralInput, setReferralInput] = useState("");
   const [referralApplied, setReferralApplied] = useState(false);
 
+  // promo code (SEPARATE from referral, lives at the payment step)
+  const [promoInput, setPromoInput] = useState("");
+  const [promoBusy, setPromoBusy] = useState(false);
+  const [promoError, setPromoError] = useState<string | null>(null);
+  const [promo, setPromo] = useState<{
+    promotion_code_id: string; code: string; percent_off: number | null; amount_off: number | null; currency: string | null;
+  } | null>(null);
+
   // stripe
   const [stripeIds, setStripeIds] = useState<{ customer_id: string; setup_intent_id: string; payment_method_id: string } | null>(null);
 
@@ -107,7 +115,45 @@ export default function SignupFlow({
     setError(null);
     setTeenFirstName(""); setPurchaserEmail(""); setTeenPhone(""); setPrimaryAttest(false);
     setPoEnabled(false); setPoAttest(false); setStripeIds(null); setReferralApplied(false); setReferralInput("");
+    setPromo(null); setPromoInput(""); setPromoError(null);
   }
+
+  async function applyPromo() {
+    setPromoError(null);
+    setPromoBusy(true);
+    try {
+      const res = await fetch("/api/promo/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: promoInput.trim() }),
+      });
+      const data = await res.json();
+      if (data.valid) {
+        setPromo({
+          promotion_code_id: data.promotion_code_id,
+          code: data.code,
+          percent_off: data.percent_off ?? null,
+          amount_off: data.amount_off ?? null,
+          currency: data.currency ?? null,
+        });
+      } else {
+        setPromo(null);
+        setPromoError(s.promoInvalid);
+      }
+    } catch {
+      setPromoError(s.promoInvalid);
+    } finally {
+      setPromoBusy(false);
+    }
+  }
+
+  const promoLabel = promo
+    ? promo.percent_off != null
+      ? `${promo.percent_off}% off`
+      : promo.amount_off != null
+        ? `$${(promo.amount_off / 100).toFixed(2)} off`
+        : ""
+    : "";
 
   async function handleSubmit() {
     setError(null);
@@ -122,6 +168,8 @@ export default function SignupFlow({
         dm_addon_price_id: poEnabled ? DM_ADDON.price_id : null,
         referral_code: referralApplied ? referralInput.trim() : null,
         referral_discount_applied: referralApplied,
+        promo_code: promo?.code ?? null,
+        promo_promotion_code_id: promo?.promotion_code_id ?? null,
         purchaser_email: purchaserEmail.trim() || null,
         teen: { first_name: teenFirstName.trim(), phone: normalizePhone(teenPhone) },
         plus_one: poEnabled
@@ -435,6 +483,34 @@ export default function SignupFlow({
                     <span>−{money(discount)}</span>
                   </div>
                 )}
+                {promo && (
+                  <div className="summary-line">
+                    <span>{s.promoFieldLabel} ({promo.code})</span>
+                    <span>{promoLabel}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Promo code — a SEPARATE field from the referral code (which
+                  lives on its own earlier step). Placed here at payment, where a
+                  discount conceptually belongs, with distinct labelling so the
+                  two are never confused. */}
+              <div className="field" style={{ borderTop: "1px dashed var(--igy-line)", paddingTop: 16 }}>
+                <label>🎟️ {s.promoFieldLabel}</label>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input
+                    value={promoInput}
+                    onChange={(e) => { setPromoInput(e.target.value.toUpperCase()); setPromo(null); setPromoError(null); }}
+                    placeholder={s.promoFieldPlaceholder}
+                    style={{ flex: 1 }}
+                  />
+                  <button className="btn btn-ghost" onClick={applyPromo} disabled={promoBusy || !promoInput.trim()}>
+                    {promoBusy ? "…" : s.apply}
+                  </button>
+                </div>
+                {promo && <p className="hint" style={{ color: "var(--igy-blue)" }}>✓ {s.promoApplied}: {promoLabel}</p>}
+                {promoError && <p className="hint" style={{ color: "#a12626" }}>{promoError}</p>}
+                {!promo && !promoError && <p className="hint">{s.promoFieldHint}</p>}
               </div>
 
               {stripeIds ? (

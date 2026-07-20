@@ -115,6 +115,12 @@ export const t = {
     referralSkip: "Skip",
     apply: "Apply",
 
+    promoFieldLabel: "Promo code",
+    promoFieldPlaceholder: "e.g. WSULAUNCH25",
+    promoFieldHint: "A discount from us — separate from a referral code.",
+    promoApplied: "Promo applied",
+    promoInvalid: "That promo code isn't valid or has expired.",
+
     wPayTitle: "Save a payment method",
     wPaySub:
       "We save your card now but don't charge it. Billing only begins after the recipient confirms by text — with a 7-day free trial from that moment.",
@@ -226,6 +232,12 @@ export const t = {
     referralApplied: "¡10% de descuento aplicado!",
     referralSkip: "Omitir",
     apply: "Aplicar",
+
+    promoFieldLabel: "Código promocional",
+    promoFieldPlaceholder: "ej. WSULAUNCH25",
+    promoFieldHint: "Un descuento de nuestra parte — distinto de un código de referido.",
+    promoApplied: "Promo aplicado",
+    promoInvalid: "Ese código promocional no es válido o expiró.",
 
     wPayTitle: "Guarda un método de pago",
     wPaySub:
