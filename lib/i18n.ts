@@ -92,6 +92,15 @@ export const t = {
     wRecipientSub: "Just a first name for now — we'll ask for the phone number at the end.",
     recipientFirstName: "Recipient's first name",
     purchaserEmailLabel: "Your email (for receipts & updates)",
+    birthYearLabel: "Recipient's birth year",
+    birthYearHint: "Just the year — it determines which consent rules apply. We don't store a full date of birth.",
+    ageBlockTitle: "Not available yet",
+    ageBlockMsgTpl: "Sign-ups for people under {age} aren't available in {country} yet — we're still finalizing the consent requirements there. Please check back soon.",
+    ageBlockMsgNoCountry: "We couldn't confirm the country for this number, so we can't complete this sign-up right now.",
+    enhancedTitle: "Extra consent needed",
+    enhancedMsgTpl: "Because this recipient is under {age} in {country}, standard consent isn't enough — additional verification is required.",
+    enhancedTodo: "Pending: the exact verification method is being confirmed with our legal team. This shell collects intent only; it does not yet perform verified consent.",
+    enhancedAck: "I understand additional consent verification will be required before this can activate.",
 
     wPlusOneTitle: "Add a “DM from Him”?",
     wPlusOneSub:
@@ -210,6 +219,15 @@ export const t = {
     wRecipientSub: "Por ahora solo el nombre — el número lo pedimos al final.",
     recipientFirstName: "Nombre de la persona",
     purchaserEmailLabel: "Tu correo (para recibos y avisos)",
+    birthYearLabel: "Año de nacimiento de la persona",
+    birthYearHint: "Solo el año — determina qué reglas de consentimiento aplican. No guardamos la fecha completa.",
+    ageBlockTitle: "Aún no disponible",
+    ageBlockMsgTpl: "Las inscripciones para menores de {age} aún no están disponibles en {country} — seguimos finalizando los requisitos de consentimiento ahí. Vuelve pronto.",
+    ageBlockMsgNoCountry: "No pudimos confirmar el país de este número, así que no podemos completar esta inscripción ahora.",
+    enhancedTitle: "Se necesita consentimiento adicional",
+    enhancedMsgTpl: "Como esta persona es menor de {age} en {country}, el consentimiento estándar no es suficiente — se requiere verificación adicional.",
+    enhancedTodo: "Pendiente: el método exacto de verificación se está confirmando con nuestro equipo legal. Este formulario solo registra la intención; todavía no realiza el consentimiento verificado.",
+    enhancedAck: "Entiendo que se requerirá verificación de consentimiento adicional antes de activar esto.",
 
     wPlusOneTitle: "¿Agregar un “DM de Él”?",
     wPlusOneSub:

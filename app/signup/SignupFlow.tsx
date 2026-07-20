@@ -28,6 +28,22 @@ const TOTAL_DOTS = 7;
 
 const money = (n: number) => `$${n % 1 === 0 ? n.toFixed(0) : n.toFixed(2)}`;
 
+type Gate = {
+  decision: "standard" | "enhanced" | "block";
+  country: string | null;
+  age: number;
+  min_age: number;
+  confirmed: boolean;
+  mechanism: string | null;
+};
+const fillTpl = (tpl: string, vals: Record<string, string | number>) =>
+  tpl.replace(/\{(\w+)\}/g, (_, k) => String(vals[k] ?? ""));
+const validYear = (s: string) => {
+  const y = Number(s);
+  const now = new Date().getFullYear();
+  return Number.isInteger(y) && y >= now - 120 && y <= now;
+};
+
 export default function SignupFlow({
   initialLang,
   initialPlan,
@@ -49,6 +65,9 @@ export default function SignupFlow({
   // recipient / purchaser
   const [teenFirstName, setTeenFirstName] = useState("");
   const [purchaserEmail, setPurchaserEmail] = useState("");
+  const [teenBirthYear, setTeenBirthYear] = useState("");
+  const [teenGate, setTeenGate] = useState<Gate | null>(null);
+  const [teenEnhancedAck, setTeenEnhancedAck] = useState(false);
 
   // plus-one (DM from Him)
   const [poEnabled, setPoEnabled] = useState(false);
@@ -58,6 +77,9 @@ export default function SignupFlow({
   const [poGifterLast, setPoGifterLast] = useState("");
   const [poRecipientName, setPoRecipientName] = useState("");
   const [poRecipientPhone, setPoRecipientPhone] = useState("");
+  const [poBirthYear, setPoBirthYear] = useState("");
+  const [poGate, setPoGate] = useState<Gate | null>(null);
+  const [poEnhancedAck, setPoEnhancedAck] = useState(false);
   const [poAttest, setPoAttest] = useState(false);
 
   // referral
@@ -81,6 +103,34 @@ export default function SignupFlow({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ConsentResult | null>(null);
+
+  // Age-gate PREVIEW (the authoritative enforcement is server-side in
+  // submit-consent; this only drives which UI branch shows).
+  useEffect(() => {
+    let cancelled = false;
+    if (step === STEP.PHONE && teenPhone.trim() && validYear(teenBirthYear)) {
+      fetch("/api/age-gate/check", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: normalizePhone(teenPhone), birth_year: Number(teenBirthYear) }),
+      }).then((r) => (r.ok ? r.json() : null)).then((g) => { if (!cancelled) setTeenGate(g); }).catch(() => {});
+    } else {
+      setTeenGate(null);
+    }
+    return () => { cancelled = true; };
+  }, [step, teenPhone, teenBirthYear]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (poEnabled && poRecipientPhone.trim() && validYear(poBirthYear)) {
+      fetch("/api/age-gate/check", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: normalizePhone(poRecipientPhone), birth_year: Number(poBirthYear) }),
+      }).then((r) => (r.ok ? r.json() : null)).then((g) => { if (!cancelled) setPoGate(g); }).catch(() => {});
+    } else {
+      setPoGate(null);
+    }
+    return () => { cancelled = true; };
+  }, [poEnabled, poRecipientPhone, poBirthYear]);
 
   // ---- derived plan ----
   const band = planChoice === "group" ? bandForCount(teenCount) : null;
@@ -116,6 +166,8 @@ export default function SignupFlow({
     setTeenFirstName(""); setPurchaserEmail(""); setTeenPhone(""); setPrimaryAttest(false);
     setPoEnabled(false); setPoAttest(false); setStripeIds(null); setReferralApplied(false); setReferralInput("");
     setPromo(null); setPromoInput(""); setPromoError(null);
+    setTeenBirthYear(""); setTeenGate(null); setTeenEnhancedAck(false);
+    setPoBirthYear(""); setPoGate(null); setPoEnhancedAck(false);
   }
 
   async function applyPromo() {
@@ -171,7 +223,12 @@ export default function SignupFlow({
         promo_code: promo?.code ?? null,
         promo_promotion_code_id: promo?.promotion_code_id ?? null,
         purchaser_email: purchaserEmail.trim() || null,
-        teen: { first_name: teenFirstName.trim(), phone: normalizePhone(teenPhone) },
+        teen: {
+          first_name: teenFirstName.trim(),
+          phone: normalizePhone(teenPhone),
+          birth_year: Number(teenBirthYear),
+          enhanced_consent_ack: teenGate?.decision === "enhanced" ? teenEnhancedAck : undefined,
+        },
         plus_one: poEnabled
           ? {
               gifter_first_name: poGifterFirst.trim(),
@@ -180,7 +237,9 @@ export default function SignupFlow({
               gifter_relationship: poRelationship || undefined,
               recipient_first_name: poRecipientName.trim() || undefined,
               recipient_phone: normalizePhone(poRecipientPhone),
+              recipient_birth_year: Number(poBirthYear),
               attestation_confirmed: poAttest,
+              enhanced_consent_ack: poGate?.decision === "enhanced" ? poEnhancedAck : undefined,
             }
           : null,
         stripe: stripeIds ?? undefined,
@@ -349,12 +408,17 @@ export default function SignupFlow({
                 <input value={teenFirstName} onChange={(e) => setTeenFirstName(e.target.value)} autoFocus />
               </div>
               <div className="field">
+                <label>{s.birthYearLabel}</label>
+                <input type="number" inputMode="numeric" value={teenBirthYear} onChange={(e) => setTeenBirthYear(e.target.value)} placeholder="2010" min={new Date().getFullYear() - 120} max={new Date().getFullYear()} />
+                <p className="hint">{s.birthYearHint}</p>
+              </div>
+              <div className="field">
                 <label>{s.purchaserEmailLabel}</label>
                 <input type="email" value={purchaserEmail} onChange={(e) => setPurchaserEmail(e.target.value)} />
               </div>
               <div className="wizard-nav">
                 <button className="btn btn-ghost" onClick={() => setStep(STEP.PLAN)}>{s.back}</button>
-                <button className="btn btn-primary" disabled={!teenFirstName.trim()} onClick={() => setStep(STEP.PLUSONE)}>
+                <button className="btn btn-primary" disabled={!teenFirstName.trim() || !validYear(teenBirthYear)} onClick={() => setStep(STEP.PLUSONE)}>
                   {s.continue}
                 </button>
               </div>
@@ -413,6 +477,12 @@ export default function SignupFlow({
                     <label>{s.plusOneRecipientPhone}</label>
                     <input value={poRecipientPhone} onChange={(e) => setPoRecipientPhone(e.target.value)} placeholder="+1 555 123 4567" />
                   </div>
+                  <div className="field">
+                    <label>{s.birthYearLabel}</label>
+                    <input type="number" inputMode="numeric" value={poBirthYear} onChange={(e) => setPoBirthYear(e.target.value)} placeholder="2010" min={new Date().getFullYear() - 120} max={new Date().getFullYear()} />
+                    <p className="hint">{s.birthYearHint}</p>
+                  </div>
+                  <AgeGateNotice gate={poGate} lang={lang} ackChecked={poEnhancedAck} onAck={setPoEnhancedAck} />
                   <div className="consent-box">{ATTESTATION[lang](poRecipientName.trim() || (lang === "es" ? "esta persona" : "them"))}</div>
                   <div className="consent-box">{DISCLOSURE[lang](poRecipientName.trim() || (lang === "es" ? "Esta persona" : "They"))}</div>
                   <label className="check">
@@ -426,7 +496,14 @@ export default function SignupFlow({
                 <button className="btn btn-ghost" onClick={() => setStep(STEP.RECIPIENT)}>{s.back}</button>
                 <button
                   className="btn btn-primary"
-                  disabled={poEnabled && !(poGifterFirst.trim() && (poHonorific || poRelationship) && poRecipientPhone.trim() && poAttest)}
+                  disabled={
+                    poEnabled && !(
+                      poGifterFirst.trim() && (poHonorific || poRelationship) && poRecipientPhone.trim() && poAttest &&
+                      validYear(poBirthYear) &&
+                      poGate !== null && poGate.decision !== "block" &&
+                      (poGate.decision !== "enhanced" || poEnhancedAck)
+                    )
+                  }
                   onClick={() => setStep(STEP.REFERRAL)}
                 >
                   {s.continue}
@@ -543,23 +620,33 @@ export default function SignupFlow({
                 <label>{s.recipientPhone} — {teenFirstName}</label>
                 <input value={teenPhone} onChange={(e) => setTeenPhone(e.target.value)} placeholder="+1 555 123 4567" autoFocus />
               </div>
-              <p className="eyebrow">{s.attestationHeading}</p>
-              <div className="consent-box">{ATTESTATION[lang](teenFirstName.trim() || (lang === "es" ? "esta persona" : "them"))}</div>
-              <p className="eyebrow">{s.disclosureHeading}</p>
-              <div className="consent-box">{DISCLOSURE[lang](teenFirstName.trim() || (lang === "es" ? "Esta persona" : "They"))}</div>
-              <label className="check">
-                <input type="checkbox" checked={primaryAttest} onChange={(e) => setPrimaryAttest(e.target.checked)} />
-                <span>{s.iConfirm}</span>
-              </label>
+              <AgeGateNotice gate={teenGate} lang={lang} ackChecked={teenEnhancedAck} onAck={setTeenEnhancedAck} />
+              {teenGate?.decision !== "block" && (
+                <>
+                  <p className="eyebrow">{s.attestationHeading}</p>
+                  <div className="consent-box">{ATTESTATION[lang](teenFirstName.trim() || (lang === "es" ? "esta persona" : "them"))}</div>
+                  <p className="eyebrow">{s.disclosureHeading}</p>
+                  <div className="consent-box">{DISCLOSURE[lang](teenFirstName.trim() || (lang === "es" ? "Esta persona" : "They"))}</div>
+                  <label className="check">
+                    <input type="checkbox" checked={primaryAttest} onChange={(e) => setPrimaryAttest(e.target.checked)} />
+                    <span>{s.iConfirm}</span>
+                  </label>
+                </>
+              )}
               <div className="wizard-nav">
                 <button className="btn btn-ghost" onClick={() => setStep(STEP.PAY)}>{s.back}</button>
-                <button
-                  className="btn btn-primary"
-                  disabled={!teenPhone.trim() || !primaryAttest || submitting}
-                  onClick={handleSubmit}
-                >
-                  {submitting ? s.submitting : s.submitSignup}
-                </button>
+                {teenGate?.decision !== "block" && (
+                  <button
+                    className="btn btn-primary"
+                    disabled={
+                      !teenPhone.trim() || !primaryAttest || submitting || !validYear(teenBirthYear) ||
+                      teenGate === null || (teenGate.decision === "enhanced" && !teenEnhancedAck)
+                    }
+                    onClick={handleSubmit}
+                  >
+                    {submitting ? s.submitting : s.submitSignup}
+                  </button>
+                )}
               </div>
             </section>
           )}
@@ -581,6 +668,53 @@ export default function SignupFlow({
       </div>
     </main>
   );
+}
+
+/* ---------------- Age-gate notice (block / enhanced shell) ---------------- */
+function AgeGateNotice({
+  gate,
+  lang,
+  ackChecked,
+  onAck,
+}: {
+  gate: Gate | null;
+  lang: Lang;
+  ackChecked: boolean;
+  onAck: (b: boolean) => void;
+}) {
+  if (!gate) return null;
+  const s = t[lang];
+
+  if (gate.decision === "block") {
+    return (
+      <div className="error" role="alert">
+        <strong>{s.ageBlockTitle}</strong>
+        <p style={{ margin: "6px 0 0" }}>
+          {gate.country ? fillTpl(s.ageBlockMsgTpl, { age: gate.min_age, country: gate.country }) : s.ageBlockMsgNoCountry}
+        </p>
+      </div>
+    );
+  }
+
+  if (gate.decision === "enhanced") {
+    // Enhanced-consent SHELL only. It collects intent, NOT verified consent —
+    // the real mechanism is pending counsel and deliberately not built.
+    return (
+      <div className="consent-box" style={{ borderColor: "#efd9a0", background: "#fff8e8" }}>
+        <strong>{s.enhancedTitle}</strong>
+        <p style={{ margin: "6px 0" }}>{fillTpl(s.enhancedMsgTpl, { age: gate.min_age, country: gate.country ?? "" })}</p>
+        <p className="hint" style={{ color: "#8a5f1c" }}>
+          ⚠ TODO (pending counsel): {s.enhancedTodo}
+          {gate.mechanism ? ` [required_consent_mechanism: ${gate.mechanism}]` : ""}
+        </p>
+        <label className="check">
+          <input type="checkbox" checked={ackChecked} onChange={(e) => onAck(e.target.checked)} />
+          <span>{s.enhancedAck}</span>
+        </label>
+      </div>
+    );
+  }
+  return null; // standard -> no special notice
 }
 
 /* ---------------- Stripe payment sub-step ---------------- */

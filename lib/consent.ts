@@ -23,7 +23,7 @@ export interface ConsentPayload {
   promo_code?: string | null;
   promo_promotion_code_id?: string | null;
   purchaser_email?: string | null;
-  teen: { first_name: string; phone: string };
+  teen: { first_name: string; phone: string; birth_year?: number; enhanced_consent_ack?: boolean };
   plus_one?: {
     gifter_first_name?: string;
     gifter_last_name?: string;
@@ -31,7 +31,9 @@ export interface ConsentPayload {
     gifter_relationship?: string;
     recipient_first_name?: string;
     recipient_phone?: string;
+    recipient_birth_year?: number;
     attestation_confirmed?: boolean;
+    enhanced_consent_ack?: boolean;
   } | null;
   stripe?: { customer_id?: string; setup_intent_id?: string; payment_method_id?: string };
 }
