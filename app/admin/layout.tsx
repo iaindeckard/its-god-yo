@@ -10,6 +10,7 @@ const NAV = [
   { href: "/admin/promo-codes", label: "Promo codes", need: "billing.promo_codes.view" },
   { href: "/admin/review", label: "Review queue", need: "content.queue.view" },
   { href: "/admin/dashboard", label: "KPI dashboard", need: "analytics.dashboard.view" },
+  { href: "/admin/consent-thresholds", label: "Consent thresholds", need: "admin.consent_thresholds.manage" },
 ];
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
