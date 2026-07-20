@@ -69,7 +69,9 @@ interface PlusOne {
   gifter_relationship?: string;
   recipient_first_name?: string;
   recipient_phone?: string;
+  recipient_birth_year?: number;
   attestation_confirmed?: boolean;
+  enhanced_consent_ack?: boolean;
 }
 interface Payload {
   language?: string;
@@ -83,9 +85,79 @@ interface Payload {
   promo_code?: string;
   promo_promotion_code_id?: string;
   purchaser_email?: string;
-  teen?: { first_name?: string; phone?: string };
+  teen?: { first_name?: string; phone?: string; birth_year?: number; enhanced_consent_ack?: boolean };
   plus_one?: PlusOne | null;
   stripe?: { customer_id?: string; setup_intent_id?: string; payment_method_id?: string };
+}
+
+// ============================ AGE-CONSENT GATE ============================
+// Fail-safe by default. There is NO single hardcoded age. The self-consent age
+// for each country is read from age_consent_thresholds (the single source of
+// truth). Until a country's row is attorney_confirmed, anyone computed under the
+// strictest plausible default (16, the GDPR ceiling) is BLOCKED in that country.
+// This is the whole point: nothing legally risky can complete until counsel
+// confirms a country's real number. Enforced HERE (the one non-bypassable write
+// path), not just in the UI.
+const FAILSAFE_MIN_AGE = 16;
+
+// E.164 calling code -> ISO country. +1 (NANP) is treated as US for the launch;
+// other NANP countries aren't launch markets and fail safe anyway (no confirmed
+// row => under-16 blocked). Unknown prefix => null => fail-safe.
+const CALLING_CODE_TO_ISO: Record<string, string> = {
+  "1": "US", "52": "MX",
+  "44": "GB", "353": "IE", "49": "DE", "33": "FR", "34": "ES", "39": "IT", "351": "PT",
+  "31": "NL", "32": "BE", "41": "CH", "43": "AT", "46": "SE", "45": "DK", "47": "NO",
+  "358": "FI", "48": "PL", "55": "BR", "54": "AR", "57": "CO", "56": "CL", "51": "PE",
+  "61": "AU", "64": "NZ", "91": "IN", "81": "JP", "82": "KR", "86": "CN", "63": "PH",
+};
+
+function parseCountryFromPhone(phone: string): string | null {
+  const cleaned = phone.replace(/[^\d+]/g, "");
+  if (!cleaned.startsWith("+")) return null; // need E.164 to determine country reliably
+  const num = cleaned.slice(1);
+  for (const len of [3, 2, 1]) {
+    const code = num.slice(0, len);
+    if (CALLING_CODE_TO_ISO[code]) return CALLING_CODE_TO_ISO[code];
+  }
+  return null;
+}
+
+type GateDecision = "standard" | "enhanced" | "block";
+interface GateResult {
+  decision: GateDecision;
+  country: string | null;
+  age: number;
+  minAge: number;
+  confirmed: boolean;
+  reason: string;
+}
+
+function evaluateAgeGate(
+  phone: string,
+  birthYear: number,
+  currentYear: number,
+  thresholds: Map<string, { min: number; confirmed: boolean }>,
+): GateResult {
+  const country = parseCountryFromPhone(phone);
+  const age = currentYear - birthYear;
+  const row = country ? thresholds.get(country) : undefined;
+  const confirmed = row?.confirmed ?? false;
+  const minAge = row?.min ?? FAILSAFE_MIN_AGE;
+
+  if (!confirmed) {
+    // Unconfirmed / unknown country: fail safe. Block under the strictest
+    // plausible default; at/above it, standard attestation is safe because no
+    // jurisdiction's self-consent line exceeds 16.
+    if (age < FAILSAFE_MIN_AGE) {
+      return { decision: "block", country, age, minAge: FAILSAFE_MIN_AGE, confirmed, reason: "under_failsafe_unconfirmed_country" };
+    }
+    return { decision: "standard", country, age, minAge: FAILSAFE_MIN_AGE, confirmed, reason: "at_or_above_failsafe" };
+  }
+  // Attorney-confirmed country: use its real threshold (which may be below 16).
+  if (age >= minAge) {
+    return { decision: "standard", country, age, minAge, confirmed, reason: "at_or_above_confirmed_threshold" };
+  }
+  return { decision: "enhanced", country, age, minAge, confirmed, reason: "below_confirmed_threshold" };
 }
 
 Deno.serve(async (req: Request) => {
@@ -117,6 +189,65 @@ Deno.serve(async (req: Request) => {
     { auth: { persistSession: false } },
   );
 
+  // ---------------- AGE-CONSENT GATE (enforced before ANY writes) ----------------
+  const currentYear = new Date().getFullYear();
+  const validBirthYear = (y: unknown): number | null =>
+    typeof y === "number" && Number.isInteger(y) && y >= currentYear - 120 && y <= currentYear ? y : null;
+
+  const teenBirthYear = validBirthYear(p.teen?.birth_year);
+  if (teenBirthYear === null) return json(400, { error: "teen.birth_year is required (a 4-digit year)" });
+  let poBirthYear: number | null = null;
+  if (optedInPlusOne) {
+    poBirthYear = validBirthYear(p.plus_one!.recipient_birth_year);
+    if (poBirthYear === null) return json(400, { error: "plus_one.recipient_birth_year is required (a 4-digit year)" });
+  }
+
+  const { data: thrRows, error: thrErr } = await supa
+    .from("age_consent_thresholds")
+    .select("country_code, minimum_age_for_self_consent, attorney_confirmed");
+  if (thrErr) return json(500, { error: "failed_to_read_age_thresholds", detail: thrErr.message });
+  const thresholds = new Map<string, { min: number; confirmed: boolean }>();
+  for (const r of thrRows ?? []) thresholds.set(r.country_code, { min: r.minimum_age_for_self_consent, confirmed: r.attorney_confirmed });
+
+  const teenGate = evaluateAgeGate(p.teen!.phone!.trim(), teenBirthYear, currentYear, thresholds);
+  const poGate = optedInPlusOne ? evaluateAgeGate(p.plus_one!.recipient_phone!.trim(), poBirthYear!, currentYear, thresholds) : null;
+
+  const gates: Array<{ who: string; gate: GateResult; ack: boolean }> = [
+    { who: "teen", gate: teenGate, ack: p.teen?.enhanced_consent_ack === true },
+  ];
+  if (poGate) gates.push({ who: "plus_one", gate: poGate, ack: p.plus_one?.enhanced_consent_ack === true });
+
+  for (const g of gates) {
+    if (g.gate.decision === "block") {
+      return json(403, {
+        error: "age_consent_blocked",
+        who: g.who,
+        country: g.gate.country,
+        computed_age: g.gate.age,
+        min_age: g.gate.minAge,
+        message: g.gate.country
+          ? `Sign-ups for people under ${g.gate.minAge} aren't available in ${g.gate.country} yet.`
+          : `We couldn't confirm the country for this number, so sign-ups for people under ${g.gate.minAge} aren't available.`,
+        detail: g.gate.reason,
+      });
+    }
+    if (g.gate.decision === "enhanced" && !g.ack) {
+      // Attorney-confirmed country, recipient below its threshold: the standard
+      // purchaser attestation is NOT sufficient. Require the enhanced-consent
+      // shell to have been used. The actual mechanism is TODO pending counsel.
+      return json(422, {
+        error: "enhanced_consent_required",
+        who: g.who,
+        country: g.gate.country,
+        computed_age: g.gate.age,
+        threshold: g.gate.minAge,
+        message: "This recipient is below the confirmed self-consent age for their country. Standard attestation is not sufficient — TODO: pending confirmed consent mechanism from counsel.",
+      });
+    }
+  }
+  const teenGateDecision = teenGate.decision === "enhanced" ? "enhanced_pending_mechanism" : "standard";
+  const poGateDecision = poGate ? (poGate.decision === "enhanced" ? "enhanced_pending_mechanism" : "standard") : null;
+
   const teenName = p.teen!.first_name!.trim();
   const stubs: Array<{ kind: string; to: string; body: string }> = [];
 
@@ -133,6 +264,9 @@ Deno.serve(async (req: Request) => {
     disclosure_text: DISCLOSURE[lang](teenName),
     disclosure_text_version: CONSENT_VERSION,
     consent_status: "pending_confirmation",
+    recipient_birth_year: teenBirthYear,
+    recipient_country_code: teenGate.country,
+    age_gate_decision: teenGateDecision,
     // confirmation_sent_at intentionally left null -- SMS is stubbed, not sent.
   }).select("id").single();
   if (teenErr) return json(500, { error: "failed_to_write_teen_consent", detail: teenErr.message });
@@ -160,6 +294,9 @@ Deno.serve(async (req: Request) => {
       disclosure_text: DISCLOSURE[lang](poName),
       disclosure_text_version: CONSENT_VERSION,
       consent_status: "pending_confirmation",
+      recipient_birth_year: poBirthYear,
+      recipient_country_code: poGate!.country,
+      age_gate_decision: poGateDecision,
     }).select("id").single();
     if (poErr) return json(500, { error: "failed_to_write_plus_one_consent", detail: poErr.message });
     plusOneId = poRow.id;
@@ -195,6 +332,10 @@ Deno.serve(async (req: Request) => {
     pending_signup_id: signup.id,
     teen_consent_id: teenRow.id,
     plus_one_consent_id: plusOneId,
+    age_gate: {
+      teen: { country: teenGate.country, computed_age: teenGate.age, decision: teenGateDecision },
+      plus_one: poGate ? { country: poGate.country, computed_age: poGate.age, decision: poGateDecision } : null,
+    },
     sms_stubbed: true,
     sms_would_send: stubs,
     note: "No charge yet. Subscription is created after SMS confirmation (trial_end = 7d from that moment). SMS copy is the locked DM-from-Him template; only Twilio delivery is still TODO (bodies are composed and logged, not sent).",
