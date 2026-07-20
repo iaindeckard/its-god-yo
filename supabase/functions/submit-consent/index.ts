@@ -31,18 +31,34 @@ const DISCLOSURE: Record<string, (name: string) => string> = {
   es: (n) => `${n} recibirá un mensaje de texto pidiéndole que confirme — no podemos inscribir a nadie sin su propio consentimiento. Si no responde en 48 horas, te avisaremos para que puedas reenviar la invitación si lo deseas. Puedes reenviarla hasta 3 veces en un período de 30 días; después de eso, tendrías que empezar de nuevo. Nunca reenviaremos automáticamente ni seguiremos enviando mensajes a alguien que no ha respondido.`,
 };
 
-// Twilio stub. TODO(iain): replace with the LOCKED "DM from Him" SMS templates
-// (per honorific / relationship / neither mode, EN+ES) once provided + Twilio
-// creds. For now compose a clearly-marked placeholder and log it.
-function stubConfirmationSms(lang: string, recipientName: string, kind: "primary" | "plus_one", gifter?: { honorific?: string; first?: string; relationship?: string }) {
-  let who = "";
-  if (kind === "plus_one" && gifter) {
-    who = gifter.honorific?.trim() || [gifter.relationship, gifter.first].filter(Boolean).join(" ") || gifter.first || "someone who cares about you";
+// ---- Locked "DM from Him" confirmation-SMS templates (EN/ES), version-pinned
+// with the consent copy above. The lead-in is the SUBJECT of "thought you could
+// use..." and has three modes, in priority order:
+//   1) honorific present  -> "[Honorific] [Gifter first]"      e.g. "Fr. Michael"
+//   2) relationship only  -> "Your [Relationship] [Gifter first]" e.g. "Your Grandmother Linda"
+//   3) neither            -> "Someone who cares about you"
+// The primary subscriber carries no gifter data, so it always resolves to mode 3
+// (by design -- the locked spec's "neither" fallback covers exactly this case).
+// STOP/HELP stay in English in BOTH languages (carrier keyword requirement, not
+// a translation gap). Twilio is still not wired, so we compose the real body and
+// LOG it (stubbed delivery) rather than sending -- but the copy is now final.
+function smsLeadIn(lang: "en" | "es", gifter?: { honorific?: string; first?: string; relationship?: string }): string {
+  const honorific = gifter?.honorific?.trim();
+  const relationship = gifter?.relationship?.trim();
+  const first = gifter?.first?.trim();
+  if (honorific) return [honorific, first].filter(Boolean).join(" ");           // mode 1
+  if (relationship) {                                                            // mode 2
+    const your = lang === "es" ? "Tu" : "Your";
+    return [your, relationship, first].filter(Boolean).join(" ");
   }
+  return lang === "es" ? "Alguien que se preocupa por ti" : "Someone who cares about you"; // mode 3
+}
+function confirmationSms(lang: "en" | "es", recipientName: string, kind: "primary" | "plus_one", gifter?: { honorific?: string; first?: string; relationship?: string }): string {
+  const leadIn = smsLeadIn(lang, kind === "plus_one" ? gifter : undefined);
   const body = lang === "es"
-    ? `[STUB] Hola ${recipientName}, ${kind === "plus_one" ? `${who} ` : ""}te invitó a recibir un versículo diario de It's God, Yo. Responde SÍ para confirmar. (Plantilla oficial pendiente.)`
-    : `[STUB] Hey ${recipientName}, ${kind === "plus_one" ? `${who} ` : ""}invited you to get a daily verse from It's God, Yo. Reply YES to confirm. (Official template pending.)`;
-  console.log(`[submit-consent] SMS STUB (${kind}, ${lang}) -> ${recipientName}: ${body}`);
+    ? `¡Hola ${recipientName}! ${leadIn} piensa que te vendrían bien unas Buenas Nuevas cada día. Responde SÍ para recibir mensajes diarios de It's God, Yo! Aplican tarifas de mensajes y datos. Responde STOP para cancelar, HELP para ayuda.`
+    : `Hey ${recipientName}! ${leadIn} thought you could use some Good News every day. Reply YES to get daily texts from It's God, Yo! Msg & data rates may apply. Reply STOP to cancel, HELP for help.`;
+  console.log(`[submit-consent] SMS (${kind}, ${lang}, delivery stubbed) -> ${recipientName}: ${body}`);
   return body;
 }
 
@@ -103,7 +119,7 @@ Deno.serve(async (req: Request) => {
   const stubs: Array<{ kind: string; to: string; body: string }> = [];
 
   // 1) primary subscriber consent row (the teen)
-  const teenSms = stubConfirmationSms(lang, teenName, "primary");
+  const teenSms = confirmationSms(lang, teenName, "primary");
   stubs.push({ kind: "primary", to: p.teen!.phone!.trim(), body: teenSms });
   const { data: teenRow, error: teenErr } = await supa.from("consent_log").insert({
     recipient_phone: p.teen!.phone!.trim(),
@@ -124,7 +140,7 @@ Deno.serve(async (req: Request) => {
   if (optedInPlusOne) {
     const po = p.plus_one!;
     const poName = po.recipient_first_name?.trim() || "your friend";
-    const poSms = stubConfirmationSms(lang, poName, "plus_one", {
+    const poSms = confirmationSms(lang, poName, "plus_one", {
       honorific: po.gifter_honorific, first: po.gifter_first_name, relationship: po.gifter_relationship,
     });
     stubs.push({ kind: "plus_one", to: po.recipient_phone!.trim(), body: poSms });
@@ -177,6 +193,6 @@ Deno.serve(async (req: Request) => {
     plus_one_consent_id: plusOneId,
     sms_stubbed: true,
     sms_would_send: stubs,
-    note: "No charge yet. Subscription is created after SMS confirmation (trial_end = 7d from that moment). Twilio + locked DM-from-Him SMS templates still TODO.",
+    note: "No charge yet. Subscription is created after SMS confirmation (trial_end = 7d from that moment). SMS copy is the locked DM-from-Him template; only Twilio delivery is still TODO (bodies are composed and logged, not sent).",
   });
 });
