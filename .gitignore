@@ -1,0 +1,6 @@
+venv/
+__pycache__/
+*.pyc
+spa-rv1909.usfx.xml
+verses.json
+.env
