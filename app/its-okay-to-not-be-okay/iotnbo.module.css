@@ -1,0 +1,49 @@
+/* "It's okay to not be okay" — adapted from the USN page for IGY. Dark theme. */
+.page { background: #0B1830; color: #fff; min-height: 100vh; font-family: 'Poppins', system-ui, -apple-system, sans-serif; }
+.wrap { max-width: 760px; margin: 0 auto; padding: 0 24px; }
+.hero { padding: 72px 0 32px; text-align: center; }
+.eyebrow { color: #7ea8e0; font-weight: 700; font-size: 11px; letter-spacing: 0.28em; text-transform: uppercase; margin-bottom: 18px; }
+.hero h1 { font-size: 44px; line-height: 1.1; font-weight: 700; margin-bottom: 18px; }
+.hero h1 .teal { color: #6fd3c4; }
+.lead { color: #a9bad6; font-size: 18px; line-height: 1.6; max-width: 620px; margin: 0 auto; }
+
+.card { background: #111b30; border: 1px solid rgba(255,255,255,0.08); border-radius: 20px; padding: 32px; margin: 24px 0; }
+.founderTag { color: #FFD37A; font-weight: 700; font-size: 10px; letter-spacing: 0.28em; text-transform: uppercase; margin-bottom: 18px; }
+.card p { color: #a9bad6; line-height: 1.7; margin-bottom: 16px; }
+.card p.strong { color: #eaf1fb; font-size: 18px; }
+.sig { color: #7686a0; font-style: italic; font-size: 14px; margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.08); }
+
+.divider { display: flex; align-items: center; gap: 16px; margin: 48px 0 28px; }
+.divider span { color: rgba(169,186,214,0.5); font-weight: 700; font-size: 12px; letter-spacing: 0.24em; text-transform: uppercase; white-space: nowrap; }
+.divider .line { height: 1px; flex: 1; background: rgba(255,255,255,0.1); }
+
+.body p { color: #a9bad6; font-size: 17px; line-height: 1.7; margin-bottom: 20px; }
+.body em { color: #eaf1fb; font-style: italic; }
+.callout { background: rgba(55,138,221,0.08); border: 1px solid rgba(55,138,221,0.25); border-radius: 18px; padding: 28px; text-align: center; margin: 8px 0 24px; }
+.callout p { font-size: 20px; font-weight: 700; line-height: 1.5; color: #fff; margin: 0; }
+.callout .accent { color: #7ea8e0; }
+
+.resourceGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 8px 0 20px; }
+.resource { background: #111b30; border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 22px; }
+.resource .emoji { font-size: 26px; margin-bottom: 10px; }
+.resource h3 { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+.resource p { color: #a9bad6; font-size: 13.5px; line-height: 1.55; margin-bottom: 12px; }
+.resource strong { color: #fff; }
+.resource a { color: #7ea8e0; font-size: 13px; font-weight: 600; text-decoration: none; }
+.resource a:hover { text-decoration: underline; }
+
+.closing { background: #111b30; border: 1px solid rgba(255,255,255,0.08); border-radius: 18px; padding: 32px; text-align: center; margin-bottom: 24px; }
+.closing p { color: #a9bad6; line-height: 1.7; margin-bottom: 10px; }
+.closing .em { color: #eaf1fb; font-weight: 600; font-size: 18px; margin-bottom: 20px; }
+.closing a.email { display: inline-block; border: 1px solid rgba(255,211,122,0.3); color: #FFD37A; border-radius: 999px; padding: 10px 22px; font-weight: 500; font-size: 14px; text-decoration: none; }
+.closing a.email:hover { background: rgba(255,211,122,0.1); border-color: #FFD37A; }
+.closing .stay { color: rgba(169,186,214,0.55); font-size: 14px; margin-top: 28px; }
+
+.foot { text-align: center; padding: 16px 0 56px; }
+.foot a { color: #7ea8e0; font-size: 14px; text-decoration: none; }
+
+@media (max-width: 640px) {
+  .hero h1 { font-size: 32px; }
+  .resourceGrid { grid-template-columns: 1fr; }
+  .card, .closing { padding: 24px; }
+}
