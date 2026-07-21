@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Wordmark from "./Wordmark";
+import { PURCHASES_ENABLED } from "@/lib/flags";
 import s from "./landing.module.css";
 
 type Audience = "parent" | "teen";
@@ -64,6 +65,7 @@ export default function Landing() {
 
   function handleCta() {
     if (audience === "parent") {
+      if (!PURCHASES_ENABLED) return; // signups temporarily closed — no checkout
       window.location.href = "/signup";
       return;
     }
@@ -129,7 +131,9 @@ export default function Landing() {
             <a href="/?lang=es" className={s.lang}>Espa&ntilde;ol</a>
             <button className={s.switch} onClick={() => setAudience(audience === "parent" ? "teen" : "parent")}>{c!.switchLabel}</button>
             {audience === "parent"
-              ? <a href="/signup" className={s.btnWhite}>{c!.navCta}</a>
+              ? (PURCHASES_ENABLED
+                  ? <a href="/signup" className={s.btnWhite}>{c!.navCta}</a>
+                  : <span className={s.btnWhite} style={{ opacity: 0.55, cursor: "not-allowed" }} aria-disabled="true">Coming soon</span>)
               : <button className={s.btnWhite} onClick={handleCta}>{c!.navCta}</button>}
           </nav>
         </div>
@@ -145,10 +149,16 @@ export default function Landing() {
           <h1 dangerouslySetInnerHTML={{ __html: c!.headline }} />
           <p className={s.subhead}>{c!.subhead}</p>
           <div className={s.ctaRow}>
-            <button className={s.btnBlue} onClick={handleCta}>{c!.cta}</button>
+            {audience === "parent" && !PURCHASES_ENABLED
+              ? <button className={s.btnBlue} disabled style={{ opacity: 0.55, cursor: "not-allowed" }}>Coming soon</button>
+              : <button className={s.btnBlue} onClick={handleCta}>{c!.cta}</button>}
             <a href="#pricing" className={s.btnOutline}>See pricing</a>
           </div>
-          <div className={s.fineprint}>{c!.fineprint}</div>
+          <div className={s.fineprint}>
+            {audience === "parent" && !PURCHASES_ENABLED
+              ? "Signups aren't open just yet — you can look around, but you can't be charged. Check back soon."
+              : c!.fineprint}
+          </div>
 
           {audience === "teen" && showShare && (
             <div className={s.sharePanel}>

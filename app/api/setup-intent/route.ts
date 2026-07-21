@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
+import { PURCHASES_ENABLED } from "@/lib/flags";
 
 /**
  * Creates a Stripe Customer + SetupIntent so the browser can save a card WITHOUT
@@ -9,6 +10,11 @@ import { getStripe } from "@/lib/stripe";
  * setup_intent_id, which the client threads back into submit-consent.
  */
 export async function POST(req: Request) {
+  // TEMPORARY hard block — no SetupIntent (and therefore no Stripe card entry)
+  // can be created while purchases are disabled (see lib/flags.ts).
+  if (!PURCHASES_ENABLED) {
+    return NextResponse.json({ error: "coming_soon", message: "Signups aren't open yet." }, { status: 503 });
+  }
   let body: { email?: string; language?: string } = {};
   try {
     body = await req.json();
