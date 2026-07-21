@@ -1,0 +1,124 @@
+/* It's God, Yo — landing page (dark theme). Ported from the v12 mockup.
+   Scoped as a CSS module so none of these class names collide with the global
+   signup/admin styles in globals.css. The wordmark itself uses the global
+   .wordmark classes (see Wordmark component) via :global(). */
+
+.page { background: #0B1830; color: #fff; min-height: 100vh; }
+.wrap { max-width: 1200px; margin: 0 auto; padding: 0 40px; }
+
+/* wordmark message-bubble (dark card, tail bottom-left) */
+.wordmarkMsg { display: inline-block; background: #111b30; border: 1px solid rgba(255,255,255,0.08); border-radius: 24px 24px 24px 6px; padding: 20px 30px; }
+
+/* ---------- Gate ---------- */
+.gate { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; }
+.gateReceived { align-self: flex-start; margin-left: max(0px, calc(50% - 340px)); margin-bottom: 44px; }
+.gateReceived :global(.wordmark) { font-size: 36px; }
+.gateQuestion { font-size: 32px; font-weight: 700; margin-bottom: 12px; text-align: center; }
+.gateSub { font-size: 15px; color: #a9bad6; margin-bottom: 40px; max-width: 400px; text-align: center; }
+.gateChoices { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
+.gateCard { width: 230px; background: #111b30; border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 32px 24px; cursor: pointer; color: #fff; text-align: center; font: inherit; transition: border-color .15s, background .15s; }
+.gateCard:hover, .gateCard:focus-visible { border-color: #378ADD; background: #15223f; outline: none; }
+.gateIcon { width: 48px; height: 48px; border-radius: 50%; background: rgba(55,138,221,0.15); color: #7ea8e0; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; }
+.gateIcon svg { width: 24px; height: 24px; }
+.gateCardTitle { font-size: 16px; font-weight: 500; margin-bottom: 6px; }
+.gateCardBody { font-size: 12.5px; color: #a9bad6; line-height: 1.5; }
+
+/* ---------- Header / nav ---------- */
+.header { border-bottom: 1px solid rgba(255,255,255,0.06); }
+.navbar { display: flex; align-items: center; justify-content: space-between; padding: 20px 40px; max-width: 1200px; margin: 0 auto; }
+.navHome { font-size: 14px; font-weight: 500; color: #fff; cursor: pointer; background: none; border: none; font-family: inherit; padding: 0; }
+.navlinks { display: flex; align-items: center; gap: 24px; font-size: 13.5px; color: #c7d3e6; }
+.navlinks a { color: inherit; text-decoration: none; }
+.navlinks a:hover { color: #fff; }
+.iotnbo { color: #FFD37A !important; font-weight: 500; display: flex; align-items: center; gap: 5px; }
+.lang { color: #8fa0bd; }
+.switch { color: #7ea8e0; text-decoration: underline; cursor: pointer; background: none; border: none; font-family: inherit; font-size: inherit; padding: 0; }
+.btnWhite { background: #fff; color: #0B1830; padding: 9px 20px; border-radius: 24px; font-weight: 500; font-size: 13.5px; }
+
+/* ---------- Hero ---------- */
+.heroWordmarkRow { padding: 36px 0 0; }
+.heroWordmarkRow :global(.wordmark) { font-size: 34px; }
+.hero { position: relative; display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 48px; align-items: center; padding: 32px 0 48px; }
+.eyebrow { font-size: 12px; letter-spacing: 2px; color: #7ea8e0; font-weight: 700; margin-bottom: 14px; }
+.hero h1 { font-size: 48px; line-height: 1.08; font-weight: 700; margin-bottom: 18px; }
+.subhead { font-size: 16px; color: #a9bad6; line-height: 1.65; margin-bottom: 26px; max-width: 440px; }
+.ctaRow { display: flex; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+.btnBlue { background: #378ADD; color: #fff; padding: 13px 28px; border-radius: 24px; font-weight: 500; font-size: 14px; display: inline-block; border: none; cursor: pointer; font-family: inherit; }
+.btnOutline { border: 1px solid rgba(255,255,255,0.25); color: #fff; padding: 13px 28px; border-radius: 24px; font-weight: 500; font-size: 14px; display: inline-block; background: none; cursor: pointer; font-family: inherit; }
+.fineprint { font-size: 12px; color: #7686a0; }
+
+.smsCard { background: #111b30; border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 22px; }
+.smsLabel { font-size: 11px; color: #7686a0; margin-bottom: 10px; }
+.smsBubble { background: #378ADD; border-radius: 14px 14px 14px 2px; padding: 14px 16px; font-size: 14px; line-height: 1.5; max-width: 88%; margin-bottom: 12px; }
+.smsVerseLink { font-size: 12px; color: #7ea8e0; display: inline-flex; align-items: center; gap: 4px; }
+
+/* teen "show a parent" panel */
+.sharePanel { margin-top: 14px; background: #111b30; border: 1px solid rgba(255,255,255,0.1); border-radius: 14px; padding: 16px 18px; max-width: 440px; }
+.sharePanelTitle { font-size: 14px; font-weight: 500; margin-bottom: 4px; }
+.sharePanelSub { font-size: 12.5px; color: #a9bad6; margin-bottom: 12px; }
+.shareBtns { display: flex; gap: 10px; flex-wrap: wrap; }
+.shareBtn { background: rgba(55,138,221,0.15); color: #cfe0f6; border: 1px solid rgba(55,138,221,0.35); border-radius: 999px; padding: 8px 15px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+.shareBtn:hover { background: rgba(55,138,221,0.25); }
+.shareCopied { font-size: 12px; color: #7ee0a0; margin-top: 8px; }
+
+/* ---------- How it works ---------- */
+.sectionDark { background: #0a1224; padding: 44px 0; }
+.steps { display: grid; grid-template-columns: repeat(3,1fr); gap: 24px; }
+.stepIcon { width: 36px; height: 36px; border-radius: 8px; background: rgba(55,138,221,0.15); color: #7ea8e0; display: flex; align-items: center; justify-content: center; margin-bottom: 12px; }
+.stepIcon svg { width: 18px; height: 18px; }
+.stepTitle { font-weight: 500; font-size: 15px; margin-bottom: 6px; }
+.stepBody { font-size: 13px; color: #a9bad6; line-height: 1.55; }
+
+/* ---------- Which text we use ---------- */
+.sectionPlain { padding: 44px 0; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.translationCopy { font-size: 14.5px; color: #a9bad6; line-height: 1.65; margin-bottom: 20px; max-width: 600px; }
+.badges { display: flex; gap: 12px; }
+.badge { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 12px 18px; font-size: 13px; display: flex; align-items: center; gap: 10px; }
+.badge svg { width: 20px; height: 20px; flex-shrink: 0; opacity: 0.7; }
+.badge .label { font-weight: 500; margin-bottom: 2px; }
+.badge .value { color: #a9bad6; }
+
+/* ---------- Pricing ---------- */
+.pricingSection { padding: 48px 0; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.pricingGrid { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; margin-top: 24px; }
+.priceCard { background: #111b30; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 22px 20px; }
+.priceCard.featured { border-color: #378ADD; }
+.priceTag { display: inline-block; background: #378ADD; color: #fff; font-size: 11px; font-weight: 500; padding: 3px 10px; border-radius: 12px; margin-bottom: 10px; }
+.pricePlan { font-size: 15px; font-weight: 500; margin-bottom: 6px; }
+.priceAmount { font-size: 26px; font-weight: 700; margin-bottom: 4px; }
+.priceAmount span { font-size: 13px; font-weight: 400; color: #a9bad6; }
+.priceNote { font-size: 12.5px; color: #a9bad6; line-height: 1.5; }
+.priceExtra { font-size: 12px; color: #7ea8e0; margin-top: 8px; }
+
+/* ---------- It's okay to not be okay ---------- */
+.iotnboSection { padding: 36px 0; }
+.iotnboBanner { background: linear-gradient(90deg, rgba(255,211,122,0.12), rgba(255,211,122,0.03)); border: 1px solid rgba(255,211,122,0.25); border-radius: 14px; padding: 26px 32px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.iotnboLeft { display: flex; align-items: center; gap: 16px; }
+.iotnboIcon { width: 44px; height: 44px; border-radius: 50%; background: rgba(255,211,122,0.15); display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 20px; }
+.iotnboTitle { font-weight: 500; font-size: 16px; margin-bottom: 4px; }
+.iotnboBody { font-size: 13px; color: #a9bad6; }
+.btnGold { background: #FFD37A; color: #412402; padding: 11px 22px; border-radius: 24px; font-weight: 500; font-size: 13.5px; white-space: nowrap; display: inline-block; }
+
+/* ---------- Footer ---------- */
+.footer { background: #0a1224; padding: 32px 0; border-top: 1px solid rgba(255,255,255,0.06); }
+.footerRow { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #7686a0; flex-wrap: wrap; gap: 12px; }
+.footerLinks { display: flex; gap: 18px; }
+.footerLinks a { color: inherit; text-decoration: none; }
+.footerLinks a:hover { color: #c7d3e6; }
+.footerLinks .gold { color: #FFD37A; }
+
+@media (max-width: 820px) {
+  .wrap { padding: 0 20px; }
+  .navbar { padding: 18px 20px; flex-wrap: wrap; gap: 12px; }
+  .navlinks { gap: 14px; flex-wrap: wrap; }
+  .heroWordmarkRow :global(.wordmark) { font-size: 24px; }
+  .hero { grid-template-columns: 1fr; padding: 24px 0; }
+  .hero h1 { font-size: 34px; }
+  .steps { grid-template-columns: 1fr; }
+  .badges { flex-direction: column; }
+  .pricingGrid { grid-template-columns: 1fr 1fr; }
+  .iotnboBanner { flex-direction: column; align-items: flex-start; }
+  .gateQuestion { font-size: 24px; }
+  .gateReceived { margin-left: 0; align-self: center; }
+  .gateReceived :global(.wordmark) { font-size: 26px; }
+}
