@@ -586,13 +586,13 @@ export default function SignupFlow({
                   </button>
                 </div>
                 {promo && <p className="hint" style={{ color: "var(--igy-blue)" }}>✓ {s.promoApplied}: {promoLabel}</p>}
-                {promoError && <p className="hint" style={{ color: "#a12626" }}>{promoError}</p>}
+                {promoError && <p className="hint" style={{ color: "var(--igy-error-text)" }}>{promoError}</p>}
                 {!promo && !promoError && <p className="hint">{s.promoFieldHint}</p>}
               </div>
 
               {stripeIds ? (
                 <>
-                  <div className="consent-box" style={{ background: "#eaf7ee", borderColor: "#bfe3c9", color: "#256b39" }}>
+                  <div className="consent-box" style={{ background: "var(--igy-success-bg)", borderColor: "var(--igy-success-border)", color: "var(--igy-success-text)" }}>
                     ✓ {lang === "es" ? "Tarjeta guardada (sin cobro)." : "Card saved (no charge)."}
                   </div>
                   <div className="wizard-nav">
@@ -700,10 +700,10 @@ function AgeGateNotice({
     // Enhanced-consent SHELL only. It collects intent, NOT verified consent —
     // the real mechanism is pending counsel and deliberately not built.
     return (
-      <div className="consent-box" style={{ borderColor: "#efd9a0", background: "#fff8e8" }}>
+      <div className="consent-box" style={{ borderColor: "var(--igy-caution-border)", background: "var(--igy-caution-bg)" }}>
         <strong>{s.enhancedTitle}</strong>
         <p style={{ margin: "6px 0" }}>{fillTpl(s.enhancedMsgTpl, { age: gate.min_age, country: gate.country ?? "" })}</p>
-        <p className="hint" style={{ color: "#8a5f1c" }}>
+        <p className="hint" style={{ color: "var(--igy-caution-text)" }}>
           ⚠ TODO (pending counsel): {s.enhancedTodo}
           {gate.mechanism ? ` [required_consent_mechanism: ${gate.mechanism}]` : ""}
         </p>

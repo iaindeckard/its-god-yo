@@ -27,7 +27,7 @@ export default async function Home({
               <Wordmark tone="brass" />
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-              <Link href={`/?lang=${other}`} style={{ color: "#bcd3ef", fontWeight: 600 }}>
+              <Link href={`/?lang=${other}`} style={{ color: "var(--igy-on-dark-muted)", fontWeight: 600 }}>
                 {other === "es" ? "Español" : "English"}
               </Link>
               <Link className="btn btn-light" href={signupHref}>
@@ -38,7 +38,7 @@ export default async function Home({
 
           <div className="hero-grid">
             <div>
-              <p className="eyebrow" style={{ color: "#8fb4e6" }}>
+              <p className="eyebrow" style={{ color: "var(--igy-on-dark-eyebrow)" }}>
                 {s.tagline}
               </p>
               <h1>{s.heroTitle}</h1>
@@ -47,7 +47,7 @@ export default async function Home({
                 <Link className="btn btn-primary" href={signupHref}>
                   {s.getStarted}
                 </Link>
-                <a className="btn btn-ghost" href="#pricing" style={{ color: "#eaf1fb", borderColor: "#3a5a86" }}>
+                <a className="btn btn-ghost" href="#pricing" style={{ color: "var(--igy-on-dark)", borderColor: "var(--igy-on-dark-border)" }}>
                   {s.seePricing}
                 </a>
               </div>
