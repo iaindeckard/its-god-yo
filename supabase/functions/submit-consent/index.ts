@@ -324,6 +324,40 @@ Deno.serve(async (req: Request) => {
   }).select("id").single();
   if (signupErr) return json(500, { error: "failed_to_write_pending_signup", detail: signupErr.message });
 
+  // 4) Deliver the confirmation SMS(es) via Twilio IF credentials are present.
+  //    Until the Twilio account is verified/credentialed this is a no-op and we
+  //    keep the stub behavior (bodies composed + logged above, not sent).
+  const twilioSid = Deno.env.get("TWILIO_ACCOUNT_SID");
+  const twilioToken = Deno.env.get("TWILIO_AUTH_TOKEN");
+  const twilioFrom = Deno.env.get("TWILIO_FROM_NUMBER");
+  const consentIdByKind: Record<string, string> = { primary: teenRow.id, ...(plusOneId ? { plus_one: plusOneId } : {}) };
+  let sentCount = 0;
+  const sendErrors: Array<{ to: string; error: string }> = [];
+  if (twilioSid && twilioToken && twilioFrom) {
+    for (const s of stubs) {
+      try {
+        const resp = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`, {
+          method: "POST",
+          headers: {
+            Authorization: "Basic " + btoa(`${twilioSid}:${twilioToken}`),
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: new URLSearchParams({ From: twilioFrom, To: s.to, Body: s.body }).toString(),
+        });
+        if (!resp.ok) {
+          sendErrors.push({ to: s.to, error: `${resp.status} ${(await resp.text()).slice(0, 180)}` });
+          continue;
+        }
+        sentCount++;
+        const cid = consentIdByKind[s.kind];
+        if (cid) await supa.from("consent_log").update({ confirmation_sent_at: new Date().toISOString() }).eq("id", cid);
+      } catch (e) {
+        sendErrors.push({ to: s.to, error: e instanceof Error ? e.message : "send_failed" });
+      }
+    }
+  }
+  const smsSent = sentCount > 0;
+
   return json(200, {
     status: "submitted",
     message: lang === "es"
@@ -336,8 +370,12 @@ Deno.serve(async (req: Request) => {
       teen: { country: teenGate.country, computed_age: teenGate.age, decision: teenGateDecision },
       plus_one: poGate ? { country: poGate.country, computed_age: poGate.age, decision: poGateDecision } : null,
     },
-    sms_stubbed: true,
-    sms_would_send: stubs,
-    note: "No charge yet. Subscription is created after SMS confirmation (trial_end = 7d from that moment). SMS copy is the locked DM-from-Him template; only Twilio delivery is still TODO (bodies are composed and logged, not sent).",
+    sms_stubbed: !smsSent,
+    sms_sent_count: sentCount,
+    sms_would_send: smsSent ? undefined : stubs,
+    sms_send_errors: sendErrors.length ? sendErrors : undefined,
+    note: smsSent
+      ? "No charge yet. Confirmation SMS sent; the subscription is created after the recipient replies YES (trial_end = 7d from that moment)."
+      : "No charge yet, and Twilio is not credentialed — the confirmation SMS was composed + logged but NOT sent. Set TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / TWILIO_FROM_NUMBER to enable delivery.",
   });
 });
