@@ -27,7 +27,7 @@ export default async function DashboardPage() {
           <div className="k-label">Active subscribers</div>
           <div className="k-value">{d.activeSubscribers.total}</div>
           {d.stripeError ? (
-            <div className="k-sub" style={{ color: "#a12626" }}>Stripe: {d.stripeError}</div>
+            <div className="k-sub" style={{ color: "var(--igy-error-text)" }}>Stripe: {d.stripeError}</div>
           ) : d.activeSubscribers.byTier.length ? (
             <ul className="breakdown">
               {d.activeSubscribers.byTier.map((t) => (
