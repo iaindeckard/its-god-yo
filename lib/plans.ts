@@ -1,19 +1,23 @@
 /**
  * Plan catalog — the single source of truth the UI reads. Price IDs come from
  * NEXT_PUBLIC_* env (see .env.example / config/stripe-prices.json); the literals
- * here are the committed TEST-mode fallbacks so the app runs without a .env.local
- * during local dev. `plan_key` + `base_price_id` are exactly what the
- * submit-consent Edge Function expects.
+ * here are the committed TEST-mode (sandbox account) fallbacks so the app runs
+ * without a .env.local during local dev. `plan_key` + `base_price_id` are exactly
+ * what the submit-consent Edge Function expects.
+ *
+ * IMPORTANT: each price MUST reference process.env.NEXT_PUBLIC_PRICE_* as a
+ * LITERAL member expression (not via a dynamic `process.env[key]` helper). Next.js
+ * only inlines literal NEXT_PUBLIC_* references into the CLIENT bundle; a dynamic
+ * lookup silently resolves to the fallback on the client, which would ship the
+ * sandbox price IDs to a live build. Keep these literal.
  *
  * DM-from-Him is ALWAYS its own separate monthly item ($1.99/mo), independent of
  * the base plan's cadence — never folded into the base price.
  */
-const env = (k: string, fallback: string) =>
-  (typeof process !== "undefined" && process.env[k]) || fallback;
 
 export const DM_ADDON = {
   plan_key: "dm_addon_monthly",
-  price_id: env("NEXT_PUBLIC_PRICE_DM_ADDON_MONTHLY", "price_1TvePrGYyfOIjQvM1w2NJZ2u"),
+  price_id: process.env.NEXT_PUBLIC_PRICE_DM_ADDON_MONTHLY || "price_1TvePrGYyfOIjQvM1w2NJZ2u",
   amount: 1.99,
   interval: "month" as const,
 };
@@ -37,25 +41,25 @@ export interface Plan {
 export const PLANS: Record<Exclude<PlanKey, "group">, Plan> & { individual_monthly: Plan } = {
   individual_monthly: {
     key: "individual_monthly",
-    price_id: env("NEXT_PUBLIC_PRICE_INDIVIDUAL_MONTHLY", "price_1TvePoGYyfOIjQvMi7r2wXD3"),
+    price_id: process.env.NEXT_PUBLIC_PRICE_INDIVIDUAL_MONTHLY || "price_1TvePoGYyfOIjQvMi7r2wXD3",
     amount: 6.99,
     interval: "month",
   },
   individual_annual: {
     key: "individual_annual",
-    price_id: env("NEXT_PUBLIC_PRICE_INDIVIDUAL_ANNUAL", "price_1TvePpGYyfOIjQvMDxEJsqNe"),
+    price_id: process.env.NEXT_PUBLIC_PRICE_INDIVIDUAL_ANNUAL || "price_1TvePpGYyfOIjQvMDxEJsqNe",
     amount: 59.0,
     interval: "year",
   },
   family_annual: {
     key: "family_annual",
-    price_id: env("NEXT_PUBLIC_PRICE_FAMILY_ANNUAL", "price_1TvePpGYyfOIjQvMDbu9cFli"),
+    price_id: process.env.NEXT_PUBLIC_PRICE_FAMILY_ANNUAL || "price_1TvePpGYyfOIjQvMDbu9cFli",
     amount: 99.0,
     interval: "year",
   },
   gift_annual: {
     key: "gift_annual",
-    price_id: env("NEXT_PUBLIC_PRICE_GIFT_ANNUAL", "price_1TvePqGYyfOIjQvMErLxfVjd"),
+    price_id: process.env.NEXT_PUBLIC_PRICE_GIFT_ANNUAL || "price_1TvePqGYyfOIjQvMErLxfVjd",
     amount: 59.0,
     interval: "year",
   },
@@ -80,9 +84,9 @@ export interface GroupBand {
   max: number;
 }
 export const GROUP_BANDS: GroupBand[] = [
-  { band_key: "group_1_50", price_id: env("NEXT_PUBLIC_PRICE_GROUP_1_50", "price_1TvePqGYyfOIjQvM4sSSy0mi"), amount: 28, min: 1, max: 50 },
-  { band_key: "group_51_150", price_id: env("NEXT_PUBLIC_PRICE_GROUP_51_150", "price_1TvePqGYyfOIjQvMNuPHE8SF"), amount: 32, min: 51, max: 150 },
-  { band_key: "group_151_300", price_id: env("NEXT_PUBLIC_PRICE_GROUP_151_300", "price_1TvePrGYyfOIjQvMJUcLgxJW"), amount: 36, min: 151, max: 300 },
+  { band_key: "group_1_50", price_id: process.env.NEXT_PUBLIC_PRICE_GROUP_1_50 || "price_1TvePqGYyfOIjQvM4sSSy0mi", amount: 28, min: 1, max: 50 },
+  { band_key: "group_51_150", price_id: process.env.NEXT_PUBLIC_PRICE_GROUP_51_150 || "price_1TvePqGYyfOIjQvMNuPHE8SF", amount: 32, min: 51, max: 150 },
+  { band_key: "group_151_300", price_id: process.env.NEXT_PUBLIC_PRICE_GROUP_151_300 || "price_1TvePrGYyfOIjQvMJUcLgxJW", amount: 36, min: 151, max: 300 },
 ];
 
 export const GROUP_CONTACT_THRESHOLD = 301;
