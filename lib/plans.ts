@@ -13,7 +13,7 @@ const env = (k: string, fallback: string) =>
 
 export const DM_ADDON = {
   plan_key: "dm_addon_monthly",
-  price_id: env("NEXT_PUBLIC_PRICE_DM_ADDON_MONTHLY", "price_1TvKf5K4YX4Ri7btG2kii92e"),
+  price_id: env("NEXT_PUBLIC_PRICE_DM_ADDON_MONTHLY", "price_1TvePrGYyfOIjQvM1w2NJZ2u"),
   amount: 1.99,
   interval: "month" as const,
 };
@@ -37,25 +37,25 @@ export interface Plan {
 export const PLANS: Record<Exclude<PlanKey, "group">, Plan> & { individual_monthly: Plan } = {
   individual_monthly: {
     key: "individual_monthly",
-    price_id: env("NEXT_PUBLIC_PRICE_INDIVIDUAL_MONTHLY", "price_1TvKf0K4YX4Ri7btZ9OYTxLZ"),
+    price_id: env("NEXT_PUBLIC_PRICE_INDIVIDUAL_MONTHLY", "price_1TvePoGYyfOIjQvMi7r2wXD3"),
     amount: 6.99,
     interval: "month",
   },
   individual_annual: {
     key: "individual_annual",
-    price_id: env("NEXT_PUBLIC_PRICE_INDIVIDUAL_ANNUAL", "price_1TvKf0K4YX4Ri7btNdccPWS3"),
+    price_id: env("NEXT_PUBLIC_PRICE_INDIVIDUAL_ANNUAL", "price_1TvePpGYyfOIjQvMDxEJsqNe"),
     amount: 59.0,
     interval: "year",
   },
   family_annual: {
     key: "family_annual",
-    price_id: env("NEXT_PUBLIC_PRICE_FAMILY_ANNUAL", "price_1TvKf1K4YX4Ri7btqKMmRCIh"),
+    price_id: env("NEXT_PUBLIC_PRICE_FAMILY_ANNUAL", "price_1TvePpGYyfOIjQvMDbu9cFli"),
     amount: 99.0,
     interval: "year",
   },
   gift_annual: {
     key: "gift_annual",
-    price_id: env("NEXT_PUBLIC_PRICE_GIFT_ANNUAL", "price_1TvKf2K4YX4Ri7btsmh9Ee50"),
+    price_id: env("NEXT_PUBLIC_PRICE_GIFT_ANNUAL", "price_1TvePqGYyfOIjQvMErLxfVjd"),
     amount: 59.0,
     interval: "year",
   },
@@ -80,9 +80,9 @@ export interface GroupBand {
   max: number;
 }
 export const GROUP_BANDS: GroupBand[] = [
-  { band_key: "group_1_50", price_id: env("NEXT_PUBLIC_PRICE_GROUP_1_50", "price_1TvKf3K4YX4Ri7btBWWg38g1"), amount: 28, min: 1, max: 50 },
-  { band_key: "group_51_150", price_id: env("NEXT_PUBLIC_PRICE_GROUP_51_150", "price_1TvKf3K4YX4Ri7bt9UvJNBGt"), amount: 32, min: 51, max: 150 },
-  { band_key: "group_151_300", price_id: env("NEXT_PUBLIC_PRICE_GROUP_151_300", "price_1TvKf3K4YX4Ri7btGlz9x6Q8"), amount: 36, min: 151, max: 300 },
+  { band_key: "group_1_50", price_id: env("NEXT_PUBLIC_PRICE_GROUP_1_50", "price_1TvePqGYyfOIjQvM4sSSy0mi"), amount: 28, min: 1, max: 50 },
+  { band_key: "group_51_150", price_id: env("NEXT_PUBLIC_PRICE_GROUP_51_150", "price_1TvePqGYyfOIjQvMNuPHE8SF"), amount: 32, min: 51, max: 150 },
+  { band_key: "group_151_300", price_id: env("NEXT_PUBLIC_PRICE_GROUP_151_300", "price_1TvePrGYyfOIjQvMJUcLgxJW"), amount: 36, min: 151, max: 300 },
 ];
 
 export const GROUP_CONTACT_THRESHOLD = 301;

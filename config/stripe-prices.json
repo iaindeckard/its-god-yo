@@ -1,31 +1,33 @@
 {
-  "_comment": "It's God, Yo — Stripe TEST-mode products & prices. Price IDs are not secrets and are safe to commit; the secret key is not. Account: Deckard Enterprise International (acct_1TfPPaK4YX4Ri7bt). Created 2026-07-20 to the LOCKED pricing spec. Regenerate for live mode separately.",
+  "_comment": "It's God, Yo — Stripe TEST-mode products & prices. Price IDs are not secrets and are safe to commit; the secret key is not. Account: It's God, Yo! (dedicated sandbox acct_1TvPGDGYyfOIjQvM). Regenerated 2026-07-21 onto the new dedicated account to the LOCKED pricing spec (previously lived on the shared Deckard/USN account acct_1TfPPaK4YX4Ri7bt). Regenerate for live mode separately once the account is verified.",
   "mode": "test",
-  "account_id": "acct_1TfPPaK4YX4Ri7bt",
+  "account_id": "acct_1TvPGDGYyfOIjQvM",
   "currency": "usd",
   "prices": {
-    "individual_monthly":  { "price_id": "price_1TvKf0K4YX4Ri7btZ9OYTxLZ", "amount_usd": 6.99,  "interval": "month", "lookup_key": "igy_individual_monthly" },
-    "individual_annual":   { "price_id": "price_1TvKf0K4YX4Ri7btNdccPWS3", "amount_usd": 59.00, "interval": "year",  "lookup_key": "igy_individual_annual" },
-    "family_annual":       { "price_id": "price_1TvKf1K4YX4Ri7btqKMmRCIh", "amount_usd": 99.00, "interval": "year",  "lookup_key": "igy_family_annual", "note": "up to 4 teens" },
-    "gift_annual":         { "price_id": "price_1TvKf2K4YX4Ri7btsmh9Ee50", "amount_usd": 59.00, "interval": "year",  "lookup_key": "igy_gift_annual", "note": "one-time gift framing, billed as annual (recurring year)" },
-    "group_1_50":          { "price_id": "price_1TvKf3K4YX4Ri7btBWWg38g1", "amount_usd": 28.00, "interval": "year",  "lookup_key": "igy_group_1_50",   "per": "teen", "band": "1-50" },
-    "group_51_150":        { "price_id": "price_1TvKf3K4YX4Ri7bt9UvJNBGt", "amount_usd": 32.00, "interval": "year",  "lookup_key": "igy_group_51_150", "per": "teen", "band": "51-150" },
-    "group_151_300":       { "price_id": "price_1TvKf3K4YX4Ri7btGlz9x6Q8", "amount_usd": 36.00, "interval": "year",  "lookup_key": "igy_group_151_300","per": "teen", "band": "151-300" },
-    "dm_addon_monthly":    { "price_id": "price_1TvKf5K4YX4Ri7btG2kii92e", "amount_usd": 1.99,  "interval": "month", "lookup_key": "igy_dm_addon_monthly", "note": "+1 add-on; ALWAYS its own separate monthly subscription item, independent of base-plan cadence" }
+    "individual_monthly":  { "price_id": "price_1TvePoGYyfOIjQvMi7r2wXD3", "amount_usd": 6.99,  "interval": "month", "lookup_key": "igy_individual_monthly" },
+    "individual_annual":   { "price_id": "price_1TvePpGYyfOIjQvMDxEJsqNe", "amount_usd": 59.00, "interval": "year",  "lookup_key": "igy_individual_annual" },
+    "family_annual":       { "price_id": "price_1TvePpGYyfOIjQvMDbu9cFli", "amount_usd": 99.00, "interval": "year",  "lookup_key": "igy_family_annual", "note": "up to 4 teens" },
+    "gift_annual":         { "price_id": "price_1TvePqGYyfOIjQvMErLxfVjd", "amount_usd": 59.00, "interval": "year",  "lookup_key": "igy_gift_annual", "note": "one-time gift framing, billed as annual (recurring year)" },
+    "group_1_50":          { "price_id": "price_1TvePqGYyfOIjQvM4sSSy0mi", "amount_usd": 28.00, "interval": "year",  "lookup_key": "igy_group_1_50",   "per": "teen", "band": "1-50" },
+    "group_51_150":        { "price_id": "price_1TvePqGYyfOIjQvMNuPHE8SF", "amount_usd": 32.00, "interval": "year",  "lookup_key": "igy_group_51_150", "per": "teen", "band": "51-150" },
+    "group_151_300":       { "price_id": "price_1TvePrGYyfOIjQvMJUcLgxJW", "amount_usd": 36.00, "interval": "year",  "lookup_key": "igy_group_151_300","per": "teen", "band": "151-300" },
+    "dm_addon_monthly":    { "price_id": "price_1TvePrGYyfOIjQvM1w2NJZ2u", "amount_usd": 1.99,  "interval": "month", "lookup_key": "igy_dm_addon_monthly", "note": "+1 add-on; ALWAYS its own separate monthly subscription item, independent of base-plan cadence" }
   },
   "group_301plus": {
-    "product_id": "prod_UvB1HY37lcLcXp",
+    "product_id": "prod_UvVQgQKgcBTHH8",
     "pricing": "manual_negotiated",
     "range_usd_month": "500-1500",
     "self_serve_checkout": false,
     "note": "No self-serve Price by design — route to a 'contact us' path."
   },
   "products": {
-    "individual": "prod_UvB116gCtiRC3O",
-    "family": "prod_UvB1HKTtf8b0wu",
-    "gift": "prod_UvB18W5uxrkFnU",
-    "group": "prod_UvB1mH9DytpAJ2",
-    "group_301plus_custom": "prod_UvB1HY37lcLcXp",
-    "dm_addon": "prod_UvB1AVKQPm2LEm"
-  }
+    "individual": "prod_UvVQnBA2o59S7K",
+    "family": "prod_UvVQ8VNIXzoFGk",
+    "gift": "prod_UvVQktiT7XXNj3",
+    "group": "prod_UvVQ6kO2aV06qS",
+    "group_301plus_custom": "prod_UvVQgQKgcBTHH8",
+    "dm_addon": "prod_UvVQzcbkeDULvj"
+  },
+  "referral_coupon": "igy_referral_10",
+  "webhook_endpoint_id": "we_1TveRFGYyfOIjQvM0IhYihGN"
 }
