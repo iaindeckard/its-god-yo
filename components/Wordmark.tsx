@@ -1,12 +1,12 @@
 /**
- * Wordmark — "It's God, Yo!" rendered as LIVE TEXT (never a flattened image),
- * so it stays crisp at any size and is selectable / accessible. The visual
- * treatment is pure CSS (see .brass-3d + .wordmark in globals.css):
- *   tone="brass" -> brass 3-D lettering, for dark surfaces (the hero)
- *   tone="flat"  -> flat brand-blue (#378ADD) lettering, for light surfaces
- * The exclamation point is emphasized to echo the bubble mark's "!".
+ * Wordmark — "It's God, Yo" rendered as LIVE TEXT, with the bubble-and-bang icon
+ * serving as the "!" (there is NO typed "!"). Per the locked brand spec, only
+ * "God," ever takes the brass/gold treatment; "It's" and "Yo" stay white on dark
+ * surfaces (tone="brass") or brand-blue on light surfaces (tone="flat").
+ * Visual treatment is CSS — see the .wordmark rules in globals.css.
  */
 import type { ElementType } from "react";
+import BubbleMark from "./BubbleMark";
 
 export default function Wordmark({
   tone = "brass",
@@ -18,8 +18,11 @@ export default function Wordmark({
   className?: string;
 }) {
   return (
-    <Tag className={`wordmark ${tone === "brass" ? "brass-3d" : "wordmark-flat"} ${className}`.trim()}>
-      It&rsquo;s God, Yo<span className="wordmark-bang">!</span>
+    <Tag className={`wordmark wordmark-${tone} ${className}`.trim()}>
+      <span className="w-its">It&rsquo;s</span>
+      <span className="w-god">&nbsp;God,</span>
+      <span className="w-yo">Yo</span>
+      <BubbleMark className="w-icon" title="It's God, Yo!" />
     </Tag>
   );
 }

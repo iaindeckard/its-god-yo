@@ -1,11 +1,12 @@
 /**
- * BubbleMark — the locked "It's God, Yo!" speech-bubble mark.
- * Geometry is the exact locked path data (do NOT re-guess it): a speech bubble
- * with a tail at the bottom-left, holding a tilted (-8deg) exclamation point +
- * halo arc that doubles as the "!" in "Yo".
+ * BubbleMark — the locked "It's God, Yo!" speech-bubble mark. Geometry matches
+ * the locked brand spec (see IGY-Landing-Page-Redesign-v12): a rounded speech
+ * bubble with a tail at the bottom-left, holding the exclamation point — a thin
+ * white halo arc above a tilted white bar + an offset white dot. The halo must
+ * read clearly (stroke 3.4), not as a hairline.
  *
- *   variant="primary" -> blue bubble, white mark (default, use on light surfaces)
- *   variant="light"   -> white bubble, blue mark (for dark surfaces)
+ *   variant="primary" -> blue bubble, white mark (default)
+ *   variant="light"   -> white bubble, blue mark (for use on solid-blue surfaces)
  */
 export default function BubbleMark({
   variant = "primary",
@@ -31,15 +32,16 @@ export default function BubbleMark({
       className={className}
     >
       <title>{title}</title>
+      {/* speech bubble, tail bottom-left */}
       <path
-        d="M4 16 C4 8.268 10.268 2 18 2 L54 2 C61.732 2 68 8.268 68 16 L68 42 C68 49.732 61.732 56 54 56 L26 56 L10 68 L13 54 L18 54 C10.268 54 4 47.732 4 40 Z"
+        d="M14 10 H58 A8 8 0 0 1 66 18 V48 A8 8 0 0 1 58 56 H28 L14 66 V56 A8 8 0 0 1 6 48 V18 A8 8 0 0 1 14 10 Z"
         fill={bubble}
       />
-      <g transform="translate(36 31) rotate(-8)">
-        <rect x="-3.2" y="-15" width="6.4" height="19" rx="3.2" fill={mark} />
-        <circle cx="1.1" cy="11.5" r="4.2" fill={mark} />
-        <ellipse cx="-0.5" cy="-21" rx="8.5" ry="2.6" fill="none" stroke={mark} strokeWidth="2.2" opacity="0.85" />
-      </g>
+      {/* thin white halo arc above the bang — clearly visible, not a hairline */}
+      <path d="M24 17 Q35 7 46 17" stroke={mark} strokeWidth="3.4" fill="none" strokeLinecap="round" opacity="0.95" />
+      {/* tilted bar + offset dot = the exclamation point */}
+      <rect x="30" y="20" width="10" height="24" rx="5" fill={mark} transform="rotate(-8 35 32)" />
+      <circle cx="36" cy="50" r="5.5" fill={mark} />
     </svg>
   );
 }

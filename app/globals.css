@@ -89,33 +89,25 @@ h1, h2, h3 { line-height: 1.12; letter-spacing: -0.02em; margin: 0 0 0.4em; }
 .container { width: 100%; max-width: 1080px; margin: 0 auto; padding: 0 var(--space-5); }
 .section { padding: 72px 0; }
 
-/* ---------- Wordmark (live text, never an image) ---------- */
+/* ---------- Wordmark (live text; bubble-and-bang icon serves as the "!") ---------- */
 .wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.18em;
   font-family: var(--font-sans);
-  font-weight: 800;
   letter-spacing: -0.015em;
   white-space: nowrap;
 }
-.wordmark-bang { margin-left: 0.02em; }
+.wordmark .w-its, .wordmark .w-yo { font-weight: 400; }
+.wordmark .w-god { font-weight: 700; }
+.wordmark .w-icon { width: 1.05em; height: 1.05em; flex-shrink: 0; }
 
-/* flat brand-blue treatment for light surfaces */
-.wordmark-flat { color: var(--igy-blue); }
+/* brass treatment (dark surfaces): white lettering, gold 3-D only on "God," */
+.wordmark-brass .w-its, .wordmark-brass .w-god, .wordmark-brass .w-yo { color: #fff; }
+.wordmark-brass .w-god { text-shadow: 1px 1px 0 #D4B14E, 2px 2px 0 #C49F3C, 3px 3px 0 #B08D2E; }
 
-/* brass 3-D treatment for dark surfaces (self-contained artistic gradient) */
-.brass-3d {
-  color: #f7e4a6;
-  background: linear-gradient(180deg, #fff4cf 0%, #f4d67e 38%, #b8862f 74%, #8a5f1c 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  text-shadow:
-    0 1px 0 #c59b45,
-    0 2px 0 #b6863a,
-    0 3px 0 #9c6f2e,
-    0 4px 1px rgba(0, 0, 0, 0.35),
-    0 6px 12px rgba(0, 0, 0, 0.45);
-  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.25));
-}
+/* flat treatment (light surfaces): brand-blue lettering throughout */
+.wordmark-flat .w-its, .wordmark-flat .w-god, .wordmark-flat .w-yo { color: var(--igy-blue); }
 
 /* ---------- Buttons ---------- */
 .btn {
