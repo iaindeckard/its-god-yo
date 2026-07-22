@@ -1,0 +1,44 @@
+/* Shared styling for the legal pages (Privacy, Terms, Cookies). Dark theme.
+   [PLACEHOLDER] markers are rendered with the .ph class so they clearly read as
+   unresolved / pending-legal-review, never as finished copy. */
+.page { background: #0B1830; color: #eaf1fb; min-height: 100vh; font-family: 'Poppins', system-ui, -apple-system, sans-serif; }
+.wrap { max-width: 760px; margin: 0 auto; padding: 0 24px; }
+
+.header { border-bottom: 1px solid rgba(255,255,255,0.06); }
+.nav { max-width: 760px; margin: 0 auto; padding: 18px 24px; display: flex; align-items: center; justify-content: space-between; }
+.nav :global(.wordmark) { font-size: 20px; }
+.nav .home { color: #7ea8e0; font-size: 14px; text-decoration: none; }
+.nav .home:hover { color: #fff; }
+
+.head { padding: 44px 0 8px; }
+.head h1 { font-size: 34px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 8px; }
+.updated { color: #7686a0; font-size: 13px; }
+.operator { color: #a9bad6; font-size: 13px; margin-top: 4px; line-height: 1.5; }
+
+.draft { display: flex; gap: 10px; align-items: flex-start; background: rgba(255,211,122,0.08); border: 1px solid rgba(255,211,122,0.3); border-radius: 12px; padding: 14px 16px; margin: 20px 0 8px; }
+.draft .dot { color: #FFD37A; font-size: 15px; line-height: 1.4; }
+.draft p { color: #f4dfb0; font-size: 13.5px; line-height: 1.55; margin: 0; }
+
+.prose { padding: 8px 0 64px; }
+.prose h2 { font-size: 18px; font-weight: 700; margin: 30px 0 10px; color: #fff; }
+.prose h3 { font-size: 15px; font-weight: 600; margin: 20px 0 8px; color: #cfe0f6; }
+.prose p { color: #a9bad6; line-height: 1.7; font-size: 15px; margin-bottom: 12px; }
+.prose ul { margin: 0 0 14px; padding-left: 20px; }
+.prose li { color: #a9bad6; line-height: 1.65; font-size: 15px; margin-bottom: 6px; }
+.prose strong { color: #eaf1fb; }
+.prose a { color: #7ea8e0; }
+
+/* visible placeholder / pending-legal-review marker */
+.ph {
+  display: block; margin: 12px 0; padding: 12px 14px;
+  background: rgba(255,211,122,0.07); border: 1px dashed rgba(255,211,122,0.45);
+  border-radius: 10px; color: #f4dfb0; font-size: 14px; line-height: 1.55;
+}
+.ph .tag { display: inline-block; font-size: 10.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #FFD37A; margin-right: 8px; }
+.phInline { color: #FFD37A; background: rgba(255,211,122,0.1); padding: 1px 6px; border-radius: 5px; border: 1px dashed rgba(255,211,122,0.4); font-size: 0.92em; }
+
+.foot { border-top: 1px solid rgba(255,255,255,0.06); padding: 20px 0 56px; }
+.foot a { color: #7ea8e0; font-size: 14px; text-decoration: none; margin-right: 18px; }
+.foot a:hover { color: #fff; }
+
+@media (max-width: 640px) { .head h1 { font-size: 27px; } }
