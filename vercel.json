@@ -1,5 +1,5 @@
 {
   "crons": [
-    { "path": "/api/cron/family-trials", "schedule": "0 * * * *" }
+    { "path": "/api/cron/family-trials", "schedule": "0 9 * * *" }
   ]
 }
