@@ -23,7 +23,8 @@ export interface ConsentPayload {
   promo_code?: string | null;
   promo_promotion_code_id?: string | null;
   purchaser_email?: string | null;
-  teen: { first_name: string; phone: string; birth_year?: number; enhanced_consent_ack?: boolean };
+  teen?: { first_name: string; phone: string; birth_year?: number; enhanced_consent_ack?: boolean };
+  family_teens?: Array<{ first_name: string; phone: string; birth_year?: number; enhanced_consent_ack?: boolean }>;
   plus_one?: {
     gifter_first_name?: string;
     gifter_last_name?: string;

@@ -10,7 +10,7 @@ import {
   t, ATTESTATION, DISCLOSURE, HONORIFICS, RELATIONSHIPS, type Lang,
 } from "@/lib/i18n";
 import {
-  PLANS, GROUP_BANDS, DM_ADDON, bandForCount, GROUP_CONTACT_THRESHOLD, REFERRAL_DISCOUNT,
+  PLANS, GROUP_BANDS, DM_ADDON, FAMILY_EXTRA_TEEN, FAMILY_BASE_TEENS, bandForCount, GROUP_CONTACT_THRESHOLD, REFERRAL_DISCOUNT,
 } from "@/lib/plans";
 import { submitConsent, normalizePhone, type ConsentResult } from "@/lib/consent";
 
@@ -61,6 +61,12 @@ export default function SignupFlow({
   );
   const [individualInterval, setIndividualInterval] = useState<"month" | "year">("month");
   const [teenCount, setTeenCount] = useState<number>(25);
+  // Family plan: 2+ teens, each their own phone (min 2). Extra teens are $28/yr.
+  const [familyTeens, setFamilyTeens] = useState<Array<{ name: string; phone: string; year: string }>>([
+    { name: "", phone: "", year: "" },
+    { name: "", phone: "", year: "" },
+  ]);
+  const [familyAttest, setFamilyAttest] = useState(false);
 
   // recipient / purchaser
   const [teenFirstName, setTeenFirstName] = useState("");
@@ -253,6 +259,34 @@ export default function SignupFlow({
     }
   }
 
+  const familyExtra = Math.max(0, familyTeens.length - FAMILY_BASE_TEENS);
+  const familyValid = familyTeens.every((tn) => tn.name.trim() && tn.phone.trim() && validYear(tn.year)) && familyAttest;
+
+  async function handleSubmitFamily(ids: { customer_id: string; setup_intent_id: string; payment_method_id: string }) {
+    setError(null);
+    setSubmitting(true);
+    try {
+      const res = await submitConsent({
+        language: lang,
+        plan_key: "family",
+        base_price_id: PLANS.family_annual.price_id!,
+        referral_code: referralApplied ? referralInput.trim() : null,
+        referral_discount_applied: referralApplied,
+        promo_code: promo?.code ?? null,
+        promo_promotion_code_id: promo?.promotion_code_id ?? null,
+        purchaser_email: purchaserEmail.trim() || null,
+        family_teens: familyTeens.map((tn) => ({ first_name: tn.name.trim(), phone: normalizePhone(tn.phone), birth_year: Number(tn.year) })),
+        stripe: ids,
+      });
+      setResult(res);
+      setStep(STEP.DONE);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Something went wrong");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   const dotIndex = Math.min(step, TOTAL_DOTS - 1);
 
   return (
@@ -398,8 +432,65 @@ export default function SignupFlow({
             </section>
           )}
 
+          {/* ---------- 2. Recipient — Family (multi-teen) ---------- */}
+          {step === STEP.RECIPIENT && planChoice === "family" && (
+            <section>
+              <h2>{lang === "es" ? "¿Quiénes son tus jóvenes?" : "Who are your teens?"}</h2>
+              <p className="muted">{lang === "es" ? "Cada joven recibe su propio texto y confirma por su cuenta. No se cobra por ninguno hasta que responda SÍ." : "Each teen gets their own text and confirms on their own. No teen is charged until they reply YES."}</p>
+              {familyTeens.map((tn, i) => (
+                <div key={i} style={{ border: "1px solid var(--igy-line)", borderRadius: 14, padding: 14, marginTop: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                    <strong style={{ fontSize: 14 }}>
+                      {lang === "es" ? "Joven" : "Teen"} {i + 1}
+                      {i >= FAMILY_BASE_TEENS && <span style={{ color: "var(--igy-blue)", fontWeight: 600 }}> · +{money(FAMILY_EXTRA_TEEN.amount)}{s.perYear}</span>}
+                    </strong>
+                    {familyTeens.length > FAMILY_BASE_TEENS && (
+                      <button className="muted" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13 }} onClick={() => setFamilyTeens(familyTeens.filter((_, j) => j !== i))}>{lang === "es" ? "Quitar" : "Remove"}</button>
+                    )}
+                  </div>
+                  <div className="row">
+                    <div className="field" style={{ margin: 0 }}>
+                      <label>{s.recipientFirstName}</label>
+                      <input value={tn.name} onChange={(e) => setFamilyTeens(familyTeens.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
+                    </div>
+                    <div className="field" style={{ margin: 0 }}>
+                      <label>{s.birthYearLabel}</label>
+                      <input type="number" inputMode="numeric" value={tn.year} placeholder="2010" onChange={(e) => setFamilyTeens(familyTeens.map((x, j) => (j === i ? { ...x, year: e.target.value } : x)))} />
+                    </div>
+                  </div>
+                  <div className="field" style={{ marginBottom: 0, marginTop: 10 }}>
+                    <label>{s.recipientPhone}</label>
+                    <input value={tn.phone} placeholder="+1 555 123 4567" onChange={(e) => setFamilyTeens(familyTeens.map((x, j) => (j === i ? { ...x, phone: e.target.value } : x)))} />
+                  </div>
+                </div>
+              ))}
+              <button className="btn btn-ghost" style={{ marginTop: 12 }} onClick={() => setFamilyTeens([...familyTeens, { name: "", phone: "", year: "" }])}>
+                + {lang === "es" ? "Agregar otro joven" : "Add another teen"} (+{money(FAMILY_EXTRA_TEEN.amount)}{s.perYear})
+              </button>
+              <div className="field" style={{ marginTop: 16 }}>
+                <label>{s.purchaserEmailLabel}</label>
+                <input type="email" value={purchaserEmail} onChange={(e) => setPurchaserEmail(e.target.value)} />
+              </div>
+              <div className="summary-line total" style={{ marginTop: 8 }}>
+                <span>{lang === "es" ? "Total anual" : "Annual total"}</span>
+                <span>{money(PLANS.family_annual.amount! + familyExtra * FAMILY_EXTRA_TEEN.amount)}{s.perYear}</span>
+              </div>
+              <p className="hint">
+                {lang === "es" ? `El plan base ($99) cubre 2 jóvenes.${familyExtra > 0 ? ` +${familyExtra} × $28 por joven adicional.` : ""}` : `The base plan ($99) covers 2 teens.${familyExtra > 0 ? ` +${familyExtra} × $28 for each additional teen.` : ""}`}
+              </p>
+              <label className="check">
+                <input type="checkbox" checked={familyAttest} onChange={(e) => setFamilyAttest(e.target.checked)} />
+                <span>{lang === "es" ? "Confirmo que cada número es real, que tengo permiso para inscribir a cada joven, y que creo que querrían recibir estos mensajes." : "I confirm each of these is a real phone number, that I have permission to sign each teen up, and that I believe they'd want to receive this."}</span>
+              </label>
+              <div className="wizard-nav">
+                <button className="btn btn-ghost" onClick={() => setStep(STEP.PLAN)}>{s.back}</button>
+                <button className="btn btn-primary" disabled={!familyValid} onClick={() => setStep(STEP.REFERRAL)}>{s.continue}</button>
+              </div>
+            </section>
+          )}
+
           {/* ---------- 2. Recipient ---------- */}
-          {step === STEP.RECIPIENT && (
+          {step === STEP.RECIPIENT && planChoice !== "family" && (
             <section>
               <h2>{s.wRecipientTitle}</h2>
               <p className="muted">{s.wRecipientSub}</p>
@@ -605,7 +696,11 @@ export default function SignupFlow({
                   lang={lang}
                   email={purchaserEmail}
                   onBack={() => setStep(STEP.REFERRAL)}
-                  onDone={(ids) => { setStripeIds(ids); setStep(STEP.PHONE); }}
+                  onDone={(ids) => {
+                    setStripeIds(ids);
+                    if (planChoice === "family") void handleSubmitFamily(ids); // phones already collected up front
+                    else setStep(STEP.PHONE);
+                  }}
                 />
               )}
             </section>
