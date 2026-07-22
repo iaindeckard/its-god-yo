@@ -75,6 +75,7 @@ interface PlusOne {
 }
 interface Payload {
   language?: string;
+  theme_track?: string;
   plan_key?: string;
   base_price_id?: string;
   group_teen_count?: number;
@@ -209,7 +210,7 @@ Deno.serve(async (req: Request) => {
       stubs.push({ to: teens[i].phone!.trim(), body: sms, cid: row.id });
     }
     const { data: signup, error: sErr } = await supa.from("pending_signups").insert({
-      language: lang, plan_key: "family", base_price_id: p.base_price_id, dm_addon: false,
+      language: lang, theme_track: p.theme_track?.trim() || "general", plan_key: "family", base_price_id: p.base_price_id, dm_addon: false,
       referral_code: p.referral_code?.trim() || null, referral_discount_applied: !!p.referral_discount_applied,
       promo_code: p.promo_code?.trim() || null, promo_promotion_code_id: p.promo_promotion_code_id?.trim() || null,
       purchaser_email: p.purchaser_email?.trim() || null, teen_consent_id: consentIds[0], plus_one_consent_id: null,
@@ -378,6 +379,7 @@ Deno.serve(async (req: Request) => {
   // 3) pending signup: plan + saved (uncharged) payment method + consent links
   const { data: signup, error: signupErr } = await supa.from("pending_signups").insert({
     language: lang,
+    theme_track: p.theme_track?.trim() || "general",
     plan_key: p.plan_key,
     base_price_id: p.base_price_id,
     group_teen_count: p.group_teen_count ?? null,

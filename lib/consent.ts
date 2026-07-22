@@ -13,6 +13,7 @@ const ANON =
 
 export interface ConsentPayload {
   language: "en" | "es";
+  theme_track?: string;
   plan_key: string;
   base_price_id: string;
   group_teen_count?: number | null;

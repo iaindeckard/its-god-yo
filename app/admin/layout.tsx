@@ -7,9 +7,13 @@ export const metadata = { title: "Admin — It's God, Yo!" };
 export const dynamic = "force-dynamic"; // identity/permissions resolve per-request, never at build
 
 const NAV = [
-  { href: "/admin/promo-codes", label: "Promo codes", need: "billing.promo_codes.view" },
+  { href: "/admin/promo-codes", label: "Promo Code Studio", need: "billing.promo_codes.view" },
   { href: "/admin/review", label: "Review queue", need: "content.queue.view" },
+  { href: "/admin/theme-tags", label: "Theme tags", need: "content.theme_tags.view" },
   { href: "/admin/dashboard", label: "KPI dashboard", need: "analytics.dashboard.view" },
+  { href: "/admin/donation-fund", label: "Donation Fund", need: "finance.donation_fund.view" },
+  { href: "/admin/bounty", label: "Error bounty", need: "finance.bounty.view" },
+  { href: "/admin/sponsors", label: "Sponsors", need: "marketing.sponsors.view" },
   { href: "/admin/consent-thresholds", label: "Consent thresholds", need: "admin.consent_thresholds.manage" },
 ];
 

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/rbac";
 import { apiError } from "@/lib/apiError";
 import { listPromoCodes, createPromoCode } from "@/lib/promoCodes";
+import { TIER_KEYS } from "@/lib/tiers";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,30 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "percent value must be 1–100" }, { status: 400 });
     }
 
+    const requiresAttestation = body.requiresAttestation === true;
+    const attestationText = body.attestationText?.trim() || undefined;
+    if (requiresAttestation && !attestationText) {
+      return NextResponse.json(
+        { error: "attestationText is required when requiresAttestation is true" },
+        { status: 400 },
+      );
+    }
+
+    const allowedTiers = Array.isArray(body.allowedTiers)
+      ? body.allowedTiers.filter((t: unknown) => typeof t === "string" && TIER_KEYS.includes(t))
+      : [];
+
+    const startsAt = body.startsAt ? Math.floor(new Date(body.startsAt).getTime() / 1000) : null;
+    const expiresAt = body.expiresAt ? Math.floor(new Date(body.expiresAt).getTime() / 1000) : null;
+    if (startsAt && expiresAt && startsAt >= expiresAt) {
+      return NextResponse.json({ error: "start date must be before the end date" }, { status: 400 });
+    }
+
+    const maxPerCustomer = body.maxPerCustomer ? Number(body.maxPerCustomer) : null;
+    if (maxPerCustomer != null && (!Number.isInteger(maxPerCustomer) || maxPerCustomer < 1)) {
+      return NextResponse.json({ error: "maxPerCustomer must be a positive integer" }, { status: 400 });
+    }
+
     const created = await createPromoCode({
       code: body.code?.trim() || undefined,
       discountType: body.discountType,
@@ -36,8 +61,15 @@ export async function POST(req: Request) {
       duration: ["once", "forever", "repeating"].includes(body.duration) ? body.duration : "once",
       durationInMonths: body.durationInMonths ? Number(body.durationInMonths) : undefined,
       maxRedemptions: body.maxRedemptions ? Number(body.maxRedemptions) : null,
-      expiresAt: body.expiresAt ? Math.floor(new Date(body.expiresAt).getTime() / 1000) : null,
+      expiresAt,
+      startsAt,
+      internalLabel: body.internalLabel?.trim() || undefined,
       note: body.note?.trim() || undefined,
+      maxPerCustomer,
+      firstTimeOnly: body.firstTimeOnly === true,
+      requiresAttestation,
+      attestationText,
+      allowedTiers,
     });
     return NextResponse.json({ promo_code: created });
   } catch (e) {

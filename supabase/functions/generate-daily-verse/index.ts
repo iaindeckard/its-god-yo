@@ -1,26 +1,20 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
-// Daily verse generation. FIXED 2026-07-20: candidate verse pool now comes
-// from get_random_kjv_verses() (a real server-side random sample via
-// ORDER BY random()) instead of an unordered .limit(), which was silently
-// returning table-insertion-order rows -- effectively "almost always
-// Genesis," caught via the monthly-batch dry-run test. Same underlying bug
-// existed here too, just never surfaced because most single-slot tests so
-// far used an explicit verse override rather than the random-pick path.
+// Daily verse generation (single slot). FIXED 2026-07-20: candidate verse pool
+// comes from get_random_kjv_verses() (real server-side random sample).
 //
-// ADDED 2026-07-20: bilingual support via `language` param.
-//   language: "en" (default) -> unchanged behavior: pick/override from
-//     kjv_verses, English slang prompt, writes ai_output_a/b, agreement_status,
-//     status, verse_ref on daily_slots.
-//   language: "es" -> does NOT pick a verse. Reuses the SAME verse reference
-//     already selected for English on daily_slots for that date (shared-
-//     reference architecture), looks up the matching Spanish source row in
-//     rv1909_verses (works because rv1909_verses.book uses the same English
-//     identifiers as kjv_verses.book), prompts BOTH AIs to translate the real
-//     RV1909 Spanish text into Mexican teen slang, and writes the _es columns.
-//   The Spanish output is a translation of the actual Spanish source verse --
-//   never an English slang translation, never a translation-of-the-translation.
+// ADDED 2026-07-20: bilingual support via `language` param (en default / es).
+//   es does NOT pick a verse — it reuses the reference already chosen for the
+//   SAME (date, theme_track) slot and translates the RV1909 source.
+//
+// ADDED 2026-07-22: theme/mood tracks via `theme_track` param (default
+// "general"). daily_slots is now one row per (scheduled_date, theme_track).
+//   - "general": unchanged — random from the full eligible KJV pool.
+//   - a themed track: the candidate pool is the track's APPROVED
+//     verse_theme_tags only (AI-proposed + human-approved). Dedup (used_verses)
+//     is per-track. Everything downstream (dual-AI translate, agreement,
+//     completeness, review) is identical to general.
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -42,17 +36,15 @@ function similarity(a: string, b: string): number {
 
 const AGREEMENT_THRESHOLD = 0.35;
 
-// Cheap sentence-completeness heuristic. A single verse pulled out of context
-// can be a fragment that only makes sense with its neighbor. We can't detect
-// that with certainty, so we catch the common, detectable case: source verses
-// that do NOT end in terminal sentence punctuation (period/!/?) are very likely
-// mid-thought (a trailing comma/semicolon/colon -- colons especially almost
-// always introduce something continuing into the next verse). When this fails
-// we force needs_review regardless of AI agreement, and let a human judge.
-// Applied to the SOURCE verse text (KJV / RV1909), not the AI slang output.
 function endsWithTerminalPunctuation(text: string): boolean {
-  const trimmed = text.trim();
-  return /[.!?]["')]?$/.test(trimmed);
+  return /[.!?]["')]?$/.test(text.trim());
+}
+
+// verse_ref format is "<book> <chapter>:<verse>"; book may contain spaces/digits.
+function parseVerseRef(ref: string): { book: string; chapter: number; verse: number } | null {
+  const m = ref.match(/^(.+)\s+(\d+):(\d+)$/);
+  if (!m) return null;
+  return { book: m[1], chapter: parseInt(m[2], 10), verse: parseInt(m[3], 10) };
 }
 
 function buildPromptEn(verseRef: string, verseText: string): string {
@@ -101,7 +93,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS_HEADERS });
   if (req.method !== "POST") return json(405, { error: "method_not_allowed" });
 
-  let body: { target_date?: string; verse_book?: string; verse_chapter?: number; verse_verse?: number; language?: string };
+  let body: { target_date?: string; verse_book?: string; verse_chapter?: number; verse_verse?: number; language?: string; theme_track?: string };
   try {
     body = await req.json();
   } catch {
@@ -112,6 +104,7 @@ Deno.serve(async (req: Request) => {
   if (!targetDate) return json(400, { error: "target_date is required (YYYY-MM-DD). Single-slot generation only in this version -- full-month batch is a separate function." });
 
   const language = body.language === "es" ? "es" : "en";
+  const themeTrack = body.theme_track || "general";
 
   const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
   const openaiKey = Deno.env.get("OPENAI_API_KEY");
@@ -125,53 +118,42 @@ Deno.serve(async (req: Request) => {
   );
 
   // ==================== SPANISH PATH ====================
-  // Reuses the reference already chosen for English; does not pick a verse.
+  // Reuses the reference already chosen for the SAME (date, theme_track) slot.
   if (language === "es") {
     const { data: slotRow, error: slotReadErr } = await supa
       .from("daily_slots")
       .select("id, verse_ref")
       .eq("scheduled_date", targetDate)
+      .eq("theme_track", themeTrack)
       .maybeSingle();
     if (slotReadErr) return json(500, { error: "failed_to_read_daily_slot", detail: slotReadErr.message });
     if (!slotRow || !slotRow.verse_ref) {
-      return json(409, { error: "no_english_slot_for_date", detail: `No daily_slots row with a verse_ref exists for ${targetDate}. Generate the English verse first -- Spanish reuses that same reference.` });
+      return json(409, { error: "no_english_slot_for_date", detail: `No daily_slots row with a verse_ref exists for ${targetDate} / track ${themeTrack}. Generate the English verse first -- Spanish reuses that same reference.` });
     }
 
     const verseRef = slotRow.verse_ref as string;
-    // verse_ref format is "<book> <chapter>:<verse>"; book may contain spaces
-    // and digits (e.g. "1 Chronicles", "Song of Solomon"). Anchor on the
-    // trailing "<chapter>:<verse>" and treat everything before it as the book.
-    const m = verseRef.match(/^(.+)\s+(\d+):(\d+)$/);
-    if (!m) return json(500, { error: "unparseable_verse_ref", detail: verseRef });
-    const book = m[1];
-    const chapter = parseInt(m[2], 10);
-    const verse = parseInt(m[3], 10);
+    const parsed = parseVerseRef(verseRef);
+    if (!parsed) return json(500, { error: "unparseable_verse_ref", detail: verseRef });
 
     const { data: esVerse, error: esErr } = await supa
       .from("rv1909_verses")
       .select("book, chapter, verse, text")
-      .eq("book", book).eq("chapter", chapter).eq("verse", verse)
+      .eq("book", parsed.book).eq("chapter", parsed.chapter).eq("verse", parsed.verse)
       .maybeSingle();
     if (esErr) return json(500, { error: "failed_to_read_rv1909_verses", detail: esErr.message });
-    if (!esVerse) return json(404, { error: "verse_not_found_in_rv1909", detail: `${verseRef} (book="${book}", ${chapter}:${verse}) has no matching row in rv1909_verses.` });
+    if (!esVerse) return json(404, { error: "verse_not_found_in_rv1909", detail: `${verseRef} has no matching row in rv1909_verses.` });
 
     const prompt = buildPromptEs(verseRef, esVerse.text);
 
     let outputA: string, outputB: string;
     try {
-      [outputA, outputB] = await Promise.all([
-        callClaude(anthropicKey, prompt),
-        callOpenAI(openaiKey, prompt),
-      ]);
+      [outputA, outputB] = await Promise.all([callClaude(anthropicKey, prompt), callOpenAI(openaiKey, prompt)]);
     } catch (e) {
       return json(502, { error: "generation_failed", detail: String((e as Error)?.message ?? e) });
     }
 
     const simScore = similarity(outputA, outputB);
     const agreementStatus = simScore >= AGREEMENT_THRESHOLD ? "agreed" : "disagreed";
-    // Independent review triggers -- either one forces needs_review; a slot can
-    // have both. AI agreement does NOT override the completeness check: two AIs
-    // agreeing on a translation of an incomplete thought doesn't complete it.
     const reasons: string[] = [];
     if (agreementStatus === "disagreed") reasons.push("ai_disagreement");
     if (!endsWithTerminalPunctuation(esVerse.text)) reasons.push("incomplete_sentence");
@@ -188,55 +170,54 @@ Deno.serve(async (req: Request) => {
         updated_at: new Date().toISOString(),
       })
       .eq("scheduled_date", targetDate)
+      .eq("theme_track", themeTrack)
       .select()
       .single();
     if (updErr) return json(500, { error: "failed_to_write_daily_slot_es", detail: updErr.message });
 
     return json(200, {
-      status: "generated",
-      language: "es",
-      verse_ref: verseRef,
-      source_table: "rv1909_verses",
-      source_text_es: esVerse.text,
-      ai_output_a_source: "claude-sonnet-4-6",
-      ai_output_a_es: outputA,
-      ai_output_b_source: "gpt-4o",
-      ai_output_b_es: outputB,
-      similarity_score: simScore,
-      agreement_status_es: agreementStatus,
-      slot_status_es: statusEs,
-      needs_review_reasons_es: reasons,
+      status: "generated", language: "es", theme_track: themeTrack, verse_ref: verseRef,
+      source_table: "rv1909_verses", source_text_es: esVerse.text,
+      ai_output_a_es: outputA, ai_output_b_es: outputB, similarity_score: simScore,
+      agreement_status_es: agreementStatus, slot_status_es: statusEs, needs_review_reasons_es: reasons,
       daily_slot_id: updated.id,
     });
   }
 
-  // ==================== ENGLISH PATH (unchanged) ====================
+  // ==================== ENGLISH PATH ====================
   let verseRow: { book: string; chapter: number; verse: number; text: string } | null = null;
 
   if (body.verse_book && body.verse_chapter && body.verse_verse) {
+    // Explicit override — theme_track only affects which slot the row lands in.
     const { data, error } = await supa
-      .from("kjv_verses")
-      .select("book, chapter, verse, text")
-      .eq("book", body.verse_book).eq("chapter", body.verse_chapter).eq("verse", body.verse_verse)
-      .single();
+      .from("kjv_verses").select("book, chapter, verse, text")
+      .eq("book", body.verse_book).eq("chapter", body.verse_chapter).eq("verse", body.verse_verse).single();
     if (error || !data) return json(404, { error: "verse_not_found" });
     verseRow = data;
   } else {
+    // Per-track dedup: verses used by THIS track in the last 12 months.
     const cutoff = new Date();
     cutoff.setFullYear(cutoff.getFullYear() - 1);
     const { data: usedRows, error: usedErr } = await supa
-      .from("used_verses")
-      .select("verse_ref")
-      .gte("used_for_date", cutoff.toISOString().slice(0, 10));
+      .from("used_verses").select("verse_ref").eq("theme_track", themeTrack).gte("used_for_date", cutoff.toISOString().slice(0, 10));
     if (usedErr) return json(500, { error: "failed_to_read_used_verses", detail: usedErr.message });
     const usedRefs = new Set((usedRows || []).map((r: { verse_ref: string }) => r.verse_ref));
 
-    // FIXED: genuine random sample via RPC, not an unordered .limit().
-    const { data: candidates, error: candErr } = await supa.rpc("get_random_kjv_verses", { sample_size: 1000 });
-    if (candErr) return json(500, { error: "failed_to_read_kjv_verses", detail: candErr.message });
-    const eligible = (candidates || []).filter((v: { book: string; chapter: number; verse: number }) => !usedRefs.has(`${v.book} ${v.chapter}:${v.verse}`));
-    if (eligible.length === 0) return json(500, { error: "no_eligible_verses_in_sample" });
-    verseRow = eligible[Math.floor(Math.random() * eligible.length)];
+    if (themeTrack === "general") {
+      // Full eligible pool, random sample.
+      const { data: candidates, error: candErr } = await supa.rpc("get_random_kjv_verses", { sample_size: 1000 });
+      if (candErr) return json(500, { error: "failed_to_read_kjv_verses", detail: candErr.message });
+      const eligible = (candidates || []).filter((v: { book: string; chapter: number; verse: number }) => !usedRefs.has(`${v.book} ${v.chapter}:${v.verse}`));
+      if (eligible.length === 0) return json(500, { error: "no_eligible_verses_in_sample" });
+      verseRow = eligible[Math.floor(Math.random() * eligible.length)];
+    } else {
+      // Themed track: only APPROVED tags for this track (with source text).
+      const { data: pool, error: poolErr } = await supa.rpc("get_theme_track_pool", { p_track: themeTrack });
+      if (poolErr) return json(500, { error: "failed_to_read_theme_pool", detail: poolErr.message });
+      const eligible = (pool || []).filter((v: { book: string; chapter: number; verse: number }) => !usedRefs.has(`${v.book} ${v.chapter}:${v.verse}`));
+      if (eligible.length === 0) return json(409, { error: "no_approved_verses_for_track", detail: `Track '${themeTrack}' has no approved, un-used verses. Run propose-theme-verses and approve some first.` });
+      verseRow = eligible[Math.floor(Math.random() * eligible.length)];
+    }
   }
 
   const verseRef = `${verseRow!.book} ${verseRow!.chapter}:${verseRow!.verse}`;
@@ -244,17 +225,13 @@ Deno.serve(async (req: Request) => {
 
   let outputA: string, outputB: string;
   try {
-    [outputA, outputB] = await Promise.all([
-      callClaude(anthropicKey, prompt),
-      callOpenAI(openaiKey, prompt),
-    ]);
+    [outputA, outputB] = await Promise.all([callClaude(anthropicKey, prompt), callOpenAI(openaiKey, prompt)]);
   } catch (e) {
     return json(502, { error: "generation_failed", detail: String((e as Error)?.message ?? e) });
   }
 
   const simScore = similarity(outputA, outputB);
   const agreementStatus = simScore >= AGREEMENT_THRESHOLD ? "agreed" : "disagreed";
-  // Independent review triggers -- see the Spanish path above for rationale.
   const reasons: string[] = [];
   if (agreementStatus === "disagreed") reasons.push("ai_disagreement");
   if (!endsWithTerminalPunctuation(verseRow!.text)) reasons.push("incomplete_sentence");
@@ -264,6 +241,7 @@ Deno.serve(async (req: Request) => {
     .from("daily_slots")
     .upsert({
       scheduled_date: targetDate,
+      theme_track: themeTrack,
       verse_ref: verseRef,
       status,
       ai_output_a: outputA,
@@ -271,23 +249,15 @@ Deno.serve(async (req: Request) => {
       agreement_status: agreementStatus,
       needs_review_reasons: reasons,
       updated_at: new Date().toISOString(),
-    }, { onConflict: "scheduled_date" })
+    }, { onConflict: "scheduled_date,theme_track" })
     .select()
     .single();
   if (slotErr) return json(500, { error: "failed_to_write_daily_slot", detail: slotErr.message });
 
   return json(200, {
-    status: "generated",
-    language: "en",
-    verse_ref: verseRef,
-    ai_output_a_source: "claude-sonnet-4-6",
-    ai_output_a: outputA,
-    ai_output_b_source: "gpt-4o",
-    ai_output_b: outputB,
-    similarity_score: simScore,
-    agreement_status: agreementStatus,
-    slot_status: status,
-    needs_review_reasons: reasons,
+    status: "generated", language: "en", theme_track: themeTrack, verse_ref: verseRef,
+    ai_output_a: outputA, ai_output_b: outputB, similarity_score: simScore,
+    agreement_status: agreementStatus, slot_status: status, needs_review_reasons: reasons,
     daily_slot_id: slot.id,
   });
 });

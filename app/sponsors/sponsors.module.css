@@ -1,0 +1,25 @@
+/* Static sponsor thank-you page. Dark theme, zero motion. Every logo the same
+   size regardless of what a sponsor gave — no tiers, no hierarchy. */
+.page { background: #0B1830; color: #fff; min-height: 100vh; font-family: 'Poppins', system-ui, -apple-system, sans-serif; }
+.wrap { max-width: 900px; margin: 0 auto; padding: 64px 24px; text-align: center; }
+.eyebrow { color: #7ea8e0; font-weight: 700; font-size: 12px; letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 14px; }
+.headline { font-size: 34px; line-height: 1.12; font-weight: 700; margin-bottom: 12px; }
+.sub { color: #a9bad6; font-size: 15px; line-height: 1.6; max-width: 560px; margin: 0 auto 40px; }
+.empty { color: #a9bad6; font-size: 15px; margin: 40px 0; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px; margin-bottom: 40px; }
+.cell {
+  display: flex; align-items: center; justify-content: center;
+  height: 120px; background: #111b30; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 20px;
+}
+/* Equal size everywhere — the same constraints as the rotator logo. */
+.logo { max-height: 72px; max-width: 100%; width: auto; height: auto; object-fit: contain; display: block; }
+
+.footerLinks { display: flex; gap: 18px; justify-content: center; align-items: center; font-size: 14px; }
+.footerLinks a { color: #7ea8e0; text-decoration: none; }
+.footerLinks a:hover { text-decoration: underline; }
+
+@media (max-width: 640px) {
+  .headline { font-size: 26px; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+}

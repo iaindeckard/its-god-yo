@@ -2,6 +2,7 @@ import "server-only";
 import { getSupabaseAdmin } from "./supabaseAdmin";
 import { getStripe } from "./stripe";
 import { PLANS, GROUP_BANDS, DM_ADDON } from "./plans";
+import { getFundSummary } from "./donationFund";
 
 /**
  * KPI dashboard data — all pulled from the REAL tables + live Stripe, never
@@ -19,6 +20,8 @@ export interface DashboardData {
   promoUsage: { code: string; times_redeemed: number; active: boolean }[];
   consentFunnel: { status: string; count: number }[];
   stripeError: string | null;
+  // Reserved donation fund (financial — render only behind analytics.revenue.view).
+  donationFund: { availableCents: number; accruedCents: number; disbursedCents: number; lastCloseDate: string | null } | null;
 }
 
 const CONSENT_STATUSES = ["pending_confirmation", "confirmed", "opted_out", "expired"];
@@ -60,6 +63,20 @@ export async function getDashboardData(): Promise<DashboardData> {
     gatherStripe(),
   ]);
 
+  // Donation fund is best-effort — a query failure must not blank the dashboard.
+  let donationFund: DashboardData["donationFund"] = null;
+  try {
+    const f = await getFundSummary();
+    donationFund = {
+      availableCents: f.availableCents,
+      accruedCents: f.accruedCents,
+      disbursedCents: f.disbursedCents,
+      lastCloseDate: f.lastCloseDate,
+    };
+  } catch {
+    donationFund = null;
+  }
+
   return {
     activeSubscribers: stripe.activeSubscribers,
     mrrCents: stripe.mrrCents,
@@ -70,6 +87,7 @@ export async function getDashboardData(): Promise<DashboardData> {
     promoUsage: stripe.promoUsage,
     consentFunnel: consentCounts,
     stripeError: stripe.error,
+    donationFund,
   };
 }
 

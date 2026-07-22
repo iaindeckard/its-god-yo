@@ -277,3 +277,41 @@ h1, h2, h3 { line-height: 1.12; letter-spacing: -0.02em; margin: 0 0 0.4em; }
   .kpi-grid { grid-template-columns: repeat(2, 1fr); }
   .kpi.k-span2 { grid-column: span 2; }
 }
+
+/* ---------------- Promo Code Studio + ARR simulator ---------------- */
+.field textarea {
+  width: 100%; padding: 12px 14px; font-size: 15px; font-family: var(--font-sans); line-height: 1.5;
+  border: 1.5px solid var(--igy-line); border-radius: var(--radius-sm); background: #fff; color: var(--igy-ink); resize: vertical;
+}
+.field textarea:focus { outline: none; border-color: var(--igy-blue); }
+
+.check-line { display: flex; gap: 10px; align-items: flex-start; margin: 4px 0 16px; font-size: 14px; color: var(--igy-ink); }
+.check-line input { margin-top: 2px; width: 17px; height: 17px; flex: 0 0 auto; }
+
+.tier-checks { display: flex; flex-wrap: wrap; gap: 8px; }
+.tier-chip {
+  display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; cursor: pointer;
+  border: 1.5px solid var(--igy-line); border-radius: var(--radius-pill); padding: 7px 13px; background: #fff; color: var(--igy-slate);
+}
+.tier-chip.on { border-color: var(--igy-blue); background: var(--igy-blue-tint); color: var(--igy-blue-dark); }
+.tier-chip input { width: 15px; height: 15px; }
+
+.rule-badges { display: flex; flex-wrap: wrap; gap: 5px; }
+.rule-badges .pill { background: var(--igy-neutral-100); color: var(--igy-slate); }
+
+.sim-scroll { overflow-x: auto; }
+.arr-sim { border: 1px solid var(--igy-line); }
+.arr-sim h2 { font-size: 19px; }
+.apply-all { display: inline-flex; align-items: center; gap: 8px; }
+.apply-all input { padding: 7px 10px; font-size: 14px; border: 1.5px solid var(--igy-line); border-radius: var(--radius-sm); }
+
+.sim-table td, .sim-table th { vertical-align: middle; }
+.sim-table input[type="number"] {
+  padding: 8px 10px; font-size: 14px; border: 1.5px solid var(--igy-line); border-radius: var(--radius-sm); background: #fff; color: var(--igy-ink);
+}
+.dollar-input { display: inline-flex; align-items: center; gap: 4px; }
+.dollar-input .per { font-size: 12px; color: var(--igy-slate); }
+.depth-cell { display: flex; align-items: center; gap: 10px; }
+.depth-cell input[type="range"] { flex: 1; accent-color: var(--igy-blue); }
+.depth-val { font-weight: 700; font-variant-numeric: tabular-nums; min-width: 40px; text-align: right; }
+.sim-total td { border-top: 2px solid var(--igy-line); background: var(--igy-bg-alt); font-size: 15px; }

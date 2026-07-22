@@ -8,7 +8,7 @@ const usd = (cents: number) => `$${(cents / 100).toLocaleString(undefined, { min
 
 export default async function DashboardPage() {
   if (!(await can("analytics.dashboard.view"))) return <Forbidden permission="analytics.dashboard.view" />;
-  const d = await getDashboardData();
+  const [d, canViewRevenue] = await Promise.all([getDashboardData(), can("analytics.revenue.view")]);
 
   return (
     <>
@@ -50,6 +50,20 @@ export default async function DashboardPage() {
           <div className="k-value">{usd(d.arrCents)}</div>
           <div className="k-sub">MRR × 12</div>
         </div>
+
+        {/* Reserved donation fund — financial, gated behind analytics.revenue.view */}
+        {canViewRevenue && d.donationFund && (
+          <div className="kpi k-span2">
+            <div className="k-label">Reserved donation fund</div>
+            <div className="k-value">{usd(d.donationFund.availableCents)}</div>
+            <div className="k-sub">
+              available to disburse · {usd(d.donationFund.accruedCents)} accrued − {usd(d.donationFund.disbursedCents)} donated
+              {d.donationFund.lastCloseDate ? ` · last close ${d.donationFund.lastCloseDate}` : " · no close yet"}
+              {" · "}
+              <a href="/admin/donation-fund">manage</a>
+            </div>
+          </div>
+        )}
 
         {/* Pending signups awaiting SMS */}
         <div className="kpi">

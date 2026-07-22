@@ -23,7 +23,20 @@ function getStripePromise() {
 
 type PlanChoice = "individual" | "family" | "gift" | "group";
 
-const STEP = { LANG: 0, PLAN: 1, RECIPIENT: 2, PLUSONE: 3, REFERRAL: 4, PAY: 5, PHONE: 6, DONE: 7 } as const;
+const STEP = { LANG: 0, FOCUS: 1, PLAN: 2, RECIPIENT: 3, PLUSONE: 4, REFERRAL: 5, PAY: 6, PHONE: 7, DONE: 8 } as const;
+
+// Theme/mood tracks (locked taxonomy). Stored as theme_track on the subscription
+// record; 'general' is the default. Labels here are display-only; the keys must
+// match the theme_tracks table.
+const THEME_TRACKS: Array<{ key: string; en: string; es: string }> = [
+  { key: "general", en: "General — no preference", es: "General — sin preferencia" },
+  { key: "joy_gratitude", en: "Joy & gratitude", es: "Alegría y gratitud" },
+  { key: "gods_love_grace", en: "God’s love & grace", es: "El amor y la gracia de Dios" },
+  { key: "patience_peace", en: "Patience & peace", es: "Paciencia y paz" },
+  { key: "honesty_integrity", en: "Honesty & integrity", es: "Honestidad e integridad" },
+  { key: "courage_confidence", en: "Courage & confidence", es: "Valor y confianza" },
+  { key: "comfort_hard_times", en: "Comfort in hard times", es: "Consuelo en tiempos difíciles" },
+];
 const TOTAL_DOTS = 7;
 
 const money = (n: number) => `$${n % 1 === 0 ? n.toFixed(0) : n.toFixed(2)}`;
@@ -53,6 +66,7 @@ export default function SignupFlow({
 }) {
   const [lang, setLang] = useState<Lang>(initialLang);
   const [step, setStep] = useState<number>(STEP.LANG);
+  const [themeTrack, setThemeTrack] = useState<string>("general");
   const s = t[lang];
 
   // plan
@@ -167,6 +181,7 @@ export default function SignupFlow({
 
   function reset() {
     setStep(STEP.LANG);
+    setThemeTrack("general");
     setResult(null);
     setError(null);
     setTeenFirstName(""); setPurchaserEmail(""); setTeenPhone(""); setPrimaryAttest(false);
@@ -183,7 +198,8 @@ export default function SignupFlow({
       const res = await fetch("/api/promo/validate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: promoInput.trim() }),
+        // pass the selected plan so the server enforces any tier restriction on the code
+        body: JSON.stringify({ code: promoInput.trim(), plan_key: resolved?.key }),
       });
       const data = await res.json();
       if (data.valid) {
@@ -219,6 +235,7 @@ export default function SignupFlow({
     try {
       const res = await submitConsent({
         language: lang,
+        theme_track: themeTrack,
         plan_key: resolved!.key,
         base_price_id: resolved!.price_id!,
         group_teen_count: planChoice === "group" ? teenCount : null,
@@ -268,6 +285,7 @@ export default function SignupFlow({
     try {
       const res = await submitConsent({
         language: lang,
+        theme_track: themeTrack,
         plan_key: "family",
         base_price_id: PLANS.family_annual.price_id!,
         referral_code: referralApplied ? referralInput.trim() : null,
@@ -335,6 +353,35 @@ export default function SignupFlow({
               </div>
               <div className="wizard-nav">
                 <span />
+                <button className="btn btn-primary" onClick={() => setStep(STEP.FOCUS)}>{s.continue}</button>
+              </div>
+            </section>
+          )}
+
+          {/* ---------- 0.5 Focus / theme track ---------- */}
+          {step === STEP.FOCUS && (
+            <section>
+              <h2>{lang === "es" ? "Elige un enfoque" : "Pick a focus"}</h2>
+              <p className="muted">
+                {lang === "es"
+                  ? "Elige el tipo de versículos que recibirán. Puedes dejarlo en general."
+                  : "Choose the kind of verses they’ll get. You can keep it general."}
+              </p>
+              <div style={{ display: "grid", gap: 10, marginTop: 20 }}>
+                {THEME_TRACKS.map((tk) => (
+                  <div
+                    key={tk.key}
+                    className={`choice ${themeTrack === tk.key ? "selected" : ""}`}
+                    onClick={() => setThemeTrack(tk.key)}
+                    role="button"
+                    tabIndex={0}
+                  >
+                    <span className="c-title">{lang === "es" ? tk.es : tk.en}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="wizard-nav">
+                <button className="btn btn-ghost" onClick={() => setStep(STEP.LANG)}>{s.back}</button>
                 <button className="btn btn-primary" onClick={() => setStep(STEP.PLAN)}>{s.continue}</button>
               </div>
             </section>
@@ -424,7 +471,7 @@ export default function SignupFlow({
               </div>
 
               <div className="wizard-nav">
-                <button className="btn btn-ghost" onClick={() => setStep(STEP.LANG)}>{s.back}</button>
+                <button className="btn btn-ghost" onClick={() => setStep(STEP.FOCUS)}>{s.back}</button>
                 <button className="btn btn-primary" disabled={isGroupContact || !resolved} onClick={() => setStep(STEP.RECIPIENT)}>
                   {s.continue}
                 </button>

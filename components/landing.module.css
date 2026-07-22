@@ -78,6 +78,49 @@
 .badge .label { font-weight: 500; margin-bottom: 2px; }
 .badge .value { color: #a9bad6; }
 
+/* ---------- Why we do this ---------- */
+/* Mirrors the "Which text we use" section: same .sectionPlain wrapper + .eyebrow
+   + .translationCopy body. Adds a headline, and two cards that reuse the exact
+   translation-badge treatment (rgba surface, hairline border, 10px radius) so it
+   reads as a continuation of the page, not a new visual language. */
+.whyHeadline { font-size: 27px; line-height: 1.15; font-weight: 700; color: #fff; margin-bottom: 16px; max-width: 600px; }
+.whyCards { display: flex; gap: 12px; margin-top: 22px; }
+.whyCard { flex: 1; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 18px 20px; }
+.whyCardTitle { font-weight: 600; font-size: 15px; margin-bottom: 6px; }
+.whyCardBody { font-size: 13.5px; color: #a9bad6; line-height: 1.6; }
+
+/* ---------- Sponsor rotator ---------- */
+.sponsorSection { padding: 48px 0; border-top: 1px solid rgba(255,255,255,0.06); text-align: center; }
+.sponsorHeadline { font-size: 27px; line-height: 1.15; font-weight: 700; color: #fff; margin-bottom: 10px; }
+.sponsorSub { font-size: 14.5px; color: #a9bad6; line-height: 1.6; max-width: 560px; margin: 0 auto 8px; }
+.srOnly { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+/* Fixed-height stage; logos stacked + cross-faded. Every logo the SAME size. */
+.sponsorStage { position: relative; height: 96px; max-width: 320px; margin: 22px auto 6px; }
+.sponsorLogo {
+  position: absolute; inset: 0; margin: auto; display: block;
+  max-height: 80px; max-width: 260px; width: auto; height: auto; object-fit: contain;
+  opacity: 0; transition: opacity 0.8s ease; pointer-events: none;
+}
+.sponsorLogoActive { opacity: 1; pointer-events: auto; }
+.sponsorControls { display: inline-flex; align-items: center; gap: 16px; margin-top: 6px; }
+.sponsorPause {
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.18); color: #c7d3e6;
+  border-radius: 999px; padding: 7px 16px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
+}
+.sponsorPause:hover { background: rgba(255,255,255,0.12); }
+.sponsorPause:focus-visible { outline: 2px solid #7ea8e0; outline-offset: 2px; }
+.sponsorDots { display: inline-flex; gap: 7px; }
+.sponsorDot { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,0.22); transition: background 0.3s; }
+.sponsorDotOn { background: #7ea8e0; }
+.sponsorFooterLinks { display: flex; gap: 10px; justify-content: center; align-items: center; margin-top: 18px; font-size: 13.5px; }
+.sponsorFooterLinks a { color: #7ea8e0; }
+.sponsorFooterLinks span { color: #47597a; }
+
+/* Reduced motion: no fade even if a user presses Play (default is already paused). */
+@media (prefers-reduced-motion: reduce) {
+  .sponsorLogo { transition: none; }
+}
+
 /* ---------- Pricing ---------- */
 .pricingSection { padding: 48px 0; border-bottom: 1px solid rgba(255,255,255,0.06); }
 .pricingGrid { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; margin-top: 24px; }
@@ -116,6 +159,8 @@
   .hero h1 { font-size: 34px; }
   .steps { grid-template-columns: 1fr; }
   .badges { flex-direction: column; }
+  .whyCards { flex-direction: column; }
+  .whyHeadline { font-size: 24px; }
   .pricingGrid { grid-template-columns: 1fr 1fr; }
   .iotnboBanner { flex-direction: column; align-items: flex-start; }
   .gateQuestion { font-size: 24px; }

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Wordmark from "./Wordmark";
+import SponsorRotator from "./SponsorRotator";
 import { PURCHASES_ENABLED } from "@/lib/flags";
 import s from "./landing.module.css";
 
@@ -268,6 +269,26 @@ export default function Landing() {
         </div>
       </section>
 
+      <section className={s.sectionPlain}>
+        <div className={s.wrap}>
+          <div className={s.eyebrow}>WHY WE DO THIS</div>
+          <h2 className={s.whyHeadline}>Every child deserves to hear it.</h2>
+          <p className={s.translationCopy}>
+            Every generation gets its own slang. The Bible wasn&rsquo;t written in ours &mdash; it was Hebrew, Greek, Latin, Old English, whatever the moment called for. Somebody was always translating the delivery, never the message. We&rsquo;re doing the same thing, just for right now. Teens who need the Word but don&rsquo;t always take to how it&rsquo;s usually said deserve the same shot at hearing it as anyone else. That&rsquo;s the whole point of Yo.
+          </p>
+          <div className={s.whyCards}>
+            <div className={s.whyCard}>
+              <div className={s.whyCardTitle}>Every teen gets their own week</div>
+              <div className={s.whyCardBody}>Free trials run on each teen&rsquo;s own clock, not the family&rsquo;s. If that means a few bonus days floating around, so be it. Bonus God is bonus good.</div>
+            </div>
+            <div className={s.whyCard}>
+              <div className={s.whyCardTitle}>We&rsquo;d rather lose a little money</div>
+              <div className={s.whyCardBody}>If someone finds a way to stretch the system, let them. We&rsquo;ll sleep fine knowing the Word reached someone who needed it. And if it happens, we forgive that too.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section className={s.iotnboSection}>
         <div className={s.wrap}>
           <div className={s.iotnboBanner}>
@@ -283,6 +304,9 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* Sponsor rotator — renders only when there are active sponsors. */}
+      <SponsorRotator />
+
       <footer className={s.footer}>
         <div className={`${s.wrap} ${s.footerRow}`}>
           <span>&copy; 2026 Deckard Enterprise International, LLC</span>
@@ -291,6 +315,8 @@ export default function Landing() {
             <a href="/terms">Terms</a>
             <a href="/cookies">Cookies</a>
             <a href="/its-okay-to-not-be-okay" className={s.gold}>It&rsquo;s okay to not be okay</a>
+            <a href="/sponsors">Sponsors</a>
+            <a href="/sponsor-inquiry">Interested in sponsoring?</a>
           </div>
         </div>
       </footer>
