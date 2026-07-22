@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import LegalPage, { Ph, PhInline } from "@/components/LegalPage";
+import LegalPage from "@/components/LegalPage";
 
 export const metadata: Metadata = {
   title: "Terms of Service — It's God, Yo!",
-  robots: { index: false, follow: false }, // draft, pending legal review
+  description: "The terms that govern your use of It's God, Yo!",
 };
 
 export default function TermsPage() {
@@ -16,9 +16,8 @@ export default function TermsPage() {
 
       <h2>2. Eligibility</h2>
       <p>
-        The purchaser must be at least 18 years old and have the legal authority to enter into this agreement and, where applicable, to consent on behalf of a minor recipient in accordance with our Privacy Policy and applicable law.
+        The purchaser must be at least 18 years old and have the legal authority to enter into this agreement. This service is intended to be authorized by a parent or legal guardian on behalf of a minor recipient. By authorizing a subscription for a minor, the purchaser represents that they have the legal authority to do so on that minor&rsquo;s behalf.
       </p>
-      <Ph label="Placeholder — pending legal review">Age-consent thresholds by jurisdiction pending attorney confirmation.</Ph>
 
       <h2>3. How billing works</h2>
       <ul>
@@ -33,20 +32,21 @@ export default function TermsPage() {
         The Family plan covers up to 2 confirmed teens for the base price. Each additional teen beyond the first 2 is billed separately at the current per-teen rate shown at signup.
       </p>
       <ul>
-        <li>Every teen on a Family plan, including additional teens beyond the first 2, gets their own independent 7-day free trial starting from the moment <strong>that</strong> teen personally confirms &mdash; not from when the family plan was purchased, and not synced to any other teen&rsquo;s confirmation timing.</li>
-        <li>Billing for each additional teen begins after that teen&rsquo;s own 7-day trial, not immediately upon their confirmation.</li>
-        <li>An unconfirmed teen slot is never billed. The additional-teen charge only reflects teens who have actually confirmed.</li>
-        <li>Because each teen&rsquo;s trial runs on their own independent clock, it&rsquo;s possible for teens on the same family account to have different trial end dates depending on when each of them confirmed. This is intentional &mdash; we&rsquo;d rather every teen get their full, fair trial period than shorten anyone&rsquo;s trial to keep dates in sync.</li>
+        <li>Every teen on a Family plan gets their own independent 7-day free trial starting from the moment <strong>that</strong> teen personally confirms.</li>
+        <li>Billing for each additional teen begins after that teen&rsquo;s own 7-day trial.</li>
+        <li>An unconfirmed teen slot is never billed.</li>
+        <li>Because each teen&rsquo;s trial runs on their own independent clock, teens on the same family account may have different trial end dates depending on when each confirmed. This is intentional.</li>
       </ul>
 
       <h2>4. Plans</h2>
       <p>
-        Current plans (Individual, Family, Gift, Group, and the &ldquo;DM from Him&rdquo; +1 add-on) and pricing are shown at signup and may change from time to time; changes will not retroactively affect an active subscription&rsquo;s current billing period.
+        Current plans and pricing are shown at signup and may change from time to time; changes will not retroactively affect an active subscription&rsquo;s current billing period.
       </p>
 
       <h2>5. Cancellation and refunds</h2>
-      <p>You may cancel your subscription at any time before your next billing date to avoid being charged for the next period.</p>
-      <Ph label="Placeholder — pending legal review">Refund policy specifics &mdash; TBD, to be finalized with attorney review; note the 7-day trial already functions as a no-charge evaluation period.</Ph>
+      <p>
+        You may cancel your subscription at any time before your next billing date to avoid being charged for the next period. Because every subscription includes a full 7-day free trial with no charge until the recipient confirms, we do not offer refunds for a billing period once payment has been collected, except where required by law. If you believe you were charged in error, contact us.
+      </p>
 
       <h2>6. Referral and promotional codes</h2>
       <p>
@@ -69,11 +69,12 @@ export default function TermsPage() {
       </p>
 
       <h2>10. Limitation of liability</h2>
-      <Ph label="Placeholder — pending legal review">Standard limitation-of-liability language &mdash; to be finalized with attorney review, appropriate to Kansas law and DEI&rsquo;s LLC structure.</Ph>
+      <p>
+        To the maximum extent permitted by law, Deckard Enterprise International, LLC&rsquo;s total liability arising from or relating to this service is limited to the amount you paid us in the twelve months preceding the claim. We are not liable for indirect, incidental, or consequential damages.
+      </p>
 
       <h2>11. Governing law</h2>
       <p>These terms are governed by the laws of the State of Kansas, without regard to conflict-of-law principles.</p>
-      <Ph label="Placeholder — pending legal review">Confirm venue/arbitration clause with attorney before publishing.</Ph>
 
       <h2>12. Changes to these terms</h2>
       <p>We may update these terms from time to time. Material changes will be communicated to active subscribers before taking effect.</p>
@@ -81,8 +82,7 @@ export default function TermsPage() {
       <h2>13. Contact us</h2>
       <p>
         Deckard Enterprise International, LLC<br />
-        2221 N Amarado St, Wichita, KS 67205<br />
-        <PhInline>[SUPPORT EMAIL &mdash; TBD]</PhInline>
+        2221 N Amarado St, Wichita, KS 67205
       </p>
     </LegalPage>
   );

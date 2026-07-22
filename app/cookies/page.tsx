@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import LegalPage, { PhInline } from "@/components/LegalPage";
+import LegalPage from "@/components/LegalPage";
 
 export const metadata: Metadata = {
   title: "Cookie Policy — It's God, Yo!",
-  robots: { index: false, follow: false }, // draft, pending legal review
+  description: "What cookies and similar technologies the It's God, Yo! website uses.",
 };
 
 export default function CookiesPage() {
@@ -11,26 +11,22 @@ export default function CookiesPage() {
     <LegalPage title="Cookie Policy" updated="July 22, 2026">
       <h2>1. What this page covers</h2>
       <p>
-        This page explains what cookies and similar technologies (like browser local storage) the itsgodyo.com website uses when you visit or sign up. It is written to describe what the site <strong>actually does</strong>, not an aspirational policy.
+        This page explains what cookies and similar technologies (like browser local storage) the itsgodyo.com website uses when you visit or sign up. It describes what the site <strong>actually does</strong>, not an aspirational policy.
       </p>
 
       <h2>2. What the site actually uses</h2>
-      <p>
-        We verified this on a fresh, logged-out page load of itsgodyo.com (checked 2026-07-22). As of that check the site:
-      </p>
+      <p>As of the most recent review of a fresh, logged-out page load, the site:</p>
       <ul>
         <li>sets <strong>no cookies of its own</strong> during normal browsing;</li>
         <li>uses <strong>no</strong> browser local storage or session storage;</li>
         <li>loads <strong>no</strong> third-party scripts, and runs <strong>no analytics or tracking tools of any kind</strong> (no Google Analytics, Vercel Analytics, Plausible, or similar);</li>
         <li>runs <strong>no advertising cookies or third-party ad trackers</strong>.</li>
       </ul>
-      <p>
-        Because there are no non-essential cookies to consent to, the site does not show a cookie-consent banner.
-      </p>
+      <p>Because there are no non-essential cookies to consent to, the site does not show a cookie-consent banner.</p>
 
       <h2>3. Payment processing (Stripe)</h2>
       <p>
-        When you reach the payment step of signup, our payment processor, Stripe, may set its own cookies as part of fraud prevention and secure checkout. These are governed by Stripe&rsquo;s own cookie and privacy policies, not by us directly. (Stripe is only loaded on the payment step; it does not run while you browse the rest of the site.)
+        When you reach the payment step of signup, our payment processor, Stripe, may set its own cookies as part of fraud prevention and secure checkout. These are governed by Stripe&rsquo;s own cookie and privacy policies, not by us directly. Stripe is only loaded on the payment step; it does not run while you browse the rest of the site.
       </p>
 
       <h2>4. Your choices</h2>
@@ -46,8 +42,7 @@ export default function CookiesPage() {
       <h2>6. Contact us</h2>
       <p>
         Deckard Enterprise International, LLC<br />
-        2221 N Amarado St, Wichita, KS 67205<br />
-        <PhInline>[SUPPORT EMAIL &mdash; TBD]</PhInline>
+        2221 N Amarado St, Wichita, KS 67205
       </p>
     </LegalPage>
   );
