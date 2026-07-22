@@ -22,6 +22,17 @@ export const DM_ADDON = {
   interval: "month" as const,
 };
 
+// Family plan: base $99/yr covers up to FAMILY_BASE_TEENS confirmed teens; each
+// additional confirmed teen is $28/yr on the extra-teen line (added at that
+// teen's own 7-day trial-end). Fallback = sandbox TEST price; prod injects the
+// live price via NEXT_PUBLIC_PRICE_FAMILY_EXTRA_TEEN.
+export const FAMILY_BASE_TEENS = 2;
+export const FAMILY_EXTRA_TEEN = {
+  price_id: process.env.NEXT_PUBLIC_PRICE_FAMILY_EXTRA_TEEN || "price_1TvzNeGYyfOIjQvMpKxXkm4m",
+  amount: 28,
+  interval: "year" as const,
+};
+
 export type PlanKey =
   | "individual_monthly"
   | "individual_annual"

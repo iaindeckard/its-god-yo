@@ -87,6 +87,7 @@ interface Payload {
   purchaser_email?: string;
   teen?: { first_name?: string; phone?: string; birth_year?: number; enhanced_consent_ack?: boolean };
   plus_one?: PlusOne | null;
+  family_teens?: Array<{ first_name?: string; phone?: string; birth_year?: number; enhanced_consent_ack?: boolean }>;
   stripe?: { customer_id?: string; setup_intent_id?: string; payment_method_id?: string };
 }
 
@@ -169,6 +170,78 @@ Deno.serve(async (req: Request) => {
 
   const lang = p.language === "es" ? "es" : p.language === "en" ? "en" : null;
   if (!lang) return json(400, { error: "language must be 'en' or 'es'" });
+
+  // ---------------- FAMILY plan: N teens, each own consent row + confirmation ----------------
+  if (p.plan_key === "family" && Array.isArray(p.family_teens) && p.family_teens.length >= 2) {
+    const teens = p.family_teens;
+    const supa = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
+    if (!p.base_price_id) return json(400, { error: "base_price_id is required" });
+    const yr = new Date().getFullYear();
+    const validYear = (y: unknown) => (typeof y === "number" && Number.isInteger(y) && y >= yr - 120 && y <= yr ? (y as number) : null);
+    for (let i = 0; i < teens.length; i++) {
+      if (!teens[i]?.first_name?.trim()) return json(400, { error: `family_teens[${i}].first_name is required` });
+      if (!teens[i]?.phone?.trim()) return json(400, { error: `family_teens[${i}].phone is required` });
+      if (validYear(teens[i]?.birth_year) === null) return json(400, { error: `family_teens[${i}].birth_year is required (4-digit year)` });
+    }
+    const { data: thrRows, error: thrErr } = await supa.from("age_consent_thresholds").select("country_code, minimum_age_for_self_consent, attorney_confirmed");
+    if (thrErr) return json(500, { error: "failed_to_read_age_thresholds", detail: thrErr.message });
+    const thresholds = new Map<string, { min: number; confirmed: boolean }>();
+    for (const r of thrRows ?? []) thresholds.set(r.country_code, { min: r.minimum_age_for_self_consent, confirmed: r.attorney_confirmed });
+
+    const consentIds: string[] = [];
+    const stubs: Array<{ to: string; body: string; cid: string }> = [];
+    for (let i = 0; i < teens.length; i++) {
+      const name = teens[i].first_name!.trim();
+      const gate = evaluateAgeGate(teens[i].phone!.trim(), teens[i].birth_year as number, yr, thresholds);
+      if (gate.decision === "block") return json(403, { error: "age_consent_blocked", who: `family_teens[${i}]`, country: gate.country, computed_age: gate.age, min_age: gate.minAge });
+      if (gate.decision === "enhanced" && teens[i].enhanced_consent_ack !== true) return json(422, { error: "enhanced_consent_required", who: `family_teens[${i}]`, country: gate.country, threshold: gate.minAge });
+      const sms = confirmationSms(lang, name, "primary");
+      const { data: row, error: cErr } = await supa.from("consent_log").insert({
+        recipient_phone: teens[i].phone!.trim(), recipient_first_name: name, language: lang,
+        consent_type: "family_teen", teen_index: i + 1,
+        attestation_text: ATTESTATION[lang](name), attestation_text_version: CONSENT_VERSION,
+        disclosure_text: DISCLOSURE[lang](name), disclosure_text_version: CONSENT_VERSION,
+        consent_status: "pending_confirmation", recipient_birth_year: teens[i].birth_year,
+        recipient_country_code: gate.country, age_gate_decision: gate.decision === "enhanced" ? "enhanced_pending_mechanism" : "standard",
+      }).select("id").single();
+      if (cErr) return json(500, { error: "failed_to_write_family_consent", detail: cErr.message });
+      consentIds.push(row.id);
+      stubs.push({ to: teens[i].phone!.trim(), body: sms, cid: row.id });
+    }
+    const { data: signup, error: sErr } = await supa.from("pending_signups").insert({
+      language: lang, plan_key: "family", base_price_id: p.base_price_id, dm_addon: false,
+      referral_code: p.referral_code?.trim() || null, referral_discount_applied: !!p.referral_discount_applied,
+      promo_code: p.promo_code?.trim() || null, promo_promotion_code_id: p.promo_promotion_code_id?.trim() || null,
+      purchaser_email: p.purchaser_email?.trim() || null, teen_consent_id: consentIds[0], plus_one_consent_id: null,
+      stripe_customer_id: p.stripe?.customer_id ?? null, stripe_setup_intent_id: p.stripe?.setup_intent_id ?? null,
+      stripe_payment_method_id: p.stripe?.payment_method_id ?? null, status: "awaiting_confirmation",
+    }).select("id").single();
+    if (sErr) return json(500, { error: "failed_to_write_family_signup", detail: sErr.message });
+    await supa.from("consent_log").update({ pending_signup_id: signup.id }).in("id", consentIds);
+
+    const twilioSid = Deno.env.get("TWILIO_ACCOUNT_SID"); const twilioToken = Deno.env.get("TWILIO_AUTH_TOKEN"); const twilioFrom = Deno.env.get("TWILIO_FROM_NUMBER");
+    let sent = 0; const sendErrors: Array<{ to: string; error: string }> = [];
+    if (twilioSid && twilioToken && twilioFrom) {
+      for (const s of stubs) {
+        try {
+          const resp = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`, { method: "POST", headers: { Authorization: "Basic " + btoa(`${twilioSid}:${twilioToken}`), "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ From: twilioFrom, To: s.to, Body: s.body }).toString() });
+          if (!resp.ok) { sendErrors.push({ to: s.to, error: `${resp.status} ${(await resp.text()).slice(0, 120)}` }); continue; }
+          sent++; await supa.from("consent_log").update({ confirmation_sent_at: new Date().toISOString() }).eq("id", s.cid);
+        } catch (e) { sendErrors.push({ to: s.to, error: e instanceof Error ? e.message : "send_failed" }); }
+      }
+    }
+    return json(200, {
+      status: "submitted", plan: "family", pending_signup_id: signup.id, teen_consent_ids: consentIds, teen_count: teens.length,
+      sms_stubbed: sent === 0, sms_sent_count: sent,
+      sms_would_send: sent === 0 ? stubs.map((s) => ({ to: s.to, body: s.body })) : undefined,
+      sms_send_errors: sendErrors.length ? sendErrors : undefined,
+      message: lang === "es"
+        ? "Le enviamos un mensaje a cada joven para confirmar. Cada uno debe responder SÍ por su cuenta."
+        : "We texted each teen to confirm — each one replies YES on their own.",
+      note: "Family: each teen has their own 7-day trial from their own YES; the $28 extra-teen line is added at each teen's trial-end. Unconfirmed teens are billed $0.",
+    });
+  }
+
   if (!p.teen?.first_name?.trim()) return json(400, { error: "teen.first_name is required" });
   if (!p.teen?.phone?.trim()) return json(400, { error: "teen.phone is required" });
   if (!p.plan_key || !p.base_price_id) return json(400, { error: "plan_key and base_price_id are required" });
