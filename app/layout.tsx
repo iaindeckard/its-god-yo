@@ -9,14 +9,30 @@ const poppins = Poppins({
   display: "swap",
 });
 
+// Site-wide metadata defaults (locked copy, IGY-OG-Tags-LOCKED-2026-07-23.md).
+// Individual pages can override title/description by exporting their own
+// `metadata`; the OG/Twitter image comes from app/opengraph-image.tsx +
+// app/twitter-image.tsx (Next injects those tags for every route).
+const OG_TITLE = "It's God, Yo! — Faith that fits in a text";
+const OG_DESCRIPTION =
+  "A daily verse, texted the way they'd actually read it. Faith-based texting for teens, and a reminder for the families who love them too.";
+const SITE_URL = "https://its-god-yo.vercel.app";
+
 export const metadata: Metadata = {
-  title: "It's God, Yo! — God's Word in your words.",
-  description:
-    "A daily verse, texted in language that actually sounds like you. Scripture rendered as short, casual messages — in English and Spanish.",
+  metadataBase: new URL(SITE_URL), // makes the og/twitter image URLs absolute
+  title: OG_TITLE,
+  description: OG_DESCRIPTION,
   openGraph: {
-    title: "It's God, Yo!",
-    description: "God's Word in your words. A daily verse, texted the way you'd actually text.",
+    title: OG_TITLE,
+    description: OG_DESCRIPTION,
+    siteName: "It's God, Yo!",
+    url: SITE_URL,
     type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: OG_TITLE,
+    description: OG_DESCRIPTION,
   },
 };
 
