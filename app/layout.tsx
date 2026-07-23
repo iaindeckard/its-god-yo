@@ -16,7 +16,7 @@ const poppins = Poppins({
 const OG_TITLE = "It's God, Yo! — Faith that fits in a text";
 const OG_DESCRIPTION =
   "A daily verse, texted the way they'd actually read it. Faith-based texting for teens, and a reminder for the families who love them too.";
-const SITE_URL = "https://its-god-yo.vercel.app";
+const SITE_URL = "https://itsgodyo.com"; // canonical custom domain (used for absolute og:url + image URLs)
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL), // makes the og/twitter image URLs absolute
