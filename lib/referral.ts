@@ -353,3 +353,66 @@ export async function onRefereePaymentReversed(args: {
   await admin.from("referral_events").update({ status: "void", reversed_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", ev.id);
   return { status: "reversed" };
 }
+
+// ─────────────────────────── admin read ───────────────────────────
+
+export interface ReferralAdminOverview {
+  totalEvents: number;
+  statusCounts: Record<string, number>;
+  rewardsGranted: number;
+  rewardsReversed: number;
+  netRewardCents: number;
+  recent: Array<{
+    id: string;
+    status: string;
+    referrer: string;
+    referee: string | null;
+    created_at: string;
+    rewardedAt: string | null;
+  }>;
+}
+
+/** Read-only overview for the admin referrals page. */
+export async function getReferralAdminOverview(recentLimit = 50): Promise<ReferralAdminOverview> {
+  const admin = getSupabaseAdmin();
+  const [{ data: recentRows }, { data: statusRows }, { data: ledger }] = await Promise.all([
+    admin
+      .from("referral_events")
+      .select("id, status, referrer_customer_id, referee_customer_id, created_at, referrer_credit_applied_at")
+      .order("created_at", { ascending: false })
+      .limit(recentLimit),
+    admin.from("referral_events").select("status"),
+    admin.from("referral_reward_ledger").select("direction, credit_cents"),
+  ]);
+
+  const statusCounts: Record<string, number> = {};
+  for (const r of (statusRows ?? []) as Array<{ status: string }>) {
+    statusCounts[r.status] = (statusCounts[r.status] ?? 0) + 1;
+  }
+  let rewardsGranted = 0;
+  let rewardsReversed = 0;
+  let netRewardCents = 0;
+  for (const l of (ledger ?? []) as Array<{ direction: string; credit_cents: number }>) {
+    if (l.direction === "grant") { rewardsGranted++; netRewardCents += l.credit_cents; }
+    else { rewardsReversed++; netRewardCents -= l.credit_cents; }
+  }
+  const recent = ((recentRows ?? []) as Array<{
+    id: string; status: string; referrer_customer_id: string; referee_customer_id: string | null; created_at: string; referrer_credit_applied_at: string | null;
+  }>).map((e) => ({
+    id: e.id,
+    status: e.status,
+    referrer: e.referrer_customer_id,
+    referee: e.referee_customer_id,
+    created_at: e.created_at,
+    rewardedAt: e.referrer_credit_applied_at,
+  }));
+
+  return {
+    totalEvents: (statusRows ?? []).length,
+    statusCounts,
+    rewardsGranted,
+    rewardsReversed,
+    netRewardCents,
+    recent,
+  };
+}

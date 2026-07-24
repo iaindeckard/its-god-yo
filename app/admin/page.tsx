@@ -5,6 +5,7 @@ export const dynamic = "force-dynamic";
 
 const SECTIONS = [
   { href: "/admin/promo-codes", label: "Promo codes", need: "billing.promo_codes.view", desc: "Create and manage Stripe-native discount codes." },
+  { href: "/admin/referrals", label: "Referrals", need: "billing.promo_codes.view", desc: "Give/get-a-month referral loop — events, rewards, cap." },
   { href: "/admin/review", label: "Review queue", need: "content.queue.view", desc: "Approve or reject flagged daily-verse slots." },
   { href: "/admin/dashboard", label: "KPI dashboard", need: "analytics.dashboard.view", desc: "Subscribers, MRR, funnel, backlog." },
   { href: "/admin/consent-thresholds", label: "Consent thresholds", need: "admin.consent_thresholds.manage", desc: "Per-country age-consent rules (fail-safe until counsel confirms)." },
