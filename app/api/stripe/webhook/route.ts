@@ -19,7 +19,10 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request) {
   const stripe = getStripe();
   const sig = req.headers.get("stripe-signature");
-  const secret = process.env.STRIPE_WEBHOOK_SECRET;
+  // Trim defensively: a signing secret pasted into an env var with a trailing
+  // newline/space fails constructEvent for every event, which looks exactly like
+  // a "wrong secret" (HTTP 400 on all deliveries).
+  const secret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
   if (!sig || !secret) return NextResponse.json({ error: "missing_signature_or_secret" }, { status: 400 });
 
   const raw = await req.text();
@@ -27,7 +30,11 @@ export async function POST(req: Request) {
   try {
     event = stripe.webhooks.constructEvent(raw, sig, secret);
   } catch (e) {
-    return NextResponse.json({ error: `signature_verification_failed: ${e instanceof Error ? e.message : ""}` }, { status: 400 });
+    // Log (without the secret) so signature failures are visible in Vercel logs —
+    // the 400 path was previously silent, making this class of failure hard to confirm.
+    const msg = e instanceof Error ? e.message : String(e);
+    console.warn(`[stripe-webhook] signature verification failed (secret len=${secret.length}): ${msg}`);
+    return NextResponse.json({ error: `signature_verification_failed: ${msg}` }, { status: 400 });
   }
 
   const admin = getSupabaseAdmin();
