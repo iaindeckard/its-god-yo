@@ -19,16 +19,6 @@ import { PLANS, FAMILY_EXTRA_TEEN, FAMILY_BASE_TEENS } from "./plans";
 
 const TRIAL_DAYS = 7;
 
-async function referralCoupon(stripe: Stripe): Promise<string> {
-  const id = "igy_referral_10";
-  try {
-    await stripe.coupons.retrieve(id);
-  } catch {
-    await stripe.coupons.create({ id, percent_off: 10, duration: "forever", name: "Referral 10% off" });
-  }
-  return id;
-}
-
 /** Create the base Family subscription (base price only, 7-day trial). Called
  *  once, when the first teen on a Family purchase confirms. Idempotent. */
 export async function createFamilyBaseSubscription(pendingSignupId: string): Promise<{ status: string; subscription_id?: string }> {
@@ -40,9 +30,10 @@ export async function createFamilyBaseSubscription(pendingSignupId: string): Pro
   if (ps.stripe_subscription_id) return { status: "already_created", subscription_id: ps.stripe_subscription_id };
   if (!ps.stripe_customer_id || !ps.stripe_payment_method_id) return { status: "not_ready" };
 
+  // Promo codes still apply; the old 10%-off referral coupon was retired —
+  // referrals now reward via a customer-balance credit at conversion (lib/referral.ts).
   const discounts: Stripe.SubscriptionCreateParams.Discount[] = [];
   if (ps.promo_promotion_code_id) discounts.push({ promotion_code: ps.promo_promotion_code_id });
-  if (ps.referral_discount_applied) discounts.push({ coupon: await referralCoupon(stripe) });
 
   const sub = await stripe.subscriptions.create(
     {

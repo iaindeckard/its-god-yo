@@ -10,7 +10,7 @@ import {
   t, ATTESTATION, DISCLOSURE, HONORIFICS, RELATIONSHIPS, type Lang,
 } from "@/lib/i18n";
 import {
-  PLANS, GROUP_BANDS, DM_ADDON, FAMILY_EXTRA_TEEN, FAMILY_BASE_TEENS, bandForCount, GROUP_CONTACT_THRESHOLD, REFERRAL_DISCOUNT,
+  PLANS, GROUP_BANDS, DM_ADDON, FAMILY_EXTRA_TEEN, FAMILY_BASE_TEENS, bandForCount, GROUP_CONTACT_THRESHOLD,
 } from "@/lib/plans";
 import { submitConsent, normalizePhone, type ConsentResult } from "@/lib/consent";
 
@@ -105,6 +105,8 @@ export default function SignupFlow({
   // referral
   const [referralInput, setReferralInput] = useState("");
   const [referralApplied, setReferralApplied] = useState(false);
+  const [referralBusy, setReferralBusy] = useState(false);
+  const [referralError, setReferralError] = useState<string | null>(null);
 
   // promo code (SEPARATE from referral, lives at the payment step)
   const [promoInput, setPromoInput] = useState("");
@@ -177,7 +179,8 @@ export default function SignupFlow({
   const baseAmount =
     planChoice === "group" && band ? band.amount * teenCount : resolved?.amount ?? 0;
   const baseInterval = resolved?.interval ?? "year";
-  const discount = referralApplied ? baseAmount * REFERRAL_DISCOUNT : 0;
+  // Referrals no longer discount at signup — they credit the referee a free
+  // month at their first invoice (via customer-balance credit, see lib/referral.ts).
 
   function reset() {
     setStep(STEP.LANG);
@@ -185,13 +188,14 @@ export default function SignupFlow({
     setResult(null);
     setError(null);
     setTeenFirstName(""); setPurchaserEmail(""); setTeenPhone(""); setPrimaryAttest(false);
-    setPoEnabled(false); setPoAttest(false); setStripeIds(null); setReferralApplied(false); setReferralInput("");
+    setPoEnabled(false); setPoAttest(false); setStripeIds(null); setReferralApplied(false); setReferralInput(""); setReferralError(null);
     setPromo(null); setPromoInput(""); setPromoError(null);
     setTeenBirthYear(""); setTeenGate(null); setTeenEnhancedAck(false);
     setPoBirthYear(""); setPoGate(null); setPoEnhancedAck(false);
   }
 
   async function applyPromo() {
+    if (referralApplied) { setPromo(null); setPromoError(s.referralExclusive); return; } // referral ⊕ promo
     setPromoError(null);
     setPromoBusy(true);
     try {
@@ -221,6 +225,41 @@ export default function SignupFlow({
     }
   }
 
+  async function applyReferral() {
+    setReferralError(null);
+    if (promo) { setReferralApplied(false); setReferralError(s.referralExclusive); return; } // referral ⊕ promo
+    const code = referralInput.trim();
+    if (!code) return;
+    setReferralBusy(true);
+    try {
+      const res = await fetch("/api/referral/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+      });
+      const data = await res.json();
+      if (data.valid) { setReferralApplied(true); setReferralError(null); }
+      else { setReferralApplied(false); setReferralError(s.referralInvalid); }
+    } catch {
+      setReferralApplied(false); setReferralError(s.referralInvalid);
+    } finally {
+      setReferralBusy(false);
+    }
+  }
+
+  // Best-effort: record referral attribution once the pending signup exists.
+  // Never blocks/fails the signup — conversion re-resolves attribution anyway.
+  async function attachReferral(pendingSignupId?: string) {
+    if (!referralApplied || !pendingSignupId) return;
+    try {
+      await fetch("/api/referral/attach", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pendingSignupId, code: referralInput.trim() }),
+      });
+    } catch { /* non-blocking */ }
+  }
+
   const promoLabel = promo
     ? promo.percent_off != null
       ? `${promo.percent_off}% off`
@@ -242,7 +281,7 @@ export default function SignupFlow({
         dm_addon: poEnabled,
         dm_addon_price_id: poEnabled ? DM_ADDON.price_id : null,
         referral_code: referralApplied ? referralInput.trim() : null,
-        referral_discount_applied: referralApplied,
+        referral_discount_applied: false, // retired: referrals reward via balance credit, not a signup discount
         promo_code: promo?.code ?? null,
         promo_promotion_code_id: promo?.promotion_code_id ?? null,
         purchaser_email: purchaserEmail.trim() || null,
@@ -267,6 +306,7 @@ export default function SignupFlow({
           : null,
         stripe: stripeIds ?? undefined,
       });
+      await attachReferral((res as { pending_signup_id?: string }).pending_signup_id);
       setResult(res);
       setStep(STEP.DONE);
     } catch (e) {
@@ -289,13 +329,14 @@ export default function SignupFlow({
         plan_key: "family",
         base_price_id: PLANS.family_annual.price_id!,
         referral_code: referralApplied ? referralInput.trim() : null,
-        referral_discount_applied: referralApplied,
+        referral_discount_applied: false, // retired: referrals reward via balance credit, not a signup discount
         promo_code: promo?.code ?? null,
         promo_promotion_code_id: promo?.promotion_code_id ?? null,
         purchaser_email: purchaserEmail.trim() || null,
         family_teens: familyTeens.map((tn) => ({ first_name: tn.name.trim(), phone: normalizePhone(tn.phone), birth_year: Number(tn.year) })),
         stripe: ids,
       });
+      await attachReferral((res as { pending_signup_id?: string }).pending_signup_id);
       setResult(res);
       setStep(STEP.DONE);
     } catch (e) {
@@ -657,16 +698,20 @@ export default function SignupFlow({
               <p className="muted">{s.wReferralSub}</p>
               <div className="field" style={{ marginTop: 16 }}>
                 <label>{s.referralLabel}</label>
-                <input
-                  value={referralInput}
-                  onChange={(e) => { setReferralInput(e.target.value); setReferralApplied(false); }}
-                  placeholder="FRIEND10"
-                />
-                {referralApplied && <p className="hint" style={{ color: "var(--igy-blue)" }}>{s.referralApplied}</p>}
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input
+                    value={referralInput}
+                    onChange={(e) => { setReferralInput(e.target.value); setReferralApplied(false); setReferralError(null); }}
+                    placeholder="IGY-XXXXXXXX"
+                    style={{ flex: 1 }}
+                  />
+                  <button className="btn btn-ghost" onClick={applyReferral} disabled={referralBusy || !referralInput.trim()}>
+                    {referralBusy ? "…" : s.apply}
+                  </button>
+                </div>
+                {referralApplied && <p className="hint" style={{ color: "var(--igy-blue)" }}>✓ {s.referralApplied}</p>}
+                {referralError && <p className="hint" style={{ color: "var(--igy-error-text)" }}>{referralError}</p>}
               </div>
-              {!referralApplied && referralInput.trim() && (
-                <button className="btn btn-ghost" onClick={() => setReferralApplied(true)}>{s.apply}</button>
-              )}
               <div className="wizard-nav">
                 <button className="btn btn-ghost" onClick={() => setStep(STEP.PLUSONE)}>{s.back}</button>
                 <button className="btn btn-primary" onClick={() => setStep(STEP.PAY)}>{s.continue}</button>
@@ -694,8 +739,8 @@ export default function SignupFlow({
                 )}
                 {referralApplied && (
                   <div className="summary-line">
-                    <span>{s.referral} (−10%)</span>
-                    <span>−{money(discount)}</span>
+                    <span>{s.referral}</span>
+                    <span style={{ color: "var(--igy-blue)" }}>{s.referralFreeMonthShort}</span>
                   </div>
                 )}
                 {promo && (

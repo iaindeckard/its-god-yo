@@ -106,4 +106,5 @@ export function bandForCount(count: number): GroupBand | null {
   return GROUP_BANDS.find((b) => count >= b.min && count <= b.max) ?? null;
 }
 
-export const REFERRAL_DISCOUNT = 0.1; // 10% off
+// REFERRAL_DISCOUNT (10% off) retired 2026-07-24 — referrals now reward via a
+// customer-balance credit at the referee's paid conversion (see lib/referral.ts).

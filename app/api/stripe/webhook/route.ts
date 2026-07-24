@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { getStripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+import { onRefereePaidConversion, onRefereePaymentReversed, type OwnerKind } from "@/lib/referral";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,13 @@ export const dynamic = "force-dynamic";
  * Handled: trial_will_end (reminder window), invoice.paid (first real charge /
  * renewal), invoice.payment_failed (dunning), invoice.payment_action_required
  * (off-session SCA at trial end), subscription updated/deleted.
+ *
+ * Referral hooks: on the referee's FIRST real charge (invoice.paid with
+ * amount_paid > 0 AND billing_reason 'subscription_cycle' — NOT the $0
+ * trial-start invoice, whose billing_reason is 'subscription_create') we fire
+ * onRefereePaidConversion (give/get a month + propagation); on charge.refunded /
+ * charge.dispute.created we fire onRefereePaymentReversed (clawback). Both no-op
+ * when the payment isn't tied to a referral, and are idempotent under retries.
  */
 export async function POST(req: Request) {
   const stripe = getStripe();
@@ -46,6 +54,36 @@ export async function POST(req: Request) {
     const s = (inv as unknown as { subscription?: string | { id: string } | null }).subscription;
     return typeof s === "string" ? s : s?.id ?? null;
   };
+  const idOf = (v: unknown): string | null =>
+    typeof v === "string" ? v : (v as { id?: string } | null)?.id ?? null;
+  // Group buyers are churches; everyone else is a family. Cosmetic label on the
+  // referee's propagated code — the balance-credit reward scales regardless.
+  const ownerKindForPlan = (planKey: string | null | undefined): OwnerKind =>
+    typeof planKey === "string" && planKey.startsWith("group") ? "church" : "family";
+
+  // Fire referral conversion for the referee's first REAL charge. No-ops when the
+  // signup wasn't referred. Resolves pending_signup_id + plan from the
+  // pending_signups row (already keyed by stripe_subscription_id).
+  const handleReferralConversion = async (inv: Stripe.Invoice) => {
+    const subId = invSubId(inv);
+    if (!subId) return;
+    const { data: ps } = await admin
+      .from("pending_signups")
+      .select("id, plan_key")
+      .eq("stripe_subscription_id", subId)
+      .maybeSingle();
+    if (!ps?.id) return;
+    const customerId = idOf((inv as unknown as { customer?: unknown }).customer);
+    if (!customerId) return;
+    await onRefereePaidConversion({
+      refereePendingSignupId: ps.id,
+      refereeCustomerId: customerId,
+      refereeKind: ownerKindForPlan(ps.plan_key),
+      invoiceId: inv.id ?? undefined,
+      chargeId: idOf((inv as unknown as { charge?: unknown }).charge) ?? undefined,
+      paymentIntentId: idOf((inv as unknown as { payment_intent?: unknown }).payment_intent) ?? undefined,
+    });
+  };
 
   try {
     switch (event.type) {
@@ -55,7 +93,16 @@ export async function POST(req: Request) {
         break;
       }
       case "invoice.paid": {
-        await setStatusBySub(invSubId(event.data.object as Stripe.Invoice), "active");
+        const inv = event.data.object as Stripe.Invoice;
+        await setStatusBySub(invSubId(inv), "active");
+        // Reward on PAID conversion, not signup: only the first real charge —
+        // amount_paid > 0 AND billing_reason 'subscription_cycle' — never the $0
+        // trial-start invoice (billing_reason 'subscription_create').
+        const amountPaid = (inv as unknown as { amount_paid?: number }).amount_paid ?? 0;
+        const billingReason = (inv as unknown as { billing_reason?: string }).billing_reason;
+        if (amountPaid > 0 && billingReason === "subscription_cycle") {
+          await handleReferralConversion(inv);
+        }
         break;
       }
       case "invoice.payment_failed": {
@@ -74,6 +121,24 @@ export async function POST(req: Request) {
       case "customer.subscription.updated": {
         const sub = event.data.object as Stripe.Subscription;
         console.log(`[stripe-webhook] subscription.updated sub=${sub.id} status=${sub.status}`);
+        break;
+      }
+      case "charge.refunded": {
+        // Referral clawback: reverse the referrer's reward + deactivate the
+        // referee's propagated code if this charge backed a rewarded conversion.
+        const charge = event.data.object as Stripe.Charge;
+        await onRefereePaymentReversed({
+          chargeId: charge.id,
+          paymentIntentId: idOf((charge as unknown as { payment_intent?: unknown }).payment_intent) ?? undefined,
+        });
+        break;
+      }
+      case "charge.dispute.created": {
+        const dispute = event.data.object as Stripe.Dispute;
+        await onRefereePaymentReversed({
+          chargeId: idOf((dispute as unknown as { charge?: unknown }).charge) ?? undefined,
+          paymentIntentId: idOf((dispute as unknown as { payment_intent?: unknown }).payment_intent) ?? undefined,
+        });
         break;
       }
       default:

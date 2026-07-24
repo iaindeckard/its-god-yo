@@ -15,25 +15,6 @@ import { getSupabaseAdmin } from "./supabaseAdmin";
  * signup -> create subscription later with default_payment_method + trial.
  */
 
-// Standing 10%-off referral coupon, ensured lazily (one coupon reused for all
-// referrals — NOT one per signup).
-const REFERRAL_COUPON_ID = "igy_referral_10";
-
-async function ensureReferralCoupon(stripe: Stripe): Promise<string> {
-  try {
-    await stripe.coupons.retrieve(REFERRAL_COUPON_ID);
-  } catch {
-    await stripe.coupons.create({
-      id: REFERRAL_COUPON_ID,
-      percent_off: 10,
-      duration: "forever",
-      name: "Referral 10% off",
-      metadata: { source: "itsgodyo_referral" },
-    });
-  }
-  return REFERRAL_COUPON_ID;
-}
-
 export type CreateStatus =
   | "created"
   | "already_created"
@@ -78,9 +59,10 @@ export async function createSubscriptionForPendingSignup(pendingSignupId: string
   // base plan's cadence.
   if (ps.dm_addon && ps.dm_addon_price_id) items.push({ price: ps.dm_addon_price_id });
 
+  // Promo codes still apply; the old 10%-off referral coupon was retired —
+  // referrals now reward via a customer-balance credit at conversion (lib/referral.ts).
   const discounts: Stripe.SubscriptionCreateParams.Discount[] = [];
   if (ps.promo_promotion_code_id) discounts.push({ promotion_code: ps.promo_promotion_code_id });
-  if (ps.referral_discount_applied) discounts.push({ coupon: await ensureReferralCoupon(stripe) });
 
   const sub = await stripe.subscriptions.create(
     {

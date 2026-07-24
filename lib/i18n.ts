@@ -118,9 +118,12 @@ export const t = {
     plusOneRecipientPhone: "Their mobile number",
 
     wReferralTitle: "Have a referral code?",
-    wReferralSub: "Enter one to take 10% off. Totally optional.",
+    wReferralSub: "Enter a friend's code to get a free month when your subscription starts. Optional.",
     referralLabel: "Referral code",
-    referralApplied: "10% off applied — nice!",
+    referralApplied: "Referral applied — a free month when you start! 🎁",
+    referralInvalid: "That code isn't valid.",
+    referralExclusive: "Use a referral code or a promo code, not both.",
+    referralFreeMonthShort: "1 month free",
     referralSkip: "Skip",
     apply: "Apply",
 
@@ -245,9 +248,12 @@ export const t = {
     plusOneRecipientPhone: "Su número de celular",
 
     wReferralTitle: "¿Tienes un código de referido?",
-    wReferralSub: "Ingresa uno para 10% de descuento. Totalmente opcional.",
+    wReferralSub: "Ingresa el código de un amigo para obtener un mes gratis cuando empiece tu suscripción. Opcional.",
     referralLabel: "Código de referido",
-    referralApplied: "¡10% de descuento aplicado!",
+    referralApplied: "¡Referido aplicado — un mes gratis cuando empieces! 🎁",
+    referralInvalid: "Ese código no es válido.",
+    referralExclusive: "Usa un código de referido o uno promocional, no ambos.",
+    referralFreeMonthShort: "1 mes gratis",
     referralSkip: "Omitir",
     apply: "Aplicar",
 
