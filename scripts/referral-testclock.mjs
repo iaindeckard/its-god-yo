@@ -2,10 +2,12 @@
 // Run with the SANDBOX TEST key (the one prod uses): acct_1TvPGDGYyfOIjQvM.
 //
 //   STRIPE_SECRET_KEY=sk_test_... node scripts/referral-testclock.mjs setup
+//   STRIPE_SECRET_KEY=sk_test_... node scripts/referral-testclock.mjs selfref <existing cus...>
 //   STRIPE_SECRET_KEY=sk_test_... node scripts/referral-testclock.mjs advance <clockId>
 //   STRIPE_SECRET_KEY=sk_test_... node scripts/referral-testclock.mjs lastinvoice <subId>
 //   STRIPE_SECRET_KEY=sk_test_... node scripts/referral-testclock.mjs balances <cus...>
 //   STRIPE_SECRET_KEY=sk_test_... node scripts/referral-testclock.mjs refund <paymentIntentId>
+//   STRIPE_SECRET_KEY=sk_test_... node scripts/referral-testclock.mjs clocks
 //   STRIPE_SECRET_KEY=sk_test_... node scripts/referral-testclock.mjs cleanup <clockId>
 //
 // The events from these actions hit the DEPLOYED prod webhook (test mode), which
@@ -80,6 +82,29 @@ async function refereeonly() {
   }, null, 2));
 }
 
+async function selfref(customerId) {
+  // Self-referral test: create a NEW trialing family sub for an EXISTING customer
+  // (reusing their default PM + test clock) so the SAME customer id is both the
+  // referrer (via the seeded event) and the referee (the invoice's customer).
+  // Advancing past the trial fires the first subscription_cycle invoice -> prod
+  // webhook -> onRefereePaidConversion, where the guard (referrer===referee) voids.
+  if (!customerId) { console.error("usage: selfref <existing customerId>"); process.exit(1); }
+  const customer = await stripe.customers.retrieve(customerId);
+  if (customer.deleted) { console.error(`customer ${customerId} is deleted in Stripe — use 'refereeonly' (fresh customer) instead`); process.exit(1); }
+  const clockId = customer.test_clock;
+  if (!clockId) { console.error(`customer ${customerId} is not on a test clock — cannot advance it; use 'refereeonly' instead`); process.exit(1); }
+  const sub = await stripe.subscriptions.create({
+    customer: customerId, items: [{ price: FAMILY_PRICE }],
+    trial_period_days: 7, off_session: true, metadata: { igy_test: "referral-selfref" },
+  });
+  console.log(JSON.stringify({
+    clock: clockId,
+    selfCustomer: customerId,
+    selfSub: sub.id,
+    trialEnd: sub.trial_end,
+  }, null, 2));
+}
+
 async function advance(clockId) {
   const clock = await stripe.testHelpers.testClocks.retrieve(clockId);
   const target = clock.frozen_time + 8 * DAY; // past the 7-day trial
@@ -112,12 +137,21 @@ async function refund(pi) {
   console.log(`refunded ${r.id} status=${r.status} — should trigger charge.refunded -> clawback`);
 }
 
+async function clocks() {
+  // List all test clocks so you can find the phase-7 ones and `cleanup <id>` each.
+  const list = await stripe.testHelpers.testClocks.list({ limit: 100 });
+  if (!list.data.length) { console.log("(no test clocks)"); return; }
+  for (const c of list.data) {
+    console.log(`${c.id}  name=${JSON.stringify(c.name)}  status=${c.status}  frozen_time=${c.frozen_time}`);
+  }
+}
+
 async function cleanup(clockId) {
   await stripe.testHelpers.testClocks.del(clockId); // cascades: deletes its customers + subscriptions
   console.log(`deleted test clock ${clockId} and all its customers/subscriptions`);
 }
 
 const [cmd, ...args] = process.argv.slice(2);
-const fns = { setup, refereeonly, advance, lastinvoice, balances, refund, cleanup };
+const fns = { setup, refereeonly, selfref, advance, lastinvoice, balances, refund, clocks, cleanup };
 if (!fns[cmd]) { console.error(`Unknown command "${cmd}". One of: ${Object.keys(fns).join(", ")}`); process.exit(1); }
 fns[cmd](...args).catch((e) => { console.error("ERROR:", e?.message || e); process.exit(1); });
