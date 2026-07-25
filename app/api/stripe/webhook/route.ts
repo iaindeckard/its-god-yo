@@ -48,7 +48,13 @@ export async function POST(req: Request) {
   const admin = getSupabaseAdmin();
   const setStatusBySub = async (subscriptionId: string | null, status: string) => {
     if (!subscriptionId) return;
-    await admin.from("pending_signups").update({ status }).eq("stripe_subscription_id", subscriptionId);
+    let q = admin.from("pending_signups").update({ status }).eq("stripe_subscription_id", subscriptionId);
+    // `canceled` is absorbing for a given subscription id — Stripe never un-cancels
+    // a sub (reactivation mints a new id). Guard against a delayed or duplicate
+    // retry of an earlier lifecycle event (e.g. invoice.paid -> "active") stomping a
+    // canceled row back to a live status. Setting canceled itself stays unguarded.
+    if (status !== "canceled") q = q.neq("status", "canceled");
+    await q;
   };
   const invSubId = (inv: Stripe.Invoice): string | null => {
     const s = (inv as unknown as { subscription?: string | { id: string } | null }).subscription;
@@ -146,7 +152,16 @@ export async function POST(req: Request) {
         break;
     }
   } catch (e) {
+    // Surface failures as 500 so Stripe retries with backoff, instead of swallowing
+    // them into a 200 (the old behavior silently dropped work — e.g. a referral
+    // idempotency-key collision that left a referrer un-rewarded with no retry).
+    // Safe because every write here is idempotent under retry: pending_signups
+    // status writes are guarded + CHECK-valid, referral balance credits use
+    // per-(event,direction,customer) Stripe idempotency keys, and ledger rows upsert
+    // against a unique (referral_event_id, direction) index. Stripe stops retrying
+    // after ~3 days and flags the endpoint, so a persistent failure surfaces.
     console.error(`[stripe-webhook] handler error for ${event.type}:`, e);
+    return NextResponse.json({ error: "handler_error", type: event.type }, { status: 500 });
   }
 
   return NextResponse.json({ received: true, type: event.type });

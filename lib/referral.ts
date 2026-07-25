@@ -163,7 +163,11 @@ async function activeSubscriptionFor(
 
 /** Apply a customer-balance adjustment. "credit" reduces what they owe (negative
  *  balance = a credit toward the next invoice); "debit" claws it back. Idempotent
- *  via a per-event idempotency key. */
+ *  via a per-(event, direction, customer) idempotency key. The customer MUST be in
+ *  the key: a single conversion issues two credits under the same eventId (referee
+ *  welcome + referrer reward), and Stripe rejects reuse of an idempotency key
+ *  across different endpoints (`/customers/<id>/balance_transactions` differs per
+ *  customer) with a 400 — so a per-event-only key made the second credit throw. */
 export async function applyBalanceMonth(args: {
   customerId: string;
   cents: number;
@@ -182,7 +186,7 @@ export async function applyBalanceMonth(args: {
       description: args.reason,
       metadata: { referral_event_id: args.eventId, direction: args.direction },
     },
-    { idempotencyKey: `ref_${args.direction}_${args.eventId}` },
+    { idempotencyKey: `ref_${args.direction}_${args.eventId}_${args.customerId}` },
   );
 }
 
@@ -290,9 +294,20 @@ export async function onRefereePaidConversion(args: {
       const cents = referrerSub ? subscriptionMonthlyValueCents(referrerSub) : 0;
       if (cents > 0) {
         await applyBalanceMonth({ customerId: ev.referrer_customer_id, cents, direction: "credit", eventId: ev.id, reason: "IGY referral: reward month" });
-        await admin.from("referral_reward_ledger").insert({ owner_customer_id: ev.referrer_customer_id, referral_event_id: ev.id, credit_cents: cents, direction: "grant" });
+        await admin.from("referral_reward_ledger").upsert(
+          { owner_customer_id: ev.referrer_customer_id, referral_event_id: ev.id, credit_cents: cents, direction: "grant" },
+          { onConflict: "referral_event_id,direction", ignoreDuplicates: true },
+        );
         await admin.from("referral_events").update({ status: "rewarded", referrer_credit_applied_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", ev.id);
         referrerReward = "granted";
+      } else {
+        // Referrer has no active/trialing sub to credit (e.g. they cancelled before
+        // the referee converted). Record it — otherwise the event silently stays at
+        // "converted", which is indistinguishable from "webhook hasn't run yet". We
+        // deliberately do NOT set referrer_credit_applied_at, so if they resubscribe
+        // a later re-drive of this event can still reward them.
+        console.warn(`[referral] referrer ${ev.referrer_customer_id} has no active sub for event ${ev.id}; reward skipped`);
+        await admin.from("referral_events").update({ status: "referrer_no_active_sub", updated_at: new Date().toISOString() }).eq("id", ev.id);
       }
     }
   }
@@ -342,7 +357,10 @@ export async function onRefereePaymentReversed(args: {
   const grantCents = (grant as { credit_cents: number } | null)?.credit_cents ?? 0;
   if (grantCents > 0) {
     await applyBalanceMonth({ customerId: ev.referrer_customer_id, cents: grantCents, direction: "debit", eventId: ev.id, reason: "IGY referral: clawback (referee payment reversed)" });
-    await admin.from("referral_reward_ledger").insert({ owner_customer_id: ev.referrer_customer_id, referral_event_id: ev.id, credit_cents: grantCents, direction: "reversal" });
+    await admin.from("referral_reward_ledger").upsert(
+      { owner_customer_id: ev.referrer_customer_id, referral_event_id: ev.id, credit_cents: grantCents, direction: "reversal" },
+      { onConflict: "referral_event_id,direction", ignoreDuplicates: true },
+    );
   }
 
   // Deactivate the referee's propagated code.
