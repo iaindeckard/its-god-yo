@@ -1,82 +1,92 @@
-// Verify the IGY price catalog resolves under the current STRIPE_SECRET_KEY.
-// Run with the SANDBOX TEST key (acct_1TvPGDGYyfOIjQvM) — the same key prod uses:
+// Verify the IGY Stripe price catalog resolves under the STRIPE_SECRET_KEY that is
+// currently in the environment, and make the REASON for any failure unambiguous.
 //
-//   STRIPE_SECRET_KEY=sk_test_... node scripts/verify-prices.mjs
+//   STRIPE_SECRET_KEY=... node scripts/verify-prices.mjs
 //
-// Prints a BEFORE/AFTER table: the LIVE price IDs (what prod had before the fix,
-// expected to 404 under a test key) vs the SANDBOX price IDs (what we just set in
-// Vercel, expected to resolve). "AFTER all OK" == mismatch fixed.
+// Step 1 identifies which account the key belongs to (id + livemode) WITHOUT ever
+// echoing the key — not even a prefix. Steps 2-3 retrieve every configured price for
+// that mode, plus the uncommitted family_extra_teen fallback, reporting AUTH /
+// PERMISSION / MISSING as visibly DIFFERENT outcomes so an account mismatch
+// (resource_missing) is never confused with a bad or under-scoped key.
+// Exits non-zero if anything fails.
 
 import Stripe from "stripe";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 
 const key = process.env.STRIPE_SECRET_KEY;
-if (!key) { console.error("ERROR: set STRIPE_SECRET_KEY (the IGY sandbox TEST key)."); process.exit(1); }
-if (!key.includes("_test_")) {
-  console.error(`REFUSING: key prefix "${key.slice(0, 8)}" is not a test key. Use the sandbox TEST key.`);
-  process.exit(1);
-}
+if (!key) { console.error("ERROR: set STRIPE_SECRET_KEY."); process.exit(1); }
 const stripe = new Stripe(key, { apiVersion: "2025-02-24.acacia" });
 
-// BEFORE = LIVE account price IDs (config/stripe-prices.json .live). family_extra_teen
-// has no committed live ID (was never in the catalog) — shown as such.
-const BEFORE = {
-  individual_monthly: "price_1TvfLzGZ9WDMHywoITvwlPHf",
-  individual_annual:  "price_1TvfLzGZ9WDMHywoIaGqhbXd",
-  family_annual:      "price_1TvfLzGZ9WDMHywoF4REANU9",
-  gift_annual:        "price_1TvfM0GZ9WDMHywotCWp8Lrm",
-  group_1_50:         "price_1TvfM0GZ9WDMHywoGY7AnnTU",
-  group_51_150:       "price_1TvfM1GZ9WDMHywoFuQyW2X8",
-  group_151_300:      "price_1TvfM1GZ9WDMHywoXpTFTFrI",
-  dm_addon_monthly:   "price_1TvfM1GZ9WDMHywoXcIddFVk",
-  family_extra_teen:  null, // no committed live ID
+// Never print any part of the key. Stripe's own auth-error messages embed a
+// partially-masked key (prefix + last4), so scrub anything key-shaped before logging.
+const redact = (s) =>
+  String(s ?? "").replace(/(sk|rk|pk)_(live|test)_[A-Za-z0-9*]+/g, "[redacted-key]");
+const firstSentence = (m) => redact(m).split(".")[0];
+
+// Map a thrown Stripe error to one of the distinct failure classes.
+function classify(e) {
+  if (e?.statusCode === 401 || e?.type === "StripeAuthenticationError") return "AUTH";
+  if (e?.statusCode === 403 || e?.type === "StripePermissionError")     return "PERMISSION";
+  if (e?.code === "resource_missing")                                   return "MISSING";
+  return "OTHER";
+}
+const KINDS = {
+  AUTH:       { short: "AUTH ERROR",       desc: "invalid or revoked key" },
+  PERMISSION: { short: "PERMISSION ERROR", desc: "restricted key lacks Products/Prices read" },
+  MISSING:    { short: "MISSING",          desc: "resource_missing — account mismatch" },
+  OTHER:      { short: "ERROR",            desc: "unexpected failure" },
 };
 
-// AFTER = SANDBOX price IDs just written to Vercel Production. family_extra_teen is
-// the lib/plans.ts fallback, which is NOT in config/stripe-prices.json — this run is
-// what confirms whether it actually exists in the sandbox account.
-const AFTER = {
-  individual_monthly: "price_1TvePoGYyfOIjQvMi7r2wXD3",
-  individual_annual:  "price_1TvePpGYyfOIjQvMDxEJsqNe",
-  family_annual:      "price_1TvePpGYyfOIjQvMDbu9cFli",
-  gift_annual:        "price_1TvePqGYyfOIjQvMErLxfVjd",
-  group_1_50:         "price_1TvePqGYyfOIjQvM4sSSy0mi",
-  group_51_150:       "price_1TvePqGYyfOIjQvMNuPHE8SF",
-  group_151_300:      "price_1TvePrGYyfOIjQvMJUcLgxJW",
-  dm_addon_monthly:   "price_1TvePrGYyfOIjQvM1w2NJZ2u",
-  family_extra_teen:  "price_1TvzNeGYyfOIjQvMpKxXkm4m", // plans.ts fallback (unconfirmed)
-};
+let failures = 0;
 
-async function probe(id) {
-  if (!id) return { ok: null, note: "no committed id" };
+// ── Step 1: whose account is this key? (id + livemode ONLY; never the key) ──
+console.log("=== Stripe account ===");
+let livemode = /_live_/.test(key); // fallback only if the account object omits livemode
+try {
+  const acct = await stripe.accounts.retrieve();
+  if (typeof acct.livemode === "boolean") livemode = acct.livemode;
+  console.log(`account id : ${acct.id}`);
+  console.log(`livemode   : ${livemode}`);
+} catch (e) {
+  const k = classify(e);
+  failures++;
+  console.log(`account id : (could not retrieve)`);
+  console.log(`livemode   : ${livemode}  (inferred — account call failed)`);
+  console.log(`  ${KINDS[k].short} (${KINDS[k].desc}) — ${firstSentence(e.message)}`);
+}
+
+// ── Steps 2-3: every configured price for this mode, plus family_extra_teen ──
+const here = dirname(fileURLToPath(import.meta.url));
+const catalog = JSON.parse(readFileSync(join(here, "..", "config", "stripe-prices.json"), "utf8"));
+const section = livemode ? catalog.live : catalog.test_sandbox;
+
+const checks = Object.entries(section.prices).map(([plan, p]) => ({ plan, id: p.price_id }));
+// family_extra_teen is the lib/plans.ts fallback and is intentionally NOT in
+// config/stripe-prices.json — verify it explicitly. Do NOT create it if it is missing.
+checks.push({ plan: "family_extra_teen", id: "price_1TvzNeGYyfOIjQvMpKxXkm4m", extra: true });
+
+console.log(`\n=== Prices (${section.mode} / ${section.account_id}) ===`);
+for (const { plan, id, extra } of checks) {
+  const tag = extra ? `${plan} (not in config)` : plan;
   try {
-    const p = await stripe.prices.retrieve(id);
-    const amt = (p.unit_amount ?? 0) / 100;
-    const cad = p.recurring?.interval ?? p.type;
-    return { ok: true, note: `active=${p.active} $${amt}/${cad}` };
+    const price = await stripe.prices.retrieve(id);
+    const amt = (price.unit_amount ?? 0) / 100;
+    const cad = price.recurring?.interval ?? price.type;
+    console.log(`✓ ${"OK".padEnd(17)} ${tag.padEnd(30)} ${id.padEnd(34)} active=${price.active} $${amt}/${cad}`);
   } catch (e) {
-    return { ok: false, note: `${e.code || e.type}: ${e.message?.split(".")[0]}` };
+    const k = classify(e);
+    failures++;
+    console.log(`✗ ${KINDS[k].short.padEnd(17)} ${tag.padEnd(30)} ${id.padEnd(34)} ${firstSentence(e.message)}`);
+    if (extra && k === "MISSING") {
+      console.log(`    ↳ family_extra_teen does NOT exist in this account. Not creating it (by design).`);
+    }
   }
 }
 
-async function run(label, map) {
-  console.log(`\n=== ${label} ===`);
-  let pass = 0, fail = 0;
-  for (const [plan, id] of Object.entries(map)) {
-    const r = await probe(id);
-    const mark = r.ok === true ? "✓ OK   " : r.ok === false ? "✗ FAIL " : "· skip ";
-    if (r.ok === true) pass++; if (r.ok === false) fail++;
-    console.log(`${mark} ${plan.padEnd(20)} ${(id || "—").padEnd(34)} ${r.note}`);
-  }
-  return { pass, fail };
-}
-
-const acct = await stripe.accounts.retrieve().catch(() => null);
-console.log(`Key: ${key.slice(0, 12)}…  account: ${acct?.id || "(restricted key — cannot read account)"}`);
-
-const before = await run("BEFORE — LIVE price IDs (what prod had; should 404 under test key)", BEFORE);
-const after  = await run("AFTER — SANDBOX price IDs (just set in Vercel; should all resolve)", AFTER);
-
-console.log(`\nSummary: BEFORE ${before.pass} ok / ${before.fail} fail  |  AFTER ${after.pass} ok / ${after.fail} fail`);
-console.log(after.fail === 0
-  ? "✅ AFTER all OK — no resource_missing. Mismatch fixed."
-  : "⚠️  AFTER has failures — investigate the FAIL rows above (likely family_extra_teen).");
+// ── Step 4: non-zero exit if anything failed ──
+console.log(failures === 0
+  ? "\n✅ All checks passed."
+  : `\n⚠️  ${failures} check(s) failed — see the AUTH ERROR / PERMISSION ERROR / MISSING rows above.`);
+process.exit(failures === 0 ? 0 : 1);
