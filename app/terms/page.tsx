@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import LegalPage from "@/components/LegalPage";
 
 export const metadata: Metadata = {
-  title: "Terms of Service — It's God, Yo!",
-  description: "The terms that govern your use of It's God, Yo!",
+  title: "Terms of Service — It's God, Yo!™",
+  description: "The terms that govern your use of It's God, Yo!™",
 };
 
 export default function TermsPage() {

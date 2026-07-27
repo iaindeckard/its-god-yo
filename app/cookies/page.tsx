@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import LegalPage from "@/components/LegalPage";
 
 export const metadata: Metadata = {
-  title: "Cookie Policy — It's God, Yo!",
-  description: "What cookies and similar technologies the It's God, Yo! website uses.",
+  title: "Cookie Policy — It's God, Yo!™",
+  description: "What cookies and similar technologies the It's God, Yo!™ website uses.",
 };
 
 export default function CookiesPage() {

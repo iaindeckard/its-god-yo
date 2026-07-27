@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import LegalPage from "@/components/LegalPage";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy — It's God, Yo!",
-  description: "How It's God, Yo! collects, uses, and protects your information.",
+  title: "Privacy Policy — It's God, Yo!™",
+  description: "How It's God, Yo!™ collects, uses, and protects your information.",
 };
 
 export default function PrivacyPage() {
