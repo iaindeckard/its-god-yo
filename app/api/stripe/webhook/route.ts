@@ -3,6 +3,7 @@ import type Stripe from "stripe";
 import { getStripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { onRefereePaidConversion, onRefereePaymentReversed, type OwnerKind } from "@/lib/referral";
+import { markConvertedByPromotionCodeId } from "@/lib/outreach/leads";
 
 export const dynamic = "force-dynamic";
 
@@ -70,6 +71,26 @@ export async function POST(req: Request) {
   // Fire referral conversion for the referee's first REAL charge. No-ops when the
   // signup wasn't referred. Resolves pending_signup_id + plan from the
   // pending_signups row (already keyed by stripe_subscription_id).
+  // Church-outreach conversion (spec §5). An outreach church signs up through the
+  // normal flow, so its pending_signups row already carries the outreach promo's
+  // promotion_code id. On the referee's first REAL charge we match that id to an
+  // igy_outreach_leads row and mark it converted. Independent of and additive to
+  // the referral path — no-ops when the signup used no outreach code, idempotent
+  // (markConverted only moves a not-yet-converted row).
+  const handleOutreachConversion = async (inv: Stripe.Invoice) => {
+    const subId = invSubId(inv);
+    if (!subId) return;
+    const { data: ps } = await admin
+      .from("pending_signups")
+      .select("promo_promotion_code_id")
+      .eq("stripe_subscription_id", subId)
+      .maybeSingle();
+    const pcId = (ps as { promo_promotion_code_id?: string | null } | null)?.promo_promotion_code_id;
+    if (!pcId) return;
+    const amountPaid = (inv as unknown as { amount_paid?: number }).amount_paid ?? null;
+    await markConvertedByPromotionCodeId(pcId, amountPaid);
+  };
+
   const handleReferralConversion = async (inv: Stripe.Invoice) => {
     const subId = invSubId(inv);
     if (!subId) return;
@@ -108,6 +129,7 @@ export async function POST(req: Request) {
         const billingReason = (inv as unknown as { billing_reason?: string }).billing_reason;
         if (amountPaid > 0 && billingReason === "subscription_cycle") {
           await handleReferralConversion(inv);
+          await handleOutreachConversion(inv);
         }
         break;
       }
