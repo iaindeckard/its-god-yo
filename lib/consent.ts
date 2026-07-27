@@ -23,6 +23,12 @@ export interface ConsentPayload {
   referral_discount_applied?: boolean;
   promo_code?: string | null;
   promo_promotion_code_id?: string | null;
+  // Affinity-code attestation (spec: IGY-Affinity-Promo-Codes-LOCKED-2026-07-21.md).
+  // Set when the applied promo required an attestation and the purchaser checked
+  // the box; the submit-consent function records these to promo_attestations and
+  // flips pending_signups.promo_attestation_confirmed.
+  promo_attestation_confirmed?: boolean;
+  promo_attestation_text?: string | null; // the exact statement the purchaser confirmed
   purchaser_email?: string | null;
   teen?: { first_name: string; phone: string; birth_year?: number; enhanced_consent_ack?: boolean };
   family_teens?: Array<{ first_name: string; phone: string; birth_year?: number; enhanced_consent_ack?: boolean }>;

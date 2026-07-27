@@ -22,6 +22,34 @@ function json(status: number, body: unknown) {
 // ---- Locked consent copy (versioned). Built server-side from templates so the
 // stored record is authoritative and matches exactly what the UI must display.
 const CONSENT_VERSION = "2026-07-20";
+// Version stamp for the affinity promo-code attestation audit copy.
+const PROMO_ATTESTATION_VERSION = "2026-07-27";
+
+// Record an affinity promo-code attestation (spec:
+// IGY-Affinity-Promo-Codes-LOCKED-2026-07-21.md). Writes the audit row and flips
+// the server-side flag on pending_signups. No-ops unless the purchaser both used
+// a promo code AND confirmed its attestation. The authoritative "was attestation
+// REQUIRED" check lives at subscription-creation (lib/promoCodes.promoAttestationSatisfied);
+// this records what the purchaser confirmed for audit + gate.
+// deno-lint-ignore no-explicit-any
+async function recordPromoAttestation(supa: any, signupId: string, p: Payload, lang: string) {
+  const text = p.promo_attestation_text?.trim();
+  if (!p.promo_code?.trim() || p.promo_attestation_confirmed !== true || !text) return;
+  const { data: att, error } = await supa.from("promo_attestations").insert({
+    pending_signup_id: signupId,
+    promo_code: p.promo_code.trim(),
+    promo_promotion_code_id: p.promo_promotion_code_id?.trim() || null,
+    purchaser_email: p.purchaser_email?.trim() || null,
+    language: lang,
+    attestation_text: text,
+    attestation_text_version: PROMO_ATTESTATION_VERSION,
+  }).select("id").single();
+  if (error) { console.error(`[submit-consent] promo_attestation insert failed: ${error.message}`); return; }
+  await supa.from("pending_signups").update({
+    promo_attestation_confirmed: true,
+    promo_attestation_id: att.id,
+  }).eq("id", signupId);
+}
 const ATTESTATION: Record<string, (name: string) => string> = {
   en: (n) => `I confirm this is ${n}'s real phone number, that I have their permission to share it, and that I believe they'd want to receive this.`,
   es: (n) => `Confirmo que este es el número de teléfono real de ${n}, que tengo su permiso para compartirlo, y que creo que le gustaría recibir esto.`,
@@ -85,6 +113,8 @@ interface Payload {
   referral_discount_applied?: boolean;
   promo_code?: string;
   promo_promotion_code_id?: string;
+  promo_attestation_confirmed?: boolean;
+  promo_attestation_text?: string;
   purchaser_email?: string;
   teen?: { first_name?: string; phone?: string; birth_year?: number; enhanced_consent_ack?: boolean };
   plus_one?: PlusOne | null;
@@ -219,6 +249,7 @@ Deno.serve(async (req: Request) => {
     }).select("id").single();
     if (sErr) return json(500, { error: "failed_to_write_family_signup", detail: sErr.message });
     await supa.from("consent_log").update({ pending_signup_id: signup.id }).in("id", consentIds);
+    await recordPromoAttestation(supa, signup.id, p, lang);
 
     const twilioSid = Deno.env.get("TWILIO_ACCOUNT_SID"); const twilioToken = Deno.env.get("TWILIO_AUTH_TOKEN"); const twilioFrom = Deno.env.get("TWILIO_FROM_NUMBER");
     let sent = 0; const sendErrors: Array<{ to: string; error: string }> = [];
@@ -398,6 +429,7 @@ Deno.serve(async (req: Request) => {
     status: "awaiting_confirmation",
   }).select("id").single();
   if (signupErr) return json(500, { error: "failed_to_write_pending_signup", detail: signupErr.message });
+  await recordPromoAttestation(supa, signup.id, p, lang);
 
   // 4) Deliver the confirmation SMS(es) via Twilio IF credentials are present.
   //    Until the Twilio account is verified/credentialed this is a no-op and we

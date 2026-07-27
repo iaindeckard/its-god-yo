@@ -171,6 +171,42 @@ export async function updatePromoMeta(
   return toView(pc);
 }
 
+/** Retrieve a single promotion code by its id (promo_...) as a view, or null if
+ *  it can't be fetched. The coupon is always included on a promotion code, so
+ *  toView() has everything it needs (incl. the attestation metadata). */
+export async function getPromoViewById(id: string): Promise<PromoCodeView | null> {
+  const stripe = getStripe();
+  try {
+    const pc = await stripe.promotionCodes.retrieve(id);
+    return toView(pc);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Affinity attestation gate (spec: IGY-Affinity-Promo-Codes-LOCKED-2026-07-21.md).
+ * The authoritative server-side check, applied at subscription-creation time in
+ * lib/createSubscription.ts + lib/familyBilling.ts: an attestation-required promo
+ * discount is only applied when the signup recorded a confirmed attestation.
+ *
+ * Returns true (apply the discount) UNLESS we can positively confirm the code
+ * requires attestation AND it wasn't confirmed. Codes that don't require
+ * attestation (e.g. the church-outreach 10% codes) always pass; a transient
+ * Stripe read failure fails OPEN for the discount (the gate is a policy control,
+ * not a security boundary — silently dropping a legitimate discount on a blip is
+ * the worse failure).
+ */
+export async function promoAttestationSatisfied(
+  promotionCodeId: string | null | undefined,
+  attestationConfirmed: boolean | null | undefined,
+): Promise<boolean> {
+  if (!promotionCodeId) return false; // nothing to apply
+  const view = await getPromoViewById(promotionCodeId);
+  if (view?.requires_attestation && !attestationConfirmed) return false;
+  return true;
+}
+
 /** True if a code with these allowed tiers applies to the given checkout plan. */
 export function promoAppliesToTier(view: PromoCodeView, planKey: string | null | undefined): boolean {
   if (view.allowed_tiers.length === 0) return true; // unrestricted
