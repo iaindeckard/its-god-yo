@@ -46,7 +46,11 @@ export default async function Image() {
         >
           <span style={{ ...letter, fontWeight: 400 }}>It&rsquo;s</span>
           <span style={{ ...letter, fontWeight: 700, textShadow: "2px 2px 0 #D4B14E, 4px 4px 0 #C49F3C, 6px 6px 0 #B08D2E" }}>God,</span>
-          <span style={{ ...letter, fontWeight: 400 }}>Yo</span>
+          {/* "Yo" + ™ superscript as one group (flex-start lifts the smaller ™ to the top) */}
+          <div style={{ display: "flex", alignItems: "flex-start" }}>
+            <span style={{ ...letter, fontWeight: 400 }}>Yo</span>
+            <span style={{ color: "#ffffff", fontWeight: 400, fontSize: 46, lineHeight: 1, marginTop: 6 }}>&trade;</span>
+          </div>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={bubble} width={112} height={112} alt="" style={{ marginLeft: 4 }} />
         </div>
