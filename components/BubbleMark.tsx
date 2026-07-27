@@ -1,9 +1,10 @@
 /**
- * BubbleMark — the locked "It's God, Yo!" speech-bubble mark. Geometry matches
- * the locked brand spec (see IGY-Landing-Page-Redesign-v12): a rounded speech
- * bubble with a tail at the bottom-left, holding the exclamation point — a thin
- * white halo arc above a tilted white bar + an offset white dot. The halo must
- * read clearly (stroke 3.4), not as a hairline.
+ * BubbleMark — the locked "It's God, Yo!" speech-bubble mark. Geometry is the
+ * verbatim locked brand spec (IGY-Brand-Identity-Mark-LOCKED-2026-07-27): a
+ * rounded speech bubble with a tail at the bottom-left, holding the exclamation
+ * point — a flattened horizontal halo RING (ellipse, not an arc) above a tilted
+ * bar + a dot aligned to the bar's rotated position. Do NOT re-derive this from a
+ * description; copy the path data from the locked spec exactly.
  *
  *   variant="primary" -> blue bubble, white mark (default)
  *   variant="light"   -> white bubble, blue mark (for use on solid-blue surfaces)
@@ -37,11 +38,11 @@ export default function BubbleMark({
         d="M14 10 H58 A8 8 0 0 1 66 18 V48 A8 8 0 0 1 58 56 H28 L14 66 V56 A8 8 0 0 1 6 48 V18 A8 8 0 0 1 14 10 Z"
         fill={bubble}
       />
-      {/* thin white halo arc above the bang — clearly visible, not a hairline */}
-      <path d="M24 17 Q35 7 46 17" stroke={mark} strokeWidth="3.4" fill="none" strokeLinecap="round" opacity="0.95" />
-      {/* tilted bar + offset dot = the exclamation point */}
-      <rect x="30" y="20" width="10" height="24" rx="5" fill={mark} transform="rotate(-8 35 32)" />
-      <circle cx="36" cy="50" r="5.5" fill={mark} />
+      {/* flattened horizontal halo ring (ellipse, not an arc) above the bang */}
+      <ellipse cx="36" cy="16" rx="10" ry="3.5" fill="none" stroke={mark} strokeWidth="2.4" opacity="0.95" />
+      {/* tilted bar + dot aligned to the bar's rotated position = the "!" */}
+      <rect x="32.85" y="23" width="6.3" height="20" rx="3.15" fill={mark} transform="rotate(-8 36 33)" />
+      <circle cx="37.5" cy="48" r="3.78" fill={mark} />
     </svg>
   );
 }

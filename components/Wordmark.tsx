@@ -21,7 +21,7 @@ export default function Wordmark({
     <Tag className={`wordmark wordmark-${tone} ${className}`.trim()}>
       <span className="w-its">It&rsquo;s</span>
       <span className="w-god">&nbsp;God,</span>
-      <span className="w-yo">Yo</span>
+      <span className="w-yo">Yo<sup className="w-tm">&trade;</sup></span>
       <BubbleMark className="w-icon" title="It's God, Yo!" />
     </Tag>
   );

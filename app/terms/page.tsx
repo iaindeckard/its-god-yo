@@ -11,7 +11,7 @@ export default function TermsPage() {
     <LegalPage title="Terms of Service" updated="July 22, 2026">
       <h2>1. What IGY is</h2>
       <p>
-        It&rsquo;s God, Yo! (&ldquo;IGY&rdquo;) is a subscription SMS/text service that sends a daily scripture message to a recipient&rsquo;s phone. A purchaser (typically a parent, guardian, or gift-giver) sets up and pays for the subscription; the recipient (often a teen) must personally confirm by replying YES before any subscription is created or any charge occurs.
+        It&rsquo;s God, Yo!&trade; (&ldquo;IGY&rdquo;) is a subscription SMS/text service that sends a daily scripture message to a recipient&rsquo;s phone. A purchaser (typically a parent, guardian, or gift-giver) sets up and pays for the subscription; the recipient (often a teen) must personally confirm by replying YES before any subscription is created or any charge occurs.
       </p>
 
       <h2>2. Eligibility</h2>

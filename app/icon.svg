@@ -1,9 +1,7 @@
 <svg width="72" height="72" viewBox="0 0 72 72" xmlns="http://www.w3.org/2000/svg" role="img">
 <title>It's God, Yo! mark</title>
-<path d="M4 16 C4 8.268 10.268 2 18 2 L54 2 C61.732 2 68 8.268 68 16 L68 42 C68 49.732 61.732 56 54 56 L26 56 L10 68 L13 54 L18 54 C10.268 54 4 47.732 4 40 Z" fill="#378ADD"/>
-<g transform="translate(36 31) rotate(-8)">
-<rect x="-3.2" y="-15" width="6.4" height="19" rx="3.2" fill="#FFFFFF"/>
-<circle cx="1.1" cy="11.5" r="4.2" fill="#FFFFFF"/>
-<ellipse cx="-0.5" cy="-21" rx="8.5" ry="2.6" fill="none" stroke="#FFFFFF" stroke-width="2.2" opacity="0.85"/>
-</g>
+<path d="M14 10 H58 A8 8 0 0 1 66 18 V48 A8 8 0 0 1 58 56 H28 L14 66 V56 A8 8 0 0 1 6 48 V18 A8 8 0 0 1 14 10 Z" fill="#378ADD"/>
+<ellipse cx="36" cy="16" rx="10" ry="3.5" fill="none" stroke="#FFFFFF" stroke-width="2.4" opacity="0.95"/>
+<rect x="32.85" y="23" width="6.3" height="20" rx="3.15" fill="#FFFFFF" transform="rotate(-8 36 33)"/>
+<circle cx="37.5" cy="48" r="3.78" fill="#FFFFFF"/>
 </svg>

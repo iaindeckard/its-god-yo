@@ -16,7 +16,7 @@ export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
 // Exact BubbleMark geometry (variant "primary": blue bubble, white mark).
-const BUBBLE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="0 0 72 72"><path d="M14 10 H58 A8 8 0 0 1 66 18 V48 A8 8 0 0 1 58 56 H28 L14 66 V56 A8 8 0 0 1 6 48 V18 A8 8 0 0 1 14 10 Z" fill="#378ADD"/><path d="M24 17 Q35 7 46 17" stroke="#FFFFFF" stroke-width="3.4" fill="none" stroke-linecap="round" opacity="0.95"/><rect x="30" y="20" width="10" height="24" rx="5" fill="#FFFFFF" transform="rotate(-8 35 32)"/><circle cx="36" cy="50" r="5.5" fill="#FFFFFF"/></svg>`;
+const BUBBLE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="0 0 72 72"><path d="M14 10 H58 A8 8 0 0 1 66 18 V48 A8 8 0 0 1 58 56 H28 L14 66 V56 A8 8 0 0 1 6 48 V18 A8 8 0 0 1 14 10 Z" fill="#378ADD"/><ellipse cx="36" cy="16" rx="10" ry="3.5" fill="none" stroke="#FFFFFF" stroke-width="2.4" opacity="0.95"/><rect x="32.85" y="23" width="6.3" height="20" rx="3.15" fill="#FFFFFF" transform="rotate(-8 36 33)"/><circle cx="37.5" cy="48" r="3.78" fill="#FFFFFF"/></svg>`;
 
 export default async function Image() {
   // Read at prerender/build time (this image is static) from the colocated fonts.

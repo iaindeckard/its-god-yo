@@ -101,6 +101,8 @@ h1, h2, h3 { line-height: 1.12; letter-spacing: -0.02em; margin: 0 0 0.4em; }
 .wordmark .w-its, .wordmark .w-yo { font-weight: 400; }
 .wordmark .w-god { font-weight: 700; }
 .wordmark .w-icon { width: 1.05em; height: 1.05em; flex-shrink: 0; }
+/* ™ — small superscript right after "Yo", before the icon; inherits w-yo color */
+.wordmark .w-tm { font-size: 0.42em; vertical-align: super; font-weight: 400; line-height: 1; }
 
 /* brass treatment (dark surfaces): white lettering, gold 3-D only on "God," */
 .wordmark-brass .w-its, .wordmark-brass .w-god, .wordmark-brass .w-yo { color: #fff; }

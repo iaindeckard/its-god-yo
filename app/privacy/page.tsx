@@ -11,7 +11,7 @@ export default function PrivacyPage() {
     <LegalPage title="Privacy Policy" updated="July 22, 2026">
       <h2>1. Who we are</h2>
       <p>
-        It&rsquo;s God, Yo! (&ldquo;IGY,&rdquo; &ldquo;we,&rdquo; &ldquo;us&rdquo;) is a daily SMS/text scripture subscription service operated by Deckard Enterprise International, LLC, a Kansas limited liability company.
+        It&rsquo;s God, Yo!&trade; (&ldquo;IGY,&rdquo; &ldquo;we,&rdquo; &ldquo;us&rdquo;) is a daily SMS/text scripture subscription service operated by Deckard Enterprise International, LLC, a Kansas limited liability company.
       </p>
 
       <h2>2. What information we collect</h2>
