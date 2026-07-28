@@ -91,6 +91,165 @@ export async function POST(req: Request) {
     });
   };
 
+  // ── subscription_payments capture (launch blocker + multi-currency) ──────────
+  // Row-level realized-charge ledger mirroring USN's sponsor_payments. Every
+  // settled charge/refund/dispute lands as ONE row keyed by its Stripe balance
+  // transaction id (idempotent under retries). Captures BOTH presentment
+  // (original_*) and the Stripe-SETTLED figure (settled_*): expanding the charge's
+  // balance_transaction is what surfaces the settled USD + exchange_rate that
+  // invoice.amount_paid alone does not carry. Currency-agnostic — identical path
+  // for usd/cad/gbp/eur. See IGY-DEI-Rollup-Multi-Currency-Architecture-v3.
+  const tsIso = (unix: number | null | undefined): string | null =>
+    typeof unix === "number" ? new Date(unix * 1000).toISOString() : null;
+
+  type CaptureInput = {
+    kind: "charge" | "refund" | "dispute";
+    bt: Stripe.BalanceTransaction | null;
+    originalAmountCents: number | null;
+    originalCurrency: string | null;
+    chargeId: string | null;
+    invoiceId: string | null;
+    paymentIntentId: string | null;
+    subscriptionId: string | null;
+    customerId: string | null;
+    billingReason: string | null;
+    status: string;
+    periodStart: string | null;
+    periodEnd: string | null;
+  };
+  const recordPayment = async (p: CaptureInput) => {
+    const bt = p.bt;
+    if (!bt?.id) {
+      // No settlement record → nothing canonical to store. Log and let Stripe
+      // redeliver; a later reconciliation can backfill. Never write a settled-less
+      // row (the rollup would read it as unverified anyway).
+      console.warn(`[stripe-webhook] payment capture: no balance_transaction for ${p.kind} charge=${p.chargeId ?? "?"} — skipped`);
+      return;
+    }
+    const { error } = await admin.from("subscription_payments").upsert(
+      {
+        business_unit: "igy",
+        kind: p.kind,
+        balance_transaction_id: bt.id,
+        stripe_charge_id: p.chargeId,
+        stripe_invoice_id: p.invoiceId,
+        stripe_payment_intent_id: p.paymentIntentId,
+        stripe_subscription_id: p.subscriptionId,
+        stripe_customer_id: p.customerId,
+        original_amount_cents: p.originalAmountCents,
+        original_currency: p.originalCurrency,
+        settled_amount_cents: bt.amount ?? null,
+        settled_currency: bt.currency ?? null,
+        settled_fee_cents: bt.fee ?? null,
+        settled_net_cents: bt.net ?? null,
+        exchange_rate: bt.exchange_rate ?? null,
+        billing_reason: p.billingReason,
+        status: p.status,
+        period_start: p.periodStart,
+        period_end: p.periodEnd,
+        stripe_created_at: tsIso(bt.created),
+      },
+      { onConflict: "balance_transaction_id", ignoreDuplicates: true },
+    );
+    if (error) throw error; // caught by safeCapture at the call site — never breaks the handler; durability is via backfill, not a webhook 500/retry
+  };
+
+  // Ledger capture is ADDITIVE and best-effort: it must NEVER break the existing
+  // status-update / referral-clawback logic that shares these event cases. Any
+  // failure here (bad column, schema drift, transient Stripe/DB error) is logged
+  // at error level and swallowed — the row is simply not captured on this delivery
+  // (idempotent + backfillable), and the handler proceeds to its normal 200 exactly
+  // as before. This deliberately decouples ledger durability from the live webhook
+  // path: a ledger bug can lose/delay a row, but can't regress status or referrals.
+  const safeCapture = async (label: string, fn: () => Promise<void>) => {
+    try {
+      await fn();
+    } catch (e) {
+      console.error(`[stripe-webhook] subscription_payments capture failed (${label}) — swallowed to protect handler:`, e);
+    }
+  };
+
+  // invoice.paid → the realized recurring charge. Expand its charge to the
+  // balance_transaction for the settled figure. Skips $0 invoices (no charge,
+  // e.g. trial-start) since nothing settled. Captures ALL real charges
+  // (subscription_create + subscription_cycle), broader than the referral gating.
+  const capturePaidInvoice = async (inv: Stripe.Invoice) => {
+    const chargeId = idOf((inv as unknown as { charge?: unknown }).charge);
+    if (!chargeId) return;
+    const ch = await stripe.charges.retrieve(chargeId, { expand: ["balance_transaction"] });
+    const bt = (ch.balance_transaction ?? null) as Stripe.BalanceTransaction | null;
+    await recordPayment({
+      kind: "charge",
+      bt,
+      originalAmountCents: ch.amount ?? null,
+      originalCurrency: ch.currency ?? null,
+      chargeId: ch.id,
+      invoiceId: inv.id ?? null,
+      paymentIntentId: idOf((ch as unknown as { payment_intent?: unknown }).payment_intent),
+      subscriptionId: invSubId(inv),
+      customerId: idOf((inv as unknown as { customer?: unknown }).customer),
+      billingReason: (inv as unknown as { billing_reason?: string }).billing_reason ?? null,
+      status: "paid",
+      periodStart: tsIso((inv as unknown as { period_start?: number }).period_start),
+      periodEnd: tsIso((inv as unknown as { period_end?: number }).period_end),
+    });
+  };
+
+  // charge.refunded → each refund settles as its OWN balance transaction at its OWN
+  // rate (negative amount). Record each so net = SUM(settled_amount_cents); never
+  // derive a refund by subtracting the original presentment amount.
+  const captureRefunds = async (charge: Stripe.Charge) => {
+    const refunds = (charge.refunds as unknown as { data?: Stripe.Refund[] } | null)?.data ?? [];
+    const customerId = idOf((charge as unknown as { customer?: unknown }).customer);
+    const invoiceId = idOf((charge as unknown as { invoice?: unknown }).invoice);
+    const piId = idOf((charge as unknown as { payment_intent?: unknown }).payment_intent);
+    for (const r of refunds) {
+      const btId = idOf((r as unknown as { balance_transaction?: unknown }).balance_transaction);
+      if (!btId) continue;
+      const bt = await stripe.balanceTransactions.retrieve(btId);
+      await recordPayment({
+        kind: "refund",
+        bt,
+        originalAmountCents: typeof r.amount === "number" ? -r.amount : null, // signed to match settled
+        originalCurrency: r.currency ?? charge.currency ?? null,
+        chargeId: charge.id,
+        invoiceId,
+        paymentIntentId: piId,
+        subscriptionId: null, // not carried on the charge; ch/invoice ids tie it back
+        customerId,
+        billingReason: null,
+        status: "refunded",
+        periodStart: null,
+        periodEnd: null,
+      });
+    }
+  };
+
+  // charge.dispute.created → the dispute withdrawal(s) already carry their balance
+  // transactions in the event payload (negative). Record each.
+  const captureDispute = async (dispute: Stripe.Dispute) => {
+    const bts = (dispute as unknown as { balance_transactions?: Stripe.BalanceTransaction[] }).balance_transactions ?? [];
+    const chargeId = idOf((dispute as unknown as { charge?: unknown }).charge);
+    const piId = idOf((dispute as unknown as { payment_intent?: unknown }).payment_intent);
+    for (const bt of bts) {
+      await recordPayment({
+        kind: "dispute",
+        bt,
+        originalAmountCents: null,
+        originalCurrency: bt.currency ?? null,
+        chargeId,
+        invoiceId: null,
+        paymentIntentId: piId,
+        subscriptionId: null,
+        customerId: null,
+        billingReason: null,
+        status: "dispute",
+        periodStart: null,
+        periodEnd: null,
+      });
+    }
+  };
+
   try {
     switch (event.type) {
       case "customer.subscription.trial_will_end": {
@@ -101,6 +260,9 @@ export async function POST(req: Request) {
       case "invoice.paid": {
         const inv = event.data.object as Stripe.Invoice;
         await setStatusBySub(invSubId(inv), "active");
+        // Row-level realized-charge ledger (launch blocker + settled-currency
+        // capture). Runs for every real charge, independent of referral gating.
+        await safeCapture("invoice.paid", () => capturePaidInvoice(inv));
         // Reward on PAID conversion, not signup: only the first real charge —
         // amount_paid > 0 AND billing_reason 'subscription_cycle' — never the $0
         // trial-start invoice (billing_reason 'subscription_create').
@@ -137,6 +299,9 @@ export async function POST(req: Request) {
           chargeId: charge.id,
           paymentIntentId: idOf((charge as unknown as { payment_intent?: unknown }).payment_intent) ?? undefined,
         });
+        // Ledger: record the refund's own (negative) balance transaction so net
+        // realized revenue stays correct without subtracting presentment amounts.
+        await safeCapture("charge.refunded", () => captureRefunds(charge));
         break;
       }
       case "charge.dispute.created": {
@@ -145,6 +310,8 @@ export async function POST(req: Request) {
           chargeId: idOf((dispute as unknown as { charge?: unknown }).charge) ?? undefined,
           paymentIntentId: idOf((dispute as unknown as { payment_intent?: unknown }).payment_intent) ?? undefined,
         });
+        // Ledger: record the dispute's own (negative) balance transaction(s).
+        await safeCapture("charge.dispute.created", () => captureDispute(dispute));
         break;
       }
       default:
