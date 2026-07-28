@@ -3,6 +3,7 @@ import type Stripe from "stripe";
 import { getStripe } from "./stripe";
 import { getSupabaseAdmin } from "./supabaseAdmin";
 import { PLANS, FAMILY_EXTRA_TEEN, FAMILY_BASE_TEENS } from "./plans";
+import { promoAttestationSatisfied } from "./promoCodes";
 
 /**
  * Family multi-teen billing. Model (all decisions locked 2026-07-21, verified via
@@ -33,7 +34,14 @@ export async function createFamilyBaseSubscription(pendingSignupId: string): Pro
   // Promo codes still apply; the old 10%-off referral coupon was retired —
   // referrals now reward via a customer-balance credit at conversion (lib/referral.ts).
   const discounts: Stripe.SubscriptionCreateParams.Discount[] = [];
-  if (ps.promo_promotion_code_id) discounts.push({ promotion_code: ps.promo_promotion_code_id });
+  if (ps.promo_promotion_code_id) {
+    // Affinity attestation gate — same rule as lib/createSubscription.ts.
+    if (await promoAttestationSatisfied(ps.promo_promotion_code_id, ps.promo_attestation_confirmed)) {
+      discounts.push({ promotion_code: ps.promo_promotion_code_id });
+    } else {
+      console.warn(`[familyBilling] promo ${ps.promo_code} requires attestation but signup ${ps.id} has none — discount NOT applied`);
+    }
+  }
 
   const sub = await stripe.subscriptions.create(
     {

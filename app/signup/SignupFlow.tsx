@@ -114,7 +114,10 @@ export default function SignupFlow({
   const [promoError, setPromoError] = useState<string | null>(null);
   const [promo, setPromo] = useState<{
     promotion_code_id: string; code: string; percent_off: number | null; amount_off: number | null; currency: string | null;
+    requires_attestation: boolean; attestation_text: string | null;
   } | null>(null);
+  // Affinity-code attestation checkbox (only shown when the applied promo requires it).
+  const [promoAttest, setPromoAttest] = useState(false);
 
   // stripe
   const [stripeIds, setStripeIds] = useState<{ customer_id: string; setup_intent_id: string; payment_method_id: string } | null>(null);
@@ -182,6 +185,11 @@ export default function SignupFlow({
   // Referrals no longer discount at signup — they credit the referee a free
   // month at their first invoice (via customer-balance credit, see lib/referral.ts).
 
+  // Affinity-code attestation gate: when the applied promo requires attestation,
+  // the purchaser must check the box before they can proceed past payment.
+  const promoNeedsAttest = !!promo?.requires_attestation;
+  const promoAttestOk = !promoNeedsAttest || promoAttest;
+
   function reset() {
     setStep(STEP.LANG);
     setThemeTrack("general");
@@ -189,7 +197,7 @@ export default function SignupFlow({
     setError(null);
     setTeenFirstName(""); setPurchaserEmail(""); setTeenPhone(""); setPrimaryAttest(false);
     setPoEnabled(false); setPoAttest(false); setStripeIds(null); setReferralApplied(false); setReferralInput(""); setReferralError(null);
-    setPromo(null); setPromoInput(""); setPromoError(null);
+    setPromo(null); setPromoInput(""); setPromoError(null); setPromoAttest(false);
     setTeenBirthYear(""); setTeenGate(null); setTeenEnhancedAck(false);
     setPoBirthYear(""); setPoGate(null); setPoEnhancedAck(false);
   }
@@ -207,12 +215,15 @@ export default function SignupFlow({
       });
       const data = await res.json();
       if (data.valid) {
+        setPromoAttest(false); // a freshly-applied code must be re-attested
         setPromo({
           promotion_code_id: data.promotion_code_id,
           code: data.code,
           percent_off: data.percent_off ?? null,
           amount_off: data.amount_off ?? null,
           currency: data.currency ?? null,
+          requires_attestation: data.requires_attestation === true,
+          attestation_text: data.attestation_text ?? null,
         });
       } else {
         setPromo(null);
@@ -284,6 +295,8 @@ export default function SignupFlow({
         referral_discount_applied: false, // retired: referrals reward via balance credit, not a signup discount
         promo_code: promo?.code ?? null,
         promo_promotion_code_id: promo?.promotion_code_id ?? null,
+        promo_attestation_confirmed: promoNeedsAttest ? promoAttest : false,
+        promo_attestation_text: promoNeedsAttest ? promo?.attestation_text ?? null : null,
         purchaser_email: purchaserEmail.trim() || null,
         teen: {
           first_name: teenFirstName.trim(),
@@ -332,6 +345,8 @@ export default function SignupFlow({
         referral_discount_applied: false, // retired: referrals reward via balance credit, not a signup discount
         promo_code: promo?.code ?? null,
         promo_promotion_code_id: promo?.promotion_code_id ?? null,
+        promo_attestation_confirmed: promoNeedsAttest ? promoAttest : false,
+        promo_attestation_text: promoNeedsAttest ? promo?.attestation_text ?? null : null,
         purchaser_email: purchaserEmail.trim() || null,
         family_teens: familyTeens.map((tn) => ({ first_name: tn.name.trim(), phone: normalizePhone(tn.phone), birth_year: Number(tn.year) })),
         stripe: ids,
@@ -760,7 +775,7 @@ export default function SignupFlow({
                 <div style={{ display: "flex", gap: 8 }}>
                   <input
                     value={promoInput}
-                    onChange={(e) => { setPromoInput(e.target.value.toUpperCase()); setPromo(null); setPromoError(null); }}
+                    onChange={(e) => { setPromoInput(e.target.value.toUpperCase()); setPromo(null); setPromoError(null); setPromoAttest(false); }}
                     placeholder={s.promoFieldPlaceholder}
                     style={{ flex: 1 }}
                   />
@@ -771,6 +786,21 @@ export default function SignupFlow({
                 {promo && <p className="hint" style={{ color: "var(--igy-blue)" }}>✓ {s.promoApplied}: {promoLabel}</p>}
                 {promoError && <p className="hint" style={{ color: "var(--igy-error-text)" }}>{promoError}</p>}
                 {!promo && !promoError && <p className="hint">{s.promoFieldHint}</p>}
+
+                {/* Affinity-code attestation — required before this discount can be
+                    used. The exact statement comes from the promo code (Stripe
+                    metadata) so it's the source of truth; checking it is gated on
+                    below and logged server-side (promo_attestations). */}
+                {promo?.requires_attestation && promo.attestation_text && (
+                  <div style={{ marginTop: 14 }}>
+                    <p className="eyebrow">{s.attestationHeading}</p>
+                    <div className="consent-box">{promo.attestation_text}</div>
+                    <label className="check">
+                      <input type="checkbox" checked={promoAttest} onChange={(e) => setPromoAttest(e.target.checked)} />
+                      <span>{s.iConfirm}</span>
+                    </label>
+                  </div>
+                )}
               </div>
 
               {stripeIds ? (
@@ -780,9 +810,15 @@ export default function SignupFlow({
                   </div>
                   <div className="wizard-nav">
                     <button className="btn btn-ghost" onClick={() => setStep(STEP.REFERRAL)}>{s.back}</button>
-                    <button className="btn btn-primary" onClick={() => setStep(STEP.PHONE)}>{s.continue}</button>
+                    <button className="btn btn-primary" disabled={!promoAttestOk} onClick={() => setStep(STEP.PHONE)}>{s.continue}</button>
                   </div>
                 </>
+              ) : !promoAttestOk ? (
+                <p className="hint" style={{ color: "var(--igy-error-text)" }}>
+                  {lang === "es"
+                    ? "Confirma la declaración de arriba para continuar al pago."
+                    : "Confirm the attestation above to continue to payment."}
+                </p>
               ) : (
                 <PaymentStep
                   lang={lang}

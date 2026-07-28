@@ -2,6 +2,7 @@ import "server-only";
 import type Stripe from "stripe";
 import { getStripe } from "./stripe";
 import { getSupabaseAdmin } from "./supabaseAdmin";
+import { promoAttestationSatisfied } from "./promoCodes";
 
 /**
  * Deferred, consent-gated subscription creation — the linchpin of the
@@ -62,7 +63,15 @@ export async function createSubscriptionForPendingSignup(pendingSignupId: string
   // Promo codes still apply; the old 10%-off referral coupon was retired —
   // referrals now reward via a customer-balance credit at conversion (lib/referral.ts).
   const discounts: Stripe.SubscriptionCreateParams.Discount[] = [];
-  if (ps.promo_promotion_code_id) discounts.push({ promotion_code: ps.promo_promotion_code_id });
+  if (ps.promo_promotion_code_id) {
+    // Affinity attestation gate: an attestation-required code is only honored
+    // when the signup recorded a confirmed attestation (spec: affinity codes).
+    if (await promoAttestationSatisfied(ps.promo_promotion_code_id, ps.promo_attestation_confirmed)) {
+      discounts.push({ promotion_code: ps.promo_promotion_code_id });
+    } else {
+      console.warn(`[createSubscription] promo ${ps.promo_code} requires attestation but signup ${ps.id} has none — discount NOT applied`);
+    }
+  }
 
   const sub = await stripe.subscriptions.create(
     {
