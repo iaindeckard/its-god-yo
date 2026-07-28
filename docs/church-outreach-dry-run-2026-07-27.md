@@ -137,7 +137,12 @@ spot-verified live today.
 
 ---
 
-## 2. The outreach email (compliant draft)
+## 2. The outreach email (LOCKED / APPROVED 2026-07-28)
+
+> Copy below matches `IGY-Church-Outreach-Email-Copy-APPROVED-2026-07-28.md` (Iain's
+> final, locked version) and the templates in `lib/outreach/email.ts`. Approval of the
+> copy does **not** open the send gate — `OUTREACH_LEGAL_APPROVED` and `OUTREACH_SEND_LIVE`
+> remain unset, so nothing sends.
 
 Every send carries the CAN-SPAM / RFC 8058 baseline from spec §2. **SMTP-level headers**
 the send job sets:
@@ -155,41 +160,43 @@ address to Resend's Suppressions list. Hard bounces from Resend's webhook do the
 `bounced_hard`.
 
 **Subject** (honest, clearly outreach — not deceptive):
-> A youth-ministry partner offer from It's God, Yo — 10% off for {{ORG_NAME}}
+> A partnership opportunity for {{ORG_NAME}}'s youth ministry
 
 **Body:**
 
 > Hi {{ORG_NAME}} team,
 >
-> I'm Iain, founder of **It's God, Yo!** — a daily Scripture text-message devotional built
-> for teens, in both English (KJV) and Spanish (Reina-Valera 1909). It's a simple way for
-> a young person to get one grounded verse and a short, real-language reflection every day.
+> I'm Iain, founder of **It's God, Yo!**, a daily Scripture text devotional built for
+> teens, in English (KJV) and Spanish (Reina-Valera 1909). One verse a day, rewritten in
+> their language, real slang they use today so they actually understand it. There's always
+> a link back to the full KJV text too. And thanks to a proprietary system, the slang is
+> never stale.
 >
-> I'm reaching out because {{ORG_NAME}} has an active youth ministry, and I'd love to make
-> It's God, Yo available to your students and families at a discount. Here's a code for
-> **10% off** any plan, just for your community:
+> {{ORG_NAME}} has an active youth ministry, and I thought this might be useful for the
+> students you're already working with. Here's a code for **10% off** any plan, on us:
 >
 > > **{{PROMO_CODE}}** — 10% off at https://itsgodyo.com
 >
-> No pressure and no obligation — if it's a fit, share it with your families; if not, no
-> worries at all. And if you'd rather not hear from us again, the one-click link below
-> removes {{ORG_NAME}} permanently.
+> No pressure here. Share it if it's a fit, ignore it if it's not. If you'd rather not hear
+> from us again, the link below removes {{ORG_NAME}} for good.
 >
-> Grateful for the work you do with young people,
+> Thanks for helping us get the Word of God to young people every day.
+>
 > **Iain Deckard** · It's God, Yo!
-> Reply straight to this email — it comes to me personally.
+> Reply to this email directly, it comes to me.
 
 **Footer** (physical address is legally required — pulled from IGY's own ToS/privacy footer):
 
 > It's God, Yo!™ is operated by Deckard Enterprise International, LLC · 2221 N Amarado St,
 > Wichita, KS 67205.
 > You received this because {{ORG_NAME}} is a Wichita-area church with a publicly listed
-> youth ministry; we found your general contact address at {{SOURCE_NOTE}}.
+> youth ministry. We're proud to say we're local too. We found your general contact address
+> at {{SOURCE_NOTE}}. Please, help support a local small business!
 > **Unsubscribe (one click)** → {{UNSUB_URL}}
 
 ### Rendered example — Christ Church (would send)
 - **To:** admin@christpeople.church
-- **Subject:** A youth-ministry partner offer from It's God, Yo — 10% off for Christ Church
+- **Subject:** A partnership opportunity for Christ Church's youth ministry
 - **{{PROMO_CODE}}:** `IGY-CHRISTCHURCH-<minted at first send>` (unique per lead, 10% off, via `lib/promoCodes.ts`)
 - **{{SOURCE_NOTE}}:** christpeople.church/youth
 

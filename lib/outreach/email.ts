@@ -50,9 +50,11 @@ function sourceNote(lead: OutreachLead): string {
 }
 
 /**
- * Build the compliant outreach email (spec §2). NOTE: the copy here is PENDING
- * Iain's explicit approval — it is not sent to any real org until the send gate
- * (see config.sendGate) is opened. Every send carries: honest From/Subject,
+ * Build the compliant outreach email (spec §2). The copy here is the LOCKED /
+ * APPROVED version (Iain, 2026-07-28 — IGY-Church-Outreach-Email-Copy-APPROVED-
+ * 2026-07-28.md). Approval of the copy does NOT open the send gate: mail still
+ * goes nowhere until OUTREACH_LEGAL_APPROVED + OUTREACH_SEND_LIVE are also set
+ * (see config.sendGate). Every send carries: honest From/Subject,
  * one-click List-Unsubscribe (RFC 8058) + a visible link, the required physical
  * mailing address, and Reply-To to a monitored human inbox.
  */
@@ -61,44 +63,45 @@ export function buildEmail(lead: OutreachLead, promoCode: string): BuiltEmail {
   const link = unsubUrl(lead.id);
   const site = OUTREACH.appUrl;
 
-  const subject = `A youth-ministry partner offer from It's God, Yo — 10% off for ${org}`;
+  const subject = `A partnership opportunity for ${org}'s youth ministry`;
 
   const text =
 `Hi ${org} team,
 
-I'm Iain, founder of It's God, Yo! — a daily Scripture text-message devotional built for teens, in both English (KJV) and Spanish (Reina-Valera 1909). It's a simple way for a young person to get one grounded verse and a short, real-language reflection every day.
+I'm Iain, founder of It's God, Yo!, a daily Scripture text devotional built for teens, in English (KJV) and Spanish (Reina-Valera 1909). One verse a day, rewritten in their language, real slang they use today so they actually understand it. There's always a link back to the full KJV text too. And thanks to a proprietary system, the slang is never stale.
 
-I'm reaching out because ${org} has an active youth ministry, and I'd love to make It's God, Yo available to your students and families at a discount. Here's a code for 10% off any plan, just for your community:
+${org} has an active youth ministry, and I thought this might be useful for the students you're already working with. Here's a code for 10% off any plan, on us:
 
-  ${promoCode} — 10% off at ${site}
+${promoCode} — 10% off at ${site}
 
-No pressure and no obligation — if it's a fit, share it with your families; if not, no worries at all. And if you'd rather not hear from us again, the one-click link below removes ${org} permanently.
+No pressure here. Share it if it's a fit, ignore it if it's not. If you'd rather not hear from us again, the link below removes ${org} for good.
 
-Grateful for the work you do with young people,
+Thanks for helping us get the Word of God to young people every day.
+
 Iain Deckard · It's God, Yo!
-Reply straight to this email — it comes to me personally.
+Reply to this email directly, it comes to me.
 
 ---
-It's God, Yo! is operated by ${OUTREACH.physicalAddress}.
-You received this because ${org} is a church in ${OUTREACH.geography} with a publicly listed youth ministry; we found your general contact address at ${sourceNote(lead)}.
+It's God, Yo!™ is operated by ${OUTREACH.physicalAddress}.
+You received this because ${org} is a Wichita-area church with a publicly listed youth ministry. We're proud to say we're local too. We found your general contact address at ${sourceNote(lead)}. Please, help support a local small business!
 Unsubscribe (one click): ${link}`;
 
   const html =
 `<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:#1a1a1a;max-width:600px;margin:0 auto;">
   <p>Hi ${esc(org)} team,</p>
-  <p>I'm Iain, founder of <strong>It's God, Yo!</strong> — a daily Scripture text-message devotional built for teens, in both English (KJV) and Spanish (Reina-Valera 1909). It's a simple way for a young person to get one grounded verse and a short, real-language reflection every day.</p>
-  <p>I'm reaching out because ${esc(org)} has an active youth ministry, and I'd love to make It's God, Yo available to your students and families at a discount. Here's a code for <strong>10% off</strong> any plan, just for your community:</p>
+  <p>I'm Iain, founder of <strong>It's God, Yo!</strong>, a daily Scripture text devotional built for teens, in English (KJV) and Spanish (Reina-Valera 1909). One verse a day, rewritten in their language, real slang they use today so they actually understand it. There's always a link back to the full KJV text too. And thanks to a proprietary system, the slang is never stale.</p>
+  <p>${esc(org)} has an active youth ministry, and I thought this might be useful for the students you're already working with. Here's a code for <strong>10% off</strong> any plan, on us:</p>
   <p style="background:#f4f7f7;border:1px solid #d7e2e2;border-radius:8px;padding:12px 16px;font-size:16px;">
     <strong>${esc(promoCode)}</strong> — 10% off at <a href="${site}" style="color:#00ABBC;">${esc(site.replace(/^https?:\/\//, ""))}</a>
   </p>
-  <p>No pressure and no obligation — if it's a fit, share it with your families; if not, no worries at all. And if you'd rather not hear from us again, the one-click link below removes ${esc(org)} permanently.</p>
-  <p style="margin-bottom:2px;">Grateful for the work you do with young people,<br/>
-  <strong>Iain Deckard</strong> · It's God, Yo!</p>
-  <p style="color:#555;">Reply straight to this email — it comes to me personally.</p>
+  <p>No pressure here. Share it if it's a fit, ignore it if it's not. If you'd rather not hear from us again, the link below removes ${esc(org)} for good.</p>
+  <p style="margin-bottom:2px;">Thanks for helping us get the Word of God to young people every day.</p>
+  <p style="margin-bottom:2px;"><strong>Iain Deckard</strong> · It's God, Yo!</p>
+  <p style="color:#555;">Reply to this email directly, it comes to me.</p>
   <hr style="border:none;border-top:1px solid #e2e2e2;margin:22px 0;"/>
   <p style="font-size:12px;color:#777;">
     It's God, Yo!™ is operated by ${esc(OUTREACH.physicalAddress)}.<br/>
-    You received this because ${esc(org)} is a church in ${esc(OUTREACH.geography)} with a publicly listed youth ministry; we found your general contact address at ${esc(sourceNote(lead))}.<br/>
+    You received this because ${esc(org)} is a Wichita-area church with a publicly listed youth ministry. We're proud to say we're local too. We found your general contact address at ${esc(sourceNote(lead))}. Please, help support a local small business!<br/>
     <a href="${link}" style="color:#777;">Unsubscribe (one click)</a>
   </p>
 </div>`;
