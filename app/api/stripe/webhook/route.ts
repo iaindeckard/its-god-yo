@@ -3,6 +3,7 @@ import type Stripe from "stripe";
 import { getStripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { onRefereePaidConversion, onRefereePaymentReversed, type OwnerKind } from "@/lib/referral";
+import { upsertSubscriptionPayment, tsIso, type PaymentCapture } from "@/lib/subscriptionPayments";
 
 export const dynamic = "force-dynamic";
 
@@ -99,60 +100,14 @@ export async function POST(req: Request) {
   // balance_transaction is what surfaces the settled USD + exchange_rate that
   // invoice.amount_paid alone does not carry. Currency-agnostic — identical path
   // for usd/cad/gbp/eur. See IGY-DEI-Rollup-Multi-Currency-Architecture-v3.
-  const tsIso = (unix: number | null | undefined): string | null =>
-    typeof unix === "number" ? new Date(unix * 1000).toISOString() : null;
-
-  type CaptureInput = {
-    kind: "charge" | "refund" | "dispute";
-    bt: Stripe.BalanceTransaction | null;
-    originalAmountCents: number | null;
-    originalCurrency: string | null;
-    chargeId: string | null;
-    invoiceId: string | null;
-    paymentIntentId: string | null;
-    subscriptionId: string | null;
-    customerId: string | null;
-    billingReason: string | null;
-    status: string;
-    periodStart: string | null;
-    periodEnd: string | null;
-  };
-  const recordPayment = async (p: CaptureInput) => {
-    const bt = p.bt;
-    if (!bt?.id) {
-      // No settlement record → nothing canonical to store. Log and let Stripe
-      // redeliver; a later reconciliation can backfill. Never write a settled-less
-      // row (the rollup would read it as unverified anyway).
-      console.warn(`[stripe-webhook] payment capture: no balance_transaction for ${p.kind} charge=${p.chargeId ?? "?"} — skipped`);
-      return;
-    }
-    const { error } = await admin.from("subscription_payments").upsert(
-      {
-        business_unit: "igy",
-        kind: p.kind,
-        balance_transaction_id: bt.id,
-        stripe_charge_id: p.chargeId,
-        stripe_invoice_id: p.invoiceId,
-        stripe_payment_intent_id: p.paymentIntentId,
-        stripe_subscription_id: p.subscriptionId,
-        stripe_customer_id: p.customerId,
-        original_amount_cents: p.originalAmountCents,
-        original_currency: p.originalCurrency,
-        settled_amount_cents: bt.amount ?? null,
-        settled_currency: bt.currency ?? null,
-        settled_fee_cents: bt.fee ?? null,
-        settled_net_cents: bt.net ?? null,
-        exchange_rate: bt.exchange_rate ?? null,
-        billing_reason: p.billingReason,
-        status: p.status,
-        period_start: p.periodStart,
-        period_end: p.periodEnd,
-        stripe_created_at: tsIso(bt.created),
-      },
-      { onConflict: "balance_transaction_id", ignoreDuplicates: true },
-    );
-    if (error) throw error; // caught by safeCapture at the call site — never breaks the handler; durability is via backfill, not a webhook 500/retry
-  };
+  // The row shape, tsIso, and the idempotent upsert now live in
+  // lib/subscriptionPayments so this webhook and the reconcile cron produce
+  // byte-identical rows and share idempotency (unique on balance_transaction_id).
+  // safeCapture (below) still wraps every call so a ledger failure can never break
+  // the status-update / referral-clawback logic; durability is via the reconcile
+  // backfill, not a webhook 500/retry. recordPayment returns { inserted } (ignored
+  // here — the reconcile job uses it to count gaps).
+  const recordPayment = (p: PaymentCapture) => upsertSubscriptionPayment(admin, p);
 
   // Ledger capture is ADDITIVE and best-effort: it must NEVER break the existing
   // status-update / referral-clawback logic that shares these event cases. Any
