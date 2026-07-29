@@ -17,6 +17,7 @@ export async function POST(req: Request) {
       verseRef: body.verse_ref,
       themeTrack: body.theme_track,
       reportDate: body.report_date,
+      textLang: body.text_lang,
       reportedText: body.reported_text,
       description: body.description,
     });

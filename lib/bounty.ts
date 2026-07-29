@@ -4,7 +4,7 @@ import { getSupabaseAdmin } from "./supabaseAdmin";
 import { getStripe } from "./stripe";
 import { subscriptionMonthlyValueCents } from "./referral";
 import type { Staff } from "./rbac";
-import { earnedEmail, notFirstEmail, rejectedEmail, cappedEmail, snagEmail, sendBountyEmail } from "./bountyEmails";
+import { earnedEmail, notFirstEmail, rejectedEmail, cappedEmail, snagEmail, alreadyCorrectedEmail, sendBountyEmail } from "./bountyEmails";
 
 /**
  * Translation/reword error bounty — v2 (spec IGY-Translation-Error-Bounty-Spec-
@@ -35,9 +35,11 @@ import { earnedEmail, notFirstEmail, rejectedEmail, cappedEmail, snagEmail, send
 /** Annual reward ceiling, in months-of-credit, per account per calendar year. */
 export const ANNUAL_CAP_MONTHS = 6;
 
-/** Deterministic grouping key: reports on the same verse/date/track cluster. */
-export function groupKey(themeTrack: string, reportDate: string, verseRef: string): string {
-  return `${themeTrack}|${reportDate}|${verseRef}`;
+/** Deterministic grouping key: reports on the same verse/date/track AND the same
+ *  text (en reword vs es translation) cluster. text_lang is part of the key because
+ *  an EN error and an ES error on the same verse are distinct corrections. */
+export function groupKey(themeTrack: string, reportDate: string, verseRef: string, textLang: string): string {
+  return `${themeTrack}|${reportDate}|${verseRef}|${textLang}`;
 }
 
 function firstOfMonthUTC(d = new Date()): string {
@@ -94,6 +96,7 @@ export interface SubmitReportInput {
   reportDate: string; // YYYY-MM-DD
   reportedText?: string;
   description: string;
+  textLang: "en" | "es"; // which text: en reword vs es translation
 }
 
 export interface ReportRow {
@@ -107,6 +110,12 @@ export interface ReportRow {
   group_key: string;
   submitted_at: string;
   status: string;
+  text_lang: string | null;
+  ai_is_error: boolean | null;
+  ai_assessment: string | null;
+  ai_proposed_fix: string | null;
+  ai_target_slot_id: string | null;
+  ai_assessed_at: string | null;
 }
 
 export async function submitReport(input: SubmitReportInput): Promise<ReportRow> {
@@ -115,8 +124,13 @@ export async function submitReport(input: SubmitReportInput): Promise<ReportRow>
   if (!input.verseRef?.trim()) throw new Error("verse reference is required");
   if (!input.reportDate?.trim()) throw new Error("report date is required");
   if (!input.description?.trim()) throw new Error("a description of the issue is required");
+  if (input.textLang !== "en" && input.textLang !== "es") {
+    throw new Error("please choose which text you're reporting — the English reword or the Spanish translation");
+  }
   const email = input.reporterEmail.trim().toLowerCase();
   const track = input.themeTrack?.trim() || "general";
+  const verseRef = input.verseRef.trim();
+  const gkey = groupKey(track, input.reportDate, verseRef, input.textLang);
 
   // §6 identity match — must be an account on file. We resolve server-side from
   // the email; customers were never issued an internal id and shouldn't need one.
@@ -138,21 +152,34 @@ export async function submitReport(input: SubmitReportInput): Promise<ReportRow>
     throw new Error("You've already submitted a report today — thank you! Please come back tomorrow with any others.");
   }
 
+  // §8 Step 2 — already-resolved dedupe: this exact error (same group, incl. text_lang)
+  // was already confirmed + fixed. Record it, thank them, no reward, skip the queue.
+  const { count: resolvedCount, error: dupErr } = await admin
+    .from("igy_error_reports")
+    .select("id", { count: "exact", head: true })
+    .eq("group_key", gkey)
+    .eq("status", "confirmed");
+  if (dupErr) throw new Error(`dedupe_check_failed: ${dupErr.message}`);
+  const status = (resolvedCount ?? 0) > 0 ? "duplicate_resolved" : "pending";
+
   const { data, error } = await admin
     .from("igy_error_reports")
     .insert({
       reporter_email: email,
       reporter_stripe_customer_id: customerId,
-      verse_ref: input.verseRef.trim(),
+      verse_ref: verseRef,
       theme_track: track,
+      text_lang: input.textLang,
       report_date: input.reportDate,
       reported_text: input.reportedText?.trim() || null,
       description: input.description.trim(),
-      group_key: groupKey(track, input.reportDate, input.verseRef.trim()),
+      group_key: gkey,
+      status,
     })
-    .select("id, reporter_email, verse_ref, theme_track, report_date, reported_text, description, group_key, submitted_at, status")
+    .select("id, reporter_email, verse_ref, theme_track, text_lang, report_date, reported_text, description, group_key, submitted_at, status")
     .single();
   if (error) throw new Error(`report_insert_failed: ${error.message}`);
+  if (status === "duplicate_resolved") await sendBountyEmail(email, alreadyCorrectedEmail(verseRef));
   return data as ReportRow;
 }
 
@@ -163,16 +190,29 @@ export interface ReviewGroup {
   verse_ref: string;
   theme_track: string;
   report_date: string;
+  text_lang: string | null; // en reword vs es translation — which text this group is about
   reports: ReportRow[]; // earliest first
   earliest_reporter_email: string;
   report_count: number;
+  assessment: GroupAssessment | null; // AI assessment (Phase B), null until Assess is run
+  current_text: string | null; // the live slot text a publish would overwrite
+  slot_ok: boolean; // does the report resolve to exactly one slot? (publish requires it)
+  slot_note: string | null; // 'no_matching_slot' / 'multiple_matching_slots' when !slot_ok
+}
+
+export interface GroupAssessment {
+  ai_is_error: boolean | null;
+  ai_assessment: string | null;
+  ai_proposed_fix: string | null;
+  ai_target_slot_id: string | null;
+  ai_assessed_at: string | null;
 }
 
 export async function getReviewGroups(status = "pending"): Promise<ReviewGroup[]> {
   const admin = getSupabaseAdmin();
   const { data, error } = await admin
     .from("igy_error_reports")
-    .select("id, reporter_email, verse_ref, theme_track, report_date, reported_text, description, group_key, submitted_at, status")
+    .select("id, reporter_email, verse_ref, theme_track, text_lang, report_date, reported_text, description, group_key, submitted_at, status, ai_is_error, ai_assessment, ai_proposed_fix, ai_target_slot_id, ai_assessed_at")
     .eq("status", status)
     .order("group_key", { ascending: true })
     .order("submitted_at", { ascending: true });
@@ -187,16 +227,204 @@ export async function getReviewGroups(status = "pending"): Promise<ReviewGroup[]
         verse_ref: r.verse_ref,
         theme_track: r.theme_track,
         report_date: r.report_date,
+        text_lang: r.text_lang,
         reports: [],
         earliest_reporter_email: r.reporter_email, // first seen = earliest (ordered by submitted_at)
         report_count: 0,
+        assessment: r.ai_assessed_at
+          ? { ai_is_error: r.ai_is_error, ai_assessment: r.ai_assessment, ai_proposed_fix: r.ai_proposed_fix, ai_target_slot_id: r.ai_target_slot_id, ai_assessed_at: r.ai_assessed_at }
+          : null,
+        current_text: null,
+        slot_ok: false,
+        slot_note: null,
       };
       groups.set(r.group_key, g);
     }
     g.reports.push(r);
     g.report_count++;
   }
-  return [...groups.values()];
+
+  // Resolve each group's live slot (for current-text display + publish-readiness).
+  const list = [...groups.values()];
+  await Promise.all(
+    list.map(async (g) => {
+      const s = await resolveSlot({ report_date: g.report_date, theme_track: g.theme_track, verse_ref: g.verse_ref, text_lang: g.text_lang });
+      if (s.ok) { g.current_text = s.slot.currentText; g.slot_ok = true; g.slot_note = null; }
+      else { g.current_text = null; g.slot_ok = false; g.slot_note = s.reason; }
+    }),
+  );
+  return list;
+}
+
+// ─── report → live daily_slot resolution (foundation for assess/publish) ─────
+
+export interface SlotResolution {
+  slotId: string;
+  field: "final_translation" | "final_translation_es";
+  currentText: string | null;
+  verseRef: string;
+}
+export type SlotResolveResult =
+  | { ok: true; slot: SlotResolution }
+  | { ok: false; reason: "no_matching_slot" | "multiple_matching_slots"; slotIds?: string[] };
+
+/**
+ * Map a report to the single live daily_slot + field its correction would edit.
+ * Matches on scheduled_date=report_date, theme_track, verse_ref; text_lang picks
+ * the field (en → final_translation, es → final_translation_es). Returns an
+ * explicit failure for no-match / multi-match — callers never auto-guess a slot
+ * (corrections_log.daily_slot_id is NOT NULL, so publishing requires exactly one).
+ */
+export async function resolveSlot(r: {
+  report_date: string;
+  theme_track: string;
+  verse_ref: string;
+  text_lang: string | null;
+}): Promise<SlotResolveResult> {
+  const admin = getSupabaseAdmin();
+  const field = r.text_lang === "es" ? "final_translation_es" : "final_translation";
+  const { data, error } = await admin
+    .from("daily_slots")
+    .select(`id, verse_ref, ${field}`)
+    .eq("scheduled_date", r.report_date)
+    .eq("theme_track", r.theme_track)
+    .eq("verse_ref", r.verse_ref);
+  if (error) throw new Error(`slot_resolve_failed: ${error.message}`);
+  const rows = (data ?? []) as Array<Record<string, unknown>>;
+  if (rows.length === 0) return { ok: false, reason: "no_matching_slot" };
+  if (rows.length > 1) return { ok: false, reason: "multiple_matching_slots", slotIds: rows.map((x) => String(x.id)) };
+  const row = rows[0];
+  return { ok: true, slot: { slotId: String(row.id), field, currentText: (row[field] as string | null) ?? null, verseRef: String(row.verse_ref) } };
+}
+
+// ─── AI assessment (Phase B, on-demand) ─────────────────────────────────────
+
+/** Assessment model — a CURRENT Claude by default (not the older sonnet-4-6 the
+ *  verse generator still pins). Override via env. Single-model: the human is the gate. */
+const ASSESS_MODEL = process.env.BOUNTY_ASSESS_MODEL || "claude-sonnet-5";
+
+/** Stand-in reviewer id for the deferred-login phase — no FK on corrected_by /
+ *  reviewer_id, so any uuid is fine; matches lib/reviewFunctions' fallback. */
+const FALLBACK_REVIEWER_ID = "00000000-0000-0000-0000-000000000001";
+
+/** "John 3:16" / "1 Corinthians 13:4" / "Song of Solomon 2:1" -> {book,chapter,verse}. */
+function parseVerseRef(ref: string): { book: string; chapter: number; verse: number } | null {
+  const m = ref.trim().match(/^(.+?)\s+(\d+):(\d+)$/);
+  if (!m) return null;
+  return { book: m[1].trim(), chapter: Number(m[2]), verse: Number(m[3]) };
+}
+
+/** Best-effort canonical source text: KJV for the EN reword, RV1909 for the ES
+ *  translation. Returns null if it can't be resolved (assessment still proceeds). */
+async function fetchSourceVerse(verseRef: string, lang: "en" | "es"): Promise<string | null> {
+  const p = parseVerseRef(verseRef);
+  if (!p) return null;
+  const table = lang === "es" ? "rv1909_verses" : "kjv_verses";
+  try {
+    const admin = getSupabaseAdmin();
+    const { data } = await admin
+      .from(table)
+      .select("text")
+      .eq("book", p.book).eq("chapter", p.chapter).eq("verse", p.verse)
+      .maybeSingle();
+    return (data as { text?: string } | null)?.text ?? null;
+  } catch {
+    return null;
+  }
+}
+
+interface AssessDraft { is_error: boolean; assessment: string; proposed_fix: string | null }
+
+/** Single Claude call → structured verdict. Throws if ANTHROPIC_API_KEY is unset
+ *  (assessment is admin-triggered; a clear error beats a silent no-op here). */
+async function callAssessLLM(prompt: string): Promise<AssessDraft> {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) throw new Error("assessment_unavailable: ANTHROPIC_API_KEY is not set");
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+    body: JSON.stringify({ model: ASSESS_MODEL, max_tokens: 800, messages: [{ role: "user", content: prompt }] }),
+  });
+  if (!res.ok) throw new Error(`assess_llm_${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const body = (await res.json()) as { content?: Array<{ text?: string }> };
+  const raw = body.content?.map((c) => c.text ?? "").join("") ?? "";
+  const s = raw.indexOf("{"), e = raw.lastIndexOf("}");
+  if (s === -1 || e === -1 || e < s) throw new Error("assess_parse_failed: no JSON object in model output");
+  const parsed = JSON.parse(raw.slice(s, e + 1)) as Partial<AssessDraft>;
+  return {
+    is_error: Boolean(parsed.is_error),
+    assessment: String(parsed.assessment ?? "").trim(),
+    proposed_fix: parsed.proposed_fix ? String(parsed.proposed_fix).trim() : null,
+  };
+}
+
+function buildAssessPrompt(lang: "en" | "es", verseRef: string, currentText: string | null, source: string | null, reportedText: string | null, description: string): string {
+  const src = source ? `Canonical source (${lang === "es" ? "Reina-Valera 1909" : "KJV"}): "${source}"` : "(canonical source unavailable)";
+  const cur = currentText ? `Currently published text: "${currentText}"` : "(current published text unavailable)";
+  const frame = lang === "es"
+    ? `You are reviewing the Spanish (Reina-Valera 1909-based) rendering of ${verseRef} used in a teen Scripture devotional.`
+    : `You are reviewing the English teen-slang reword (based on the KJV) of ${verseRef} used in a daily teen Scripture devotional.`;
+  const fixNote = lang === "es"
+    ? "If it should change, provide a corrected Spanish rendering faithful to Reina-Valera 1909."
+    : "If it should change, provide a corrected teen-slang reword that stays faithful to the KJV meaning AND keeps the same casual teen-slang register as the current text.";
+  return `${frame}
+${src}
+${cur}
+A subscriber reported an issue:
+- specific text they flagged: ${reportedText ? `"${reportedText}"` : "(not given)"}
+- what they said is wrong: "${description}"
+
+Decide whether the current text is ACTUALLY wrong (mistranslation / factual error / misrepresents the verse / inappropriate), versus merely a stylistic choice the reporter happens to dislike. Be conservative: only flag a real error. ${fixNote}
+Respond with ONLY a JSON object, no prose: {"is_error": true|false, "assessment": "1-3 sentence reasoning", "proposed_fix": "corrected text" or null}`;
+}
+
+export interface AssessResult {
+  group_key: string;
+  slot_error?: "no_matching_slot" | "multiple_matching_slots";
+  ai_is_error: boolean | null;
+  ai_assessment: string;
+  ai_proposed_fix: string | null;
+  ai_target_slot_id: string | null;
+}
+
+/**
+ * On-demand AI assessment of a pending group (spec §8 Step 3): resolve the slot,
+ * ground on the canonical source + current text, ask Claude whether it's really an
+ * error and (if so) draft a fix, and persist the verdict on the group's pending
+ * rows. NEVER publishes — a human approves in Phase C.
+ */
+export async function assessReport(gkey: string): Promise<AssessResult> {
+  const admin = getSupabaseAdmin();
+  const { data: reps, error } = await admin
+    .from("igy_error_reports")
+    .select("verse_ref, theme_track, report_date, text_lang, reported_text, description")
+    .eq("group_key", gkey).eq("status", "pending")
+    .order("submitted_at", { ascending: true }).limit(1);
+  if (error) throw new Error(`assess_group_read_failed: ${error.message}`);
+  const rep = (reps ?? [])[0] as
+    | { verse_ref: string; theme_track: string; report_date: string; text_lang: string | null; reported_text: string | null; description: string }
+    | undefined;
+  if (!rep) throw new Error("no pending reports in this group");
+  const lang: "en" | "es" = rep.text_lang === "es" ? "es" : "en";
+
+  const persist = async (fields: Record<string, unknown>) => {
+    await admin.from("igy_error_reports").update({ ...fields, ai_assessed_at: new Date().toISOString() })
+      .eq("group_key", gkey).eq("status", "pending");
+  };
+
+  const slot = await resolveSlot(rep);
+  if (!slot.ok) {
+    const msg = slot.reason === "no_matching_slot"
+      ? "No matching daily_slot for this report's date/track/verse — can't assess or publish. Verify the report details or map a slot manually."
+      : `Multiple daily_slots match (${(slot.slotIds ?? []).join(", ")}) — can't auto-target. Resolve manually.`;
+    await persist({ ai_is_error: null, ai_assessment: msg, ai_proposed_fix: null, ai_target_slot_id: null });
+    return { group_key: gkey, slot_error: slot.reason, ai_is_error: null, ai_assessment: msg, ai_proposed_fix: null, ai_target_slot_id: null };
+  }
+
+  const source = await fetchSourceVerse(rep.verse_ref, lang);
+  const draft = await callAssessLLM(buildAssessPrompt(lang, rep.verse_ref, slot.slot.currentText, source, rep.reported_text, rep.description));
+  await persist({ ai_is_error: draft.is_error, ai_assessment: draft.assessment, ai_proposed_fix: draft.proposed_fix, ai_target_slot_id: slot.slot.slotId });
+  return { group_key: gkey, ai_is_error: draft.is_error, ai_assessment: draft.assessment, ai_proposed_fix: draft.proposed_fix, ai_target_slot_id: slot.slot.slotId };
 }
 
 export interface ConfirmResult {
@@ -367,6 +595,179 @@ export async function confirmGroup(gkey: string, decision: "confirm" | "reject",
 async function notifyAll(emails: string[], build: () => ReturnType<typeof rejectedEmail>): Promise<void> {
   const unique = [...new Set(emails.filter(Boolean))];
   await Promise.allSettled(unique.map((to) => sendBountyEmail(to, build())));
+}
+
+// ─── publish a correction to live content (Phase C) ─────────────────────────
+
+export interface PublishResult {
+  group_key: string;
+  slot_id: string;
+  corrections_log_id: string;
+  reward: ConfirmResult; // status + credit outcome from the finalize step
+}
+
+/**
+ * Approve + publish a confirmed error's fix to the live daily_slots content, fully
+ * audit-trailed. Opens a review_session, overwrites the target slot's en/es field,
+ * logs a corrections_log entry bound to that session, then delegates status +
+ * reward to confirmGroup("confirm") — so the credit fires only after a successful
+ * publish. `finalText` is the AI's proposed fix or the admin's edit. Gated at the
+ * API layer behind content.queue.publish (super_admin).
+ */
+export async function publishCorrection(gkey: string, finalText: string, staff: Staff, note?: string): Promise<PublishResult> {
+  const admin = getSupabaseAdmin();
+  if (!finalText?.trim()) throw new Error("a corrected text is required to publish");
+  const text = finalText.trim();
+
+  // Read the pending group (status still 'pending' here) to resolve the slot.
+  const { data, error } = await admin
+    .from("igy_error_reports")
+    .select("verse_ref, theme_track, report_date, text_lang")
+    .eq("group_key", gkey)
+    .eq("status", "pending")
+    .order("submitted_at", { ascending: true })
+    .limit(1);
+  if (error) throw new Error(`publish_group_read_failed: ${error.message}`);
+  const rep = (data ?? [])[0] as { verse_ref: string; theme_track: string; report_date: string; text_lang: string | null } | undefined;
+  if (!rep) throw new Error("no pending reports in this group");
+
+  const slot = await resolveSlot(rep);
+  if (!slot.ok) throw new Error(`cannot publish: ${slot.reason} — resolve the target slot first`);
+  const now = new Date().toISOString();
+  const reviewerUuid = staff.userId ?? FALLBACK_REVIEWER_ID;
+
+  // Open a review session (reuse the review apparatus at the table level).
+  const { data: sess, error: sErr } = await admin
+    .from("review_sessions")
+    .insert({ reviewer_id: reviewerUuid, started_at: now })
+    .select("id")
+    .single();
+  if (sErr) throw new Error(`review_session_open_failed: ${sErr.message}`);
+  const sessionId = (sess as { id: string }).id;
+
+  // Publish: overwrite the slot's target-language field with the corrected text.
+  const { error: slotErr } = await admin.from("daily_slots").update({ [slot.slot.field]: text }).eq("id", slot.slot.slotId);
+  if (slotErr) throw new Error(`slot_publish_failed: ${slotErr.message}`);
+
+  // Audit: corrections_log entry bound to the session (pre-image = original text).
+  const { data: corr, error: cErr } = await admin
+    .from("corrections_log")
+    .insert({
+      daily_slot_id: slot.slot.slotId,
+      action_type: "bounty_correction",
+      original_verse_ref: rep.verse_ref,
+      original_translation: slot.slot.currentText,
+      corrected_translation: text,
+      reason: note?.trim() || `error-bounty correction (${slot.slot.field === "final_translation_es" ? "es" : "en"})`,
+      category: "error_bounty",
+      corrected_by: reviewerUuid,
+      corrected_at: now,
+      review_session_id: sessionId,
+    })
+    .select("id")
+    .single();
+  if (cErr) throw new Error(`corrections_log_write_failed: ${cErr.message}`);
+  const corrId = (corr as { id: string }).id;
+
+  await admin.from("review_sessions").update({ ended_at: now, ended_cleanly: true }).eq("id", sessionId);
+
+  // Finalize: mark the group confirmed + issue the reward (reuses the confirm path;
+  // reports are still 'pending' at this point). Content is already live and logged.
+  const reward = await confirmGroup(gkey, "confirm", staff, note);
+
+  return { group_key: gkey, slot_id: slot.slot.slotId, corrections_log_id: corrId, reward };
+}
+
+// ─── corrections history (read-only) ────────────────────────────────────────
+
+export interface CorrectionRow {
+  id: string;
+  daily_slot_id: string;
+  action_type: string; // bounty_correction | bounty_revert
+  original_verse_ref: string | null;
+  original_translation: string | null;
+  corrected_translation: string | null;
+  corrected_at: string | null;
+  review_session_id: string | null;
+}
+
+/** Error-bounty corrections + reverts, newest first, for the admin history panel. */
+export async function getBountyCorrections(limit = 40): Promise<CorrectionRow[]> {
+  const admin = getSupabaseAdmin();
+  const { data, error } = await admin
+    .from("corrections_log")
+    .select("id, daily_slot_id, action_type, original_verse_ref, original_translation, corrected_translation, corrected_at, review_session_id")
+    .eq("category", "error_bounty")
+    .order("corrected_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`corrections_query_failed: ${error.message}`);
+  return (data ?? []) as CorrectionRow[];
+}
+
+// ─── content revert (Phase E) ───────────────────────────────────────────────
+
+export interface RevertResult {
+  corrections_log_id: string;
+  revert_log_id: string;
+  slot_id: string;
+  field: string;
+}
+
+/**
+ * Undo a published bounty correction: restore the slot field to the correction's
+ * pre-image (original_translation) and log a 'bounty_revert' entry (session-bound).
+ * Content-only — does NOT touch the reward/credit (that's pass 3). Gated at the
+ * API layer behind content.queue.publish. Safety guard: if the slot text no longer
+ * matches what this correction published (edited since), it refuses to auto-revert.
+ */
+export async function revertCorrection(correctionId: string, staff: Staff): Promise<RevertResult> {
+  const admin = getSupabaseAdmin();
+  const { data: corr, error } = await admin
+    .from("corrections_log")
+    .select("id, daily_slot_id, action_type, original_verse_ref, original_translation, corrected_translation")
+    .eq("id", correctionId)
+    .single();
+  if (error) throw new Error(`correction_read_failed: ${error.message}`);
+  const c = corr as { id: string; daily_slot_id: string; action_type: string; original_verse_ref: string | null; original_translation: string | null; corrected_translation: string | null };
+  if (c.action_type !== "bounty_correction") throw new Error("only a bounty correction can be reverted");
+
+  const { data: slot, error: sErr } = await admin
+    .from("daily_slots").select("final_translation, final_translation_es").eq("id", c.daily_slot_id).single();
+  if (sErr) throw new Error(`slot_read_failed: ${sErr.message}`);
+  const s = slot as { final_translation: string | null; final_translation_es: string | null };
+  // Which field this correction wrote — inferred by which one currently holds it.
+  let field: "final_translation" | "final_translation_es";
+  if (s.final_translation === c.corrected_translation) field = "final_translation";
+  else if (s.final_translation_es === c.corrected_translation) field = "final_translation_es";
+  else throw new Error("the slot text has changed since this correction — revert it by hand");
+
+  const now = new Date().toISOString();
+  const reviewerUuid = staff.userId ?? FALLBACK_REVIEWER_ID;
+
+  const { data: sess, error: seErr } = await admin
+    .from("review_sessions").insert({ reviewer_id: reviewerUuid, started_at: now }).select("id").single();
+  if (seErr) throw new Error(`review_session_open_failed: ${seErr.message}`);
+  const sessionId = (sess as { id: string }).id;
+
+  const { error: updErr } = await admin.from("daily_slots").update({ [field]: c.original_translation }).eq("id", c.daily_slot_id);
+  if (updErr) throw new Error(`slot_revert_failed: ${updErr.message}`);
+
+  const { data: rev, error: rErr } = await admin.from("corrections_log").insert({
+    daily_slot_id: c.daily_slot_id,
+    action_type: "bounty_revert",
+    original_verse_ref: c.original_verse_ref,
+    original_translation: c.corrected_translation, // what was live, now being undone
+    corrected_translation: c.original_translation, // the restored (pre-correction) text
+    reason: `revert of correction ${c.id}`,
+    category: "error_bounty",
+    corrected_by: reviewerUuid,
+    corrected_at: now,
+    review_session_id: sessionId,
+  }).select("id").single();
+  if (rErr) throw new Error(`revert_log_write_failed: ${rErr.message}`);
+
+  await admin.from("review_sessions").update({ ended_at: now, ended_cleanly: true }).eq("id", sessionId);
+  return { corrections_log_id: c.id, revert_log_id: (rev as { id: string }).id, slot_id: c.daily_slot_id, field };
 }
 
 // ─── credit ledger (read-only) ───────────────────────────────────────────────
