@@ -1,7 +1,7 @@
 /**
  * Plan catalog — the single source of truth the UI reads. Price IDs come from
  * NEXT_PUBLIC_* env (see .env.example / config/stripe-prices.json); the literals
- * here are the committed TEST-mode (sandbox account) fallbacks so the app runs
+ * here are the committed TEST-mode (production account acct_1TvPFiGZ9WDMHywo, test mode) fallbacks so the app runs
  * without a .env.local during local dev. `plan_key` + `base_price_id` are exactly
  * what the submit-consent Edge Function expects.
  *
@@ -17,18 +17,18 @@
 
 export const DM_ADDON = {
   plan_key: "dm_addon_monthly",
-  price_id: process.env.NEXT_PUBLIC_PRICE_DM_ADDON_MONTHLY || "price_1TvePrGYyfOIjQvM1w2NJZ2u",
+  price_id: process.env.NEXT_PUBLIC_PRICE_DM_ADDON_MONTHLY || "price_1TyZ75GZ9WDMHywoyPZvBfNz",
   amount: 1.99,
   interval: "month" as const,
 };
 
 // Family plan: base $99/yr covers up to FAMILY_BASE_TEENS confirmed teens; each
 // additional confirmed teen is $28/yr on the extra-teen line (added at that
-// teen's own 7-day trial-end). Fallback = sandbox TEST price; prod injects the
+// teen's own 7-day trial-end). Fallback = prod-account TEST price; prod injects the
 // live price via NEXT_PUBLIC_PRICE_FAMILY_EXTRA_TEEN.
 export const FAMILY_BASE_TEENS = 2;
 export const FAMILY_EXTRA_TEEN = {
-  price_id: process.env.NEXT_PUBLIC_PRICE_FAMILY_EXTRA_TEEN || "price_1TvzNeGYyfOIjQvMpKxXkm4m",
+  price_id: process.env.NEXT_PUBLIC_PRICE_FAMILY_EXTRA_TEEN || "price_1TyZ73GZ9WDMHywoT016kIGw",
   amount: 28,
   interval: "year" as const,
 };
@@ -52,25 +52,25 @@ export interface Plan {
 export const PLANS: Record<Exclude<PlanKey, "group">, Plan> & { individual_monthly: Plan } = {
   individual_monthly: {
     key: "individual_monthly",
-    price_id: process.env.NEXT_PUBLIC_PRICE_INDIVIDUAL_MONTHLY || "price_1TvePoGYyfOIjQvMi7r2wXD3",
+    price_id: process.env.NEXT_PUBLIC_PRICE_INDIVIDUAL_MONTHLY || "price_1TyZ71GZ9WDMHywoKvfqWfKU",
     amount: 6.99,
     interval: "month",
   },
   individual_annual: {
     key: "individual_annual",
-    price_id: process.env.NEXT_PUBLIC_PRICE_INDIVIDUAL_ANNUAL || "price_1TvePpGYyfOIjQvMDxEJsqNe",
+    price_id: process.env.NEXT_PUBLIC_PRICE_INDIVIDUAL_ANNUAL || "price_1TyZ72GZ9WDMHywompTEdm5H",
     amount: 59.0,
     interval: "year",
   },
   family_annual: {
     key: "family_annual",
-    price_id: process.env.NEXT_PUBLIC_PRICE_FAMILY_ANNUAL || "price_1TvePpGYyfOIjQvMDbu9cFli",
+    price_id: process.env.NEXT_PUBLIC_PRICE_FAMILY_ANNUAL || "price_1TyZ72GZ9WDMHywoBXSDr23B",
     amount: 99.0,
     interval: "year",
   },
   gift_annual: {
     key: "gift_annual",
-    price_id: process.env.NEXT_PUBLIC_PRICE_GIFT_ANNUAL || "price_1TvePqGYyfOIjQvMErLxfVjd",
+    price_id: process.env.NEXT_PUBLIC_PRICE_GIFT_ANNUAL || "price_1TyZ73GZ9WDMHywowgEhsMgv",
     amount: 59.0,
     interval: "year",
   },
@@ -95,9 +95,9 @@ export interface GroupBand {
   max: number;
 }
 export const GROUP_BANDS: GroupBand[] = [
-  { band_key: "group_1_50", price_id: process.env.NEXT_PUBLIC_PRICE_GROUP_1_50 || "price_1TvePqGYyfOIjQvM4sSSy0mi", amount: 28, min: 1, max: 50 },
-  { band_key: "group_51_150", price_id: process.env.NEXT_PUBLIC_PRICE_GROUP_51_150 || "price_1TvePqGYyfOIjQvMNuPHE8SF", amount: 32, min: 51, max: 150 },
-  { band_key: "group_151_300", price_id: process.env.NEXT_PUBLIC_PRICE_GROUP_151_300 || "price_1TvePrGYyfOIjQvMJUcLgxJW", amount: 36, min: 151, max: 300 },
+  { band_key: "group_1_50", price_id: process.env.NEXT_PUBLIC_PRICE_GROUP_1_50 || "price_1TyZ73GZ9WDMHywogZQdnkmZ", amount: 28, min: 1, max: 50 },
+  { band_key: "group_51_150", price_id: process.env.NEXT_PUBLIC_PRICE_GROUP_51_150 || "price_1TyZ74GZ9WDMHywo21eIjfeR", amount: 32, min: 51, max: 150 },
+  { band_key: "group_151_300", price_id: process.env.NEXT_PUBLIC_PRICE_GROUP_151_300 || "price_1TyZ74GZ9WDMHywotms9j27k", amount: 36, min: 151, max: 300 },
 ];
 
 export const GROUP_CONTACT_THRESHOLD = 301;

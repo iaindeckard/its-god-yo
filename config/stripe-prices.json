@@ -1,5 +1,5 @@
 {
-  "_comment": "It's God, Yo — Stripe catalog. Price IDs are not secrets (safe to commit); keys are NOT. PROD runs the LIVE account (acct_1TvPFiGZ9WDMHywo) — Vercel Production injects the live price IDs via NEXT_PUBLIC_PRICE_* env vars. LOCAL/dev falls back to the TEST sandbox account (acct_1TvPGDGYyfOIjQvM) hardcoded in lib/plans.ts. Both generated to the same LOCKED pricing spec with the same igy_* lookup keys. Went live 2026-07-21.",
+  "_comment": "It's God, Yo — Stripe catalog. Price IDs are not secrets (safe to commit); keys are NOT. PROD runs the LIVE account (acct_1TvPFiGZ9WDMHywo) — Vercel Production injects the live price IDs via NEXT_PUBLIC_PRICE_* env vars. LOCAL/dev falls back to the production account's TEST mode (acct_1TvPFiGZ9WDMHywo) hardcoded in lib/plans.ts. Both generated to the same LOCKED pricing spec with the same igy_* lookup keys. Went live 2026-07-21.",
   "currency": "usd",
   "live": {
     "mode": "live",
@@ -7,7 +7,8 @@
     "prices": {
       "individual_monthly":  { "price_id": "price_1TvfLzGZ9WDMHywoITvwlPHf", "amount_usd": 6.99,  "interval": "month", "lookup_key": "igy_individual_monthly" },
       "individual_annual":   { "price_id": "price_1TvfLzGZ9WDMHywoIaGqhbXd", "amount_usd": 59.00, "interval": "year",  "lookup_key": "igy_individual_annual" },
-      "family_annual":       { "price_id": "price_1TvfLzGZ9WDMHywoF4REANU9", "amount_usd": 99.00, "interval": "year",  "lookup_key": "igy_family_annual", "note": "up to 4 teens" },
+      "family_annual":       { "price_id": "price_1TvfLzGZ9WDMHywoF4REANU9", "amount_usd": 99.00, "interval": "year",  "lookup_key": "igy_family_annual", "note": "up to 2 teens (base); +$28/yr per additional teen — LOCKED 2026-07-21" },
+      "family_extra_teen":   { "price_id": "price_1TvzHUGZ9WDMHywoCeh4b72I", "amount_usd": 28.00, "interval": "year",  "lookup_key": "igy_family_extra_teen", "per": "teen", "note": "each confirmed teen beyond the family base; verified live in dashboard, created 2026-07-22" },
       "gift_annual":         { "price_id": "price_1TvfM0GZ9WDMHywotCWp8Lrm", "amount_usd": 59.00, "interval": "year",  "lookup_key": "igy_gift_annual" },
       "group_1_50":          { "price_id": "price_1TvfM0GZ9WDMHywoGY7AnnTU", "amount_usd": 28.00, "interval": "year",  "lookup_key": "igy_group_1_50",   "per": "teen" },
       "group_51_150":        { "price_id": "price_1TvfM1GZ9WDMHywoFuQyW2X8", "amount_usd": 32.00, "interval": "year",  "lookup_key": "igy_group_51_150", "per": "teen" },
@@ -25,35 +26,36 @@
     "referral_coupon": "igy_referral_10",
     "webhook_endpoint_id": "we_1TvfM4GZ9WDMHywotCPbht9W"
   },
-  "test_sandbox": {
+  "test": {
     "mode": "test",
-    "account_id": "acct_1TvPGDGYyfOIjQvM",
-    "note": "Local/dev fallback set (mirrors lib/plans.ts hardcoded fallbacks).",
+    "account_id": "acct_1TvPFiGZ9WDMHywo",
+    "note": "Production account test mode; mirrors lib/plans.ts hardcoded fallbacks.",
     "prices": {
-      "individual_monthly":  { "price_id": "price_1TvePoGYyfOIjQvMi7r2wXD3", "amount_usd": 6.99,  "interval": "month", "lookup_key": "igy_individual_monthly" },
-      "individual_annual":   { "price_id": "price_1TvePpGYyfOIjQvMDxEJsqNe", "amount_usd": 59.00, "interval": "year",  "lookup_key": "igy_individual_annual" },
-      "family_annual":       { "price_id": "price_1TvePpGYyfOIjQvMDbu9cFli", "amount_usd": 99.00, "interval": "year",  "lookup_key": "igy_family_annual" },
-      "gift_annual":         { "price_id": "price_1TvePqGYyfOIjQvMErLxfVjd", "amount_usd": 59.00, "interval": "year",  "lookup_key": "igy_gift_annual" },
-      "group_1_50":          { "price_id": "price_1TvePqGYyfOIjQvM4sSSy0mi", "amount_usd": 28.00, "interval": "year",  "lookup_key": "igy_group_1_50" },
-      "group_51_150":        { "price_id": "price_1TvePqGYyfOIjQvMNuPHE8SF", "amount_usd": 32.00, "interval": "year",  "lookup_key": "igy_group_51_150" },
-      "group_151_300":       { "price_id": "price_1TvePrGYyfOIjQvMJUcLgxJW", "amount_usd": 36.00, "interval": "year",  "lookup_key": "igy_group_151_300" },
-      "dm_addon_monthly":    { "price_id": "price_1TvePrGYyfOIjQvM1w2NJZ2u", "amount_usd": 1.99,  "interval": "month", "lookup_key": "igy_dm_addon_monthly" }
+      "individual_monthly":  { "price_id": "price_1TyZ71GZ9WDMHywoKvfqWfKU", "amount_usd": 6.99,  "interval": "month", "lookup_key": "igy_individual_monthly" },
+      "individual_annual":   { "price_id": "price_1TyZ72GZ9WDMHywompTEdm5H", "amount_usd": 59.00, "interval": "year",  "lookup_key": "igy_individual_annual" },
+      "family_annual":       { "price_id": "price_1TyZ72GZ9WDMHywoBXSDr23B", "amount_usd": 99.00, "interval": "year",  "lookup_key": "igy_family_annual" },
+      "family_extra_teen":   { "price_id": "price_1TyZ73GZ9WDMHywoT016kIGw", "amount_usd": 28.00, "interval": "year",  "lookup_key": "igy_family_extra_teen", "per": "teen" },
+      "gift_annual":         { "price_id": "price_1TyZ73GZ9WDMHywowgEhsMgv", "amount_usd": 59.00, "interval": "year",  "lookup_key": "igy_gift_annual" },
+      "group_1_50":          { "price_id": "price_1TyZ73GZ9WDMHywogZQdnkmZ", "amount_usd": 28.00, "interval": "year",  "lookup_key": "igy_group_1_50" },
+      "group_51_150":        { "price_id": "price_1TyZ74GZ9WDMHywo21eIjfeR", "amount_usd": 32.00, "interval": "year",  "lookup_key": "igy_group_51_150" },
+      "group_151_300":       { "price_id": "price_1TyZ74GZ9WDMHywotms9j27k", "amount_usd": 36.00, "interval": "year",  "lookup_key": "igy_group_151_300" },
+      "dm_addon_monthly":    { "price_id": "price_1TyZ75GZ9WDMHywoyPZvBfNz", "amount_usd": 1.99,  "interval": "month", "lookup_key": "igy_dm_addon_monthly" }
     },
     "products": {
-      "individual": "prod_UvVQnBA2o59S7K",
-      "family": "prod_UvVQ8VNIXzoFGk",
-      "gift": "prod_UvVQktiT7XXNj3",
-      "group": "prod_UvVQ6kO2aV06qS",
-      "group_301plus_custom": "prod_UvVQgQKgcBTHH8",
-      "dm_addon": "prod_UvVQzcbkeDULvj"
+      "individual": "prod_UyW9DH2Hc0S3m8",
+      "family": "prod_UyW9YDbotmvl3J",
+      "gift": "prod_UyW9bh7LUtoWm4",
+      "group": "prod_UyW91K7DnZ6RQD",
+      "group_301plus_custom": null,
+      "dm_addon": "prod_UyW9z4Uaoc69Ke"
     },
     "referral_coupon": "igy_referral_10",
-    "webhook_endpoint_id": "we_1TveRFGYyfOIjQvM0IhYihGN"
+    "webhook_endpoint_id": "TBD — no test webhook created in acct_1TvPFiGZ9WDMHywo yet"
   },
   "group_301plus": {
     "pricing": "manual_negotiated",
     "range_usd_month": "500-1500",
     "self_serve_checkout": false,
-    "note": "No self-serve Price by design — route to a 'contact us' path. Live product prod_UvWO7D49u7RFIk / sandbox prod_UvVQgQKgcBTHH8."
+    "note": "No self-serve Price by design — route to a 'contact us' path. Live product prod_UvWO7D49u7RFIk / test: none created (contact-us only)."
   }
 }
