@@ -111,6 +111,11 @@ export interface ReportRow {
   submitted_at: string;
   status: string;
   text_lang: string | null;
+  ai_is_error: boolean | null;
+  ai_assessment: string | null;
+  ai_proposed_fix: string | null;
+  ai_target_slot_id: string | null;
+  ai_assessed_at: string | null;
 }
 
 export async function submitReport(input: SubmitReportInput): Promise<ReportRow> {
@@ -189,13 +194,22 @@ export interface ReviewGroup {
   reports: ReportRow[]; // earliest first
   earliest_reporter_email: string;
   report_count: number;
+  assessment: GroupAssessment | null; // AI assessment (Phase B), null until Assess is run
+}
+
+export interface GroupAssessment {
+  ai_is_error: boolean | null;
+  ai_assessment: string | null;
+  ai_proposed_fix: string | null;
+  ai_target_slot_id: string | null;
+  ai_assessed_at: string | null;
 }
 
 export async function getReviewGroups(status = "pending"): Promise<ReviewGroup[]> {
   const admin = getSupabaseAdmin();
   const { data, error } = await admin
     .from("igy_error_reports")
-    .select("id, reporter_email, verse_ref, theme_track, text_lang, report_date, reported_text, description, group_key, submitted_at, status")
+    .select("id, reporter_email, verse_ref, theme_track, text_lang, report_date, reported_text, description, group_key, submitted_at, status, ai_is_error, ai_assessment, ai_proposed_fix, ai_target_slot_id, ai_assessed_at")
     .eq("status", status)
     .order("group_key", { ascending: true })
     .order("submitted_at", { ascending: true });
@@ -214,6 +228,9 @@ export async function getReviewGroups(status = "pending"): Promise<ReviewGroup[]
         reports: [],
         earliest_reporter_email: r.reporter_email, // first seen = earliest (ordered by submitted_at)
         report_count: 0,
+        assessment: r.ai_assessed_at
+          ? { ai_is_error: r.ai_is_error, ai_assessment: r.ai_assessment, ai_proposed_fix: r.ai_proposed_fix, ai_target_slot_id: r.ai_target_slot_id, ai_assessed_at: r.ai_assessed_at }
+          : null,
       };
       groups.set(r.group_key, g);
     }
@@ -262,6 +279,132 @@ export async function resolveSlot(r: {
   if (rows.length > 1) return { ok: false, reason: "multiple_matching_slots", slotIds: rows.map((x) => String(x.id)) };
   const row = rows[0];
   return { ok: true, slot: { slotId: String(row.id), field, currentText: (row[field] as string | null) ?? null, verseRef: String(row.verse_ref) } };
+}
+
+// ─── AI assessment (Phase B, on-demand) ─────────────────────────────────────
+
+/** Assessment model — a CURRENT Claude by default (not the older sonnet-4-6 the
+ *  verse generator still pins). Override via env. Single-model: the human is the gate. */
+const ASSESS_MODEL = process.env.BOUNTY_ASSESS_MODEL || "claude-sonnet-5";
+
+/** "John 3:16" / "1 Corinthians 13:4" / "Song of Solomon 2:1" -> {book,chapter,verse}. */
+function parseVerseRef(ref: string): { book: string; chapter: number; verse: number } | null {
+  const m = ref.trim().match(/^(.+?)\s+(\d+):(\d+)$/);
+  if (!m) return null;
+  return { book: m[1].trim(), chapter: Number(m[2]), verse: Number(m[3]) };
+}
+
+/** Best-effort canonical source text: KJV for the EN reword, RV1909 for the ES
+ *  translation. Returns null if it can't be resolved (assessment still proceeds). */
+async function fetchSourceVerse(verseRef: string, lang: "en" | "es"): Promise<string | null> {
+  const p = parseVerseRef(verseRef);
+  if (!p) return null;
+  const table = lang === "es" ? "rv1909_verses" : "kjv_verses";
+  try {
+    const admin = getSupabaseAdmin();
+    const { data } = await admin
+      .from(table)
+      .select("text")
+      .eq("book", p.book).eq("chapter", p.chapter).eq("verse", p.verse)
+      .maybeSingle();
+    return (data as { text?: string } | null)?.text ?? null;
+  } catch {
+    return null;
+  }
+}
+
+interface AssessDraft { is_error: boolean; assessment: string; proposed_fix: string | null }
+
+/** Single Claude call → structured verdict. Throws if ANTHROPIC_API_KEY is unset
+ *  (assessment is admin-triggered; a clear error beats a silent no-op here). */
+async function callAssessLLM(prompt: string): Promise<AssessDraft> {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) throw new Error("assessment_unavailable: ANTHROPIC_API_KEY is not set");
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+    body: JSON.stringify({ model: ASSESS_MODEL, max_tokens: 800, messages: [{ role: "user", content: prompt }] }),
+  });
+  if (!res.ok) throw new Error(`assess_llm_${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const body = (await res.json()) as { content?: Array<{ text?: string }> };
+  const raw = body.content?.map((c) => c.text ?? "").join("") ?? "";
+  const s = raw.indexOf("{"), e = raw.lastIndexOf("}");
+  if (s === -1 || e === -1 || e < s) throw new Error("assess_parse_failed: no JSON object in model output");
+  const parsed = JSON.parse(raw.slice(s, e + 1)) as Partial<AssessDraft>;
+  return {
+    is_error: Boolean(parsed.is_error),
+    assessment: String(parsed.assessment ?? "").trim(),
+    proposed_fix: parsed.proposed_fix ? String(parsed.proposed_fix).trim() : null,
+  };
+}
+
+function buildAssessPrompt(lang: "en" | "es", verseRef: string, currentText: string | null, source: string | null, reportedText: string | null, description: string): string {
+  const src = source ? `Canonical source (${lang === "es" ? "Reina-Valera 1909" : "KJV"}): "${source}"` : "(canonical source unavailable)";
+  const cur = currentText ? `Currently published text: "${currentText}"` : "(current published text unavailable)";
+  const frame = lang === "es"
+    ? `You are reviewing the Spanish (Reina-Valera 1909-based) rendering of ${verseRef} used in a teen Scripture devotional.`
+    : `You are reviewing the English teen-slang reword (based on the KJV) of ${verseRef} used in a daily teen Scripture devotional.`;
+  const fixNote = lang === "es"
+    ? "If it should change, provide a corrected Spanish rendering faithful to Reina-Valera 1909."
+    : "If it should change, provide a corrected teen-slang reword that stays faithful to the KJV meaning AND keeps the same casual teen-slang register as the current text.";
+  return `${frame}
+${src}
+${cur}
+A subscriber reported an issue:
+- specific text they flagged: ${reportedText ? `"${reportedText}"` : "(not given)"}
+- what they said is wrong: "${description}"
+
+Decide whether the current text is ACTUALLY wrong (mistranslation / factual error / misrepresents the verse / inappropriate), versus merely a stylistic choice the reporter happens to dislike. Be conservative: only flag a real error. ${fixNote}
+Respond with ONLY a JSON object, no prose: {"is_error": true|false, "assessment": "1-3 sentence reasoning", "proposed_fix": "corrected text" or null}`;
+}
+
+export interface AssessResult {
+  group_key: string;
+  slot_error?: "no_matching_slot" | "multiple_matching_slots";
+  ai_is_error: boolean | null;
+  ai_assessment: string;
+  ai_proposed_fix: string | null;
+  ai_target_slot_id: string | null;
+}
+
+/**
+ * On-demand AI assessment of a pending group (spec §8 Step 3): resolve the slot,
+ * ground on the canonical source + current text, ask Claude whether it's really an
+ * error and (if so) draft a fix, and persist the verdict on the group's pending
+ * rows. NEVER publishes — a human approves in Phase C.
+ */
+export async function assessReport(gkey: string): Promise<AssessResult> {
+  const admin = getSupabaseAdmin();
+  const { data: reps, error } = await admin
+    .from("igy_error_reports")
+    .select("verse_ref, theme_track, report_date, text_lang, reported_text, description")
+    .eq("group_key", gkey).eq("status", "pending")
+    .order("submitted_at", { ascending: true }).limit(1);
+  if (error) throw new Error(`assess_group_read_failed: ${error.message}`);
+  const rep = (reps ?? [])[0] as
+    | { verse_ref: string; theme_track: string; report_date: string; text_lang: string | null; reported_text: string | null; description: string }
+    | undefined;
+  if (!rep) throw new Error("no pending reports in this group");
+  const lang: "en" | "es" = rep.text_lang === "es" ? "es" : "en";
+
+  const persist = async (fields: Record<string, unknown>) => {
+    await admin.from("igy_error_reports").update({ ...fields, ai_assessed_at: new Date().toISOString() })
+      .eq("group_key", gkey).eq("status", "pending");
+  };
+
+  const slot = await resolveSlot(rep);
+  if (!slot.ok) {
+    const msg = slot.reason === "no_matching_slot"
+      ? "No matching daily_slot for this report's date/track/verse — can't assess or publish. Verify the report details or map a slot manually."
+      : `Multiple daily_slots match (${(slot.slotIds ?? []).join(", ")}) — can't auto-target. Resolve manually.`;
+    await persist({ ai_is_error: null, ai_assessment: msg, ai_proposed_fix: null, ai_target_slot_id: null });
+    return { group_key: gkey, slot_error: slot.reason, ai_is_error: null, ai_assessment: msg, ai_proposed_fix: null, ai_target_slot_id: null };
+  }
+
+  const source = await fetchSourceVerse(rep.verse_ref, lang);
+  const draft = await callAssessLLM(buildAssessPrompt(lang, rep.verse_ref, slot.slot.currentText, source, rep.reported_text, rep.description));
+  await persist({ ai_is_error: draft.is_error, ai_assessment: draft.assessment, ai_proposed_fix: draft.proposed_fix, ai_target_slot_id: slot.slot.slotId });
+  return { group_key: gkey, ai_is_error: draft.is_error, ai_assessment: draft.assessment, ai_proposed_fix: draft.proposed_fix, ai_target_slot_id: slot.slot.slotId };
 }
 
 export interface ConfirmResult {
