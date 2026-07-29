@@ -14,6 +14,7 @@ export default function ReportForm({ defaults }: { defaults: Defaults }) {
   const [verseRef, setVerseRef] = useState(defaults.verseRef);
   const [reportDate, setReportDate] = useState(defaults.reportDate);
   const [reportedText, setReportedText] = useState(defaults.reportedText);
+  const [textLang, setTextLang] = useState<"en" | "es" | "">("");
   const [description, setDescription] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,6 +31,7 @@ export default function ReportForm({ defaults }: { defaults: Defaults }) {
           verse_ref: verseRef,
           theme_track: defaults.themeTrack,
           report_date: reportDate,
+          text_lang: textLang,
           reported_text: reportedText || undefined,
           description,
         }),
@@ -42,15 +44,15 @@ export default function ReportForm({ defaults }: { defaults: Defaults }) {
     } finally { setBusy(false); }
   }
 
-  const valid = email.trim() && verseRef.trim() && reportDate.trim() && description.trim();
+  const valid = email.trim() && verseRef.trim() && reportDate.trim() && description.trim() && (textLang === "en" || textLang === "es");
 
   return (
     <main style={{ maxWidth: 560, margin: "0 auto", padding: "48px 24px" }}>
       <h1 style={{ fontSize: 28, marginBottom: 8 }}>Report an issue</h1>
       <p className="muted" style={{ marginBottom: 24 }}>
         See a translation or wording that seems off in one of your daily texts? Tell us what&rsquo;s wrong. A person
-        reviews every report. If it&rsquo;s confirmed, the <strong>first person</strong> to report it earns a $6.99
-        account credit (max one credit per person per month).
+        reviews every report. If it&rsquo;s confirmed, the <strong>first person</strong> to report it earns an account
+        credit worth one month of their plan, applied to their next invoice (up to six such credits per year).
       </p>
 
       {done ? (
@@ -77,6 +79,17 @@ export default function ReportForm({ defaults }: { defaults: Defaults }) {
             <div className="field">
               <label>Date of the text</label>
               <input type="date" value={reportDate} onChange={(e) => setReportDate(e.target.value)} />
+            </div>
+          </div>
+          <div className="field">
+            <label>Which text is wrong?</label>
+            <div style={{ display: "flex", gap: 20, marginTop: 4 }}>
+              <label style={{ fontWeight: 400, display: "flex", alignItems: "center", gap: 6 }}>
+                <input type="radio" name="text_lang" checked={textLang === "en"} onChange={() => setTextLang("en")} /> English reword
+              </label>
+              <label style={{ fontWeight: 400, display: "flex", alignItems: "center", gap: 6 }}>
+                <input type="radio" name="text_lang" checked={textLang === "es"} onChange={() => setTextLang("es")} /> Spanish translation
+              </label>
             </div>
           </div>
           <div className="field">

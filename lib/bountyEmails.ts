@@ -3,13 +3,15 @@ import "server-only";
 /**
  * Transactional emails for the translation/reword error bounty (spec §10).
  *
- * Four outcomes, all warm and never discouraging:
+ * Six outcomes, all warm and never discouraging:
  *   - earned    : your report was confirmed and a credit is on the way
  *   - notFirst  : confirmed, but someone reported it first — no reward, keep going
  *   - rejected  : we reviewed and it wasn't an error — thank you, keep going
  *   - capped    : you've hit this year's max — thank you, keep reporting anyway
  *   - snag      : confirmed + you were first, but we couldn't auto-credit your
  *                 account (no active subscription matched) — we'll follow up
+ *   - alreadyCorrected : report of a verse already fixed before they reported —
+ *                 thank you, already corrected, no reward
  *
  * These are transactional account-service messages (a customer's own report
  * outcome), sent from the customer-facing itsgodyo.com domain via Resend
@@ -145,6 +147,27 @@ Thank you for your patience, and please keep reporting anything that looks off.
 `  <p>Thank you for reporting an issue with <strong>${esc(verseRef)}</strong> — you were the first to catch it, and you've earned a credit.</p>
   <p>We hit a snag applying it to your account automatically (we couldn't match an active subscription to credit). Nothing is lost — we'll sort this out and follow up with you personally to make sure you get it.</p>
   <p>Thank you for your patience, and please keep reporting anything that looks off.</p>
+  <p>— It's God, Yo!</p>`,
+    ),
+  };
+}
+
+/** Report of a verse that was already caught + fixed before this report arrived. */
+export function alreadyCorrectedEmail(verseRef: string): BountyEmail {
+  return {
+    subject: "Thank you — that one's already been fixed",
+    text:
+`Thank you for reporting ${verseRef}.
+
+Good eye — but this exact one was already caught and corrected before your report came in, so there's no credit to give this time. The fix is already live.
+
+Please keep reporting anything that looks off; the next catch could be a brand-new one that's yours first.
+
+— It's God, Yo!`,
+    html: wrapHtml(
+`  <p>Thank you for reporting <strong>${esc(verseRef)}</strong>.</p>
+  <p>Good eye — but this exact one was already caught and corrected before your report came in, so there's no credit to give this time. The fix is already live.</p>
+  <p>Please keep reporting anything that looks off; the next catch could be a brand-new one that's yours first.</p>
   <p>— It's God, Yo!</p>`,
     ),
   };

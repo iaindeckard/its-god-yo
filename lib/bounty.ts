@@ -4,7 +4,7 @@ import { getSupabaseAdmin } from "./supabaseAdmin";
 import { getStripe } from "./stripe";
 import { subscriptionMonthlyValueCents } from "./referral";
 import type { Staff } from "./rbac";
-import { earnedEmail, notFirstEmail, rejectedEmail, cappedEmail, snagEmail, sendBountyEmail } from "./bountyEmails";
+import { earnedEmail, notFirstEmail, rejectedEmail, cappedEmail, snagEmail, alreadyCorrectedEmail, sendBountyEmail } from "./bountyEmails";
 
 /**
  * Translation/reword error bounty — v2 (spec IGY-Translation-Error-Bounty-Spec-
@@ -35,9 +35,11 @@ import { earnedEmail, notFirstEmail, rejectedEmail, cappedEmail, snagEmail, send
 /** Annual reward ceiling, in months-of-credit, per account per calendar year. */
 export const ANNUAL_CAP_MONTHS = 6;
 
-/** Deterministic grouping key: reports on the same verse/date/track cluster. */
-export function groupKey(themeTrack: string, reportDate: string, verseRef: string): string {
-  return `${themeTrack}|${reportDate}|${verseRef}`;
+/** Deterministic grouping key: reports on the same verse/date/track AND the same
+ *  text (en reword vs es translation) cluster. text_lang is part of the key because
+ *  an EN error and an ES error on the same verse are distinct corrections. */
+export function groupKey(themeTrack: string, reportDate: string, verseRef: string, textLang: string): string {
+  return `${themeTrack}|${reportDate}|${verseRef}|${textLang}`;
 }
 
 function firstOfMonthUTC(d = new Date()): string {
@@ -94,6 +96,7 @@ export interface SubmitReportInput {
   reportDate: string; // YYYY-MM-DD
   reportedText?: string;
   description: string;
+  textLang: "en" | "es"; // which text: en reword vs es translation
 }
 
 export interface ReportRow {
@@ -107,6 +110,7 @@ export interface ReportRow {
   group_key: string;
   submitted_at: string;
   status: string;
+  text_lang: string | null;
 }
 
 export async function submitReport(input: SubmitReportInput): Promise<ReportRow> {
@@ -115,8 +119,13 @@ export async function submitReport(input: SubmitReportInput): Promise<ReportRow>
   if (!input.verseRef?.trim()) throw new Error("verse reference is required");
   if (!input.reportDate?.trim()) throw new Error("report date is required");
   if (!input.description?.trim()) throw new Error("a description of the issue is required");
+  if (input.textLang !== "en" && input.textLang !== "es") {
+    throw new Error("please choose which text you're reporting — the English reword or the Spanish translation");
+  }
   const email = input.reporterEmail.trim().toLowerCase();
   const track = input.themeTrack?.trim() || "general";
+  const verseRef = input.verseRef.trim();
+  const gkey = groupKey(track, input.reportDate, verseRef, input.textLang);
 
   // §6 identity match — must be an account on file. We resolve server-side from
   // the email; customers were never issued an internal id and shouldn't need one.
@@ -138,21 +147,34 @@ export async function submitReport(input: SubmitReportInput): Promise<ReportRow>
     throw new Error("You've already submitted a report today — thank you! Please come back tomorrow with any others.");
   }
 
+  // §8 Step 2 — already-resolved dedupe: this exact error (same group, incl. text_lang)
+  // was already confirmed + fixed. Record it, thank them, no reward, skip the queue.
+  const { count: resolvedCount, error: dupErr } = await admin
+    .from("igy_error_reports")
+    .select("id", { count: "exact", head: true })
+    .eq("group_key", gkey)
+    .eq("status", "confirmed");
+  if (dupErr) throw new Error(`dedupe_check_failed: ${dupErr.message}`);
+  const status = (resolvedCount ?? 0) > 0 ? "duplicate_resolved" : "pending";
+
   const { data, error } = await admin
     .from("igy_error_reports")
     .insert({
       reporter_email: email,
       reporter_stripe_customer_id: customerId,
-      verse_ref: input.verseRef.trim(),
+      verse_ref: verseRef,
       theme_track: track,
+      text_lang: input.textLang,
       report_date: input.reportDate,
       reported_text: input.reportedText?.trim() || null,
       description: input.description.trim(),
-      group_key: groupKey(track, input.reportDate, input.verseRef.trim()),
+      group_key: gkey,
+      status,
     })
-    .select("id, reporter_email, verse_ref, theme_track, report_date, reported_text, description, group_key, submitted_at, status")
+    .select("id, reporter_email, verse_ref, theme_track, text_lang, report_date, reported_text, description, group_key, submitted_at, status")
     .single();
   if (error) throw new Error(`report_insert_failed: ${error.message}`);
+  if (status === "duplicate_resolved") await sendBountyEmail(email, alreadyCorrectedEmail(verseRef));
   return data as ReportRow;
 }
 
@@ -163,6 +185,7 @@ export interface ReviewGroup {
   verse_ref: string;
   theme_track: string;
   report_date: string;
+  text_lang: string | null; // en reword vs es translation — which text this group is about
   reports: ReportRow[]; // earliest first
   earliest_reporter_email: string;
   report_count: number;
@@ -172,7 +195,7 @@ export async function getReviewGroups(status = "pending"): Promise<ReviewGroup[]
   const admin = getSupabaseAdmin();
   const { data, error } = await admin
     .from("igy_error_reports")
-    .select("id, reporter_email, verse_ref, theme_track, report_date, reported_text, description, group_key, submitted_at, status")
+    .select("id, reporter_email, verse_ref, theme_track, text_lang, report_date, reported_text, description, group_key, submitted_at, status")
     .eq("status", status)
     .order("group_key", { ascending: true })
     .order("submitted_at", { ascending: true });
@@ -187,6 +210,7 @@ export async function getReviewGroups(status = "pending"): Promise<ReviewGroup[]
         verse_ref: r.verse_ref,
         theme_track: r.theme_track,
         report_date: r.report_date,
+        text_lang: r.text_lang,
         reports: [],
         earliest_reporter_email: r.reporter_email, // first seen = earliest (ordered by submitted_at)
         report_count: 0,
@@ -197,6 +221,47 @@ export async function getReviewGroups(status = "pending"): Promise<ReviewGroup[]
     g.report_count++;
   }
   return [...groups.values()];
+}
+
+// ─── report → live daily_slot resolution (foundation for assess/publish) ─────
+
+export interface SlotResolution {
+  slotId: string;
+  field: "final_translation" | "final_translation_es";
+  currentText: string | null;
+  verseRef: string;
+}
+export type SlotResolveResult =
+  | { ok: true; slot: SlotResolution }
+  | { ok: false; reason: "no_matching_slot" | "multiple_matching_slots"; slotIds?: string[] };
+
+/**
+ * Map a report to the single live daily_slot + field its correction would edit.
+ * Matches on scheduled_date=report_date, theme_track, verse_ref; text_lang picks
+ * the field (en → final_translation, es → final_translation_es). Returns an
+ * explicit failure for no-match / multi-match — callers never auto-guess a slot
+ * (corrections_log.daily_slot_id is NOT NULL, so publishing requires exactly one).
+ */
+export async function resolveSlot(r: {
+  report_date: string;
+  theme_track: string;
+  verse_ref: string;
+  text_lang: string | null;
+}): Promise<SlotResolveResult> {
+  const admin = getSupabaseAdmin();
+  const field = r.text_lang === "es" ? "final_translation_es" : "final_translation";
+  const { data, error } = await admin
+    .from("daily_slots")
+    .select(`id, verse_ref, ${field}`)
+    .eq("scheduled_date", r.report_date)
+    .eq("theme_track", r.theme_track)
+    .eq("verse_ref", r.verse_ref);
+  if (error) throw new Error(`slot_resolve_failed: ${error.message}`);
+  const rows = (data ?? []) as Array<Record<string, unknown>>;
+  if (rows.length === 0) return { ok: false, reason: "no_matching_slot" };
+  if (rows.length > 1) return { ok: false, reason: "multiple_matching_slots", slotIds: rows.map((x) => String(x.id)) };
+  const row = rows[0];
+  return { ok: true, slot: { slotId: String(row.id), field, currentText: (row[field] as string | null) ?? null, verseRef: String(row.verse_ref) } };
 }
 
 export interface ConfirmResult {
