@@ -17,3 +17,6 @@ next-env.d.ts
 
 # --- Supabase CLI local state (machine-specific, not source) ---
 supabase/.temp/
+
+# --- macOS ---
+.DS_Store

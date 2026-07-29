@@ -195,6 +195,9 @@ export interface ReviewGroup {
   earliest_reporter_email: string;
   report_count: number;
   assessment: GroupAssessment | null; // AI assessment (Phase B), null until Assess is run
+  current_text: string | null; // the live slot text a publish would overwrite
+  slot_ok: boolean; // does the report resolve to exactly one slot? (publish requires it)
+  slot_note: string | null; // 'no_matching_slot' / 'multiple_matching_slots' when !slot_ok
 }
 
 export interface GroupAssessment {
@@ -231,13 +234,26 @@ export async function getReviewGroups(status = "pending"): Promise<ReviewGroup[]
         assessment: r.ai_assessed_at
           ? { ai_is_error: r.ai_is_error, ai_assessment: r.ai_assessment, ai_proposed_fix: r.ai_proposed_fix, ai_target_slot_id: r.ai_target_slot_id, ai_assessed_at: r.ai_assessed_at }
           : null,
+        current_text: null,
+        slot_ok: false,
+        slot_note: null,
       };
       groups.set(r.group_key, g);
     }
     g.reports.push(r);
     g.report_count++;
   }
-  return [...groups.values()];
+
+  // Resolve each group's live slot (for current-text display + publish-readiness).
+  const list = [...groups.values()];
+  await Promise.all(
+    list.map(async (g) => {
+      const s = await resolveSlot({ report_date: g.report_date, theme_track: g.theme_track, verse_ref: g.verse_ref, text_lang: g.text_lang });
+      if (s.ok) { g.current_text = s.slot.currentText; g.slot_ok = true; g.slot_note = null; }
+      else { g.current_text = null; g.slot_ok = false; g.slot_note = s.reason; }
+    }),
+  );
+  return list;
 }
 
 // ─── report → live daily_slot resolution (foundation for assess/publish) ─────
@@ -660,6 +676,32 @@ export async function publishCorrection(gkey: string, finalText: string, staff: 
   const reward = await confirmGroup(gkey, "confirm", staff, note);
 
   return { group_key: gkey, slot_id: slot.slot.slotId, corrections_log_id: corrId, reward };
+}
+
+// ─── corrections history (read-only) ────────────────────────────────────────
+
+export interface CorrectionRow {
+  id: string;
+  daily_slot_id: string;
+  action_type: string; // bounty_correction | bounty_revert
+  original_verse_ref: string | null;
+  original_translation: string | null;
+  corrected_translation: string | null;
+  corrected_at: string | null;
+  review_session_id: string | null;
+}
+
+/** Error-bounty corrections + reverts, newest first, for the admin history panel. */
+export async function getBountyCorrections(limit = 40): Promise<CorrectionRow[]> {
+  const admin = getSupabaseAdmin();
+  const { data, error } = await admin
+    .from("corrections_log")
+    .select("id, daily_slot_id, action_type, original_verse_ref, original_translation, corrected_translation, corrected_at, review_session_id")
+    .eq("category", "error_bounty")
+    .order("corrected_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`corrections_query_failed: ${error.message}`);
+  return (data ?? []) as CorrectionRow[];
 }
 
 // ─── credit ledger (read-only) ───────────────────────────────────────────────
