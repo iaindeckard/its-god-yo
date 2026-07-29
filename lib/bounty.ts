@@ -704,6 +704,72 @@ export async function getBountyCorrections(limit = 40): Promise<CorrectionRow[]>
   return (data ?? []) as CorrectionRow[];
 }
 
+// ─── content revert (Phase E) ───────────────────────────────────────────────
+
+export interface RevertResult {
+  corrections_log_id: string;
+  revert_log_id: string;
+  slot_id: string;
+  field: string;
+}
+
+/**
+ * Undo a published bounty correction: restore the slot field to the correction's
+ * pre-image (original_translation) and log a 'bounty_revert' entry (session-bound).
+ * Content-only — does NOT touch the reward/credit (that's pass 3). Gated at the
+ * API layer behind content.queue.publish. Safety guard: if the slot text no longer
+ * matches what this correction published (edited since), it refuses to auto-revert.
+ */
+export async function revertCorrection(correctionId: string, staff: Staff): Promise<RevertResult> {
+  const admin = getSupabaseAdmin();
+  const { data: corr, error } = await admin
+    .from("corrections_log")
+    .select("id, daily_slot_id, action_type, original_verse_ref, original_translation, corrected_translation")
+    .eq("id", correctionId)
+    .single();
+  if (error) throw new Error(`correction_read_failed: ${error.message}`);
+  const c = corr as { id: string; daily_slot_id: string; action_type: string; original_verse_ref: string | null; original_translation: string | null; corrected_translation: string | null };
+  if (c.action_type !== "bounty_correction") throw new Error("only a bounty correction can be reverted");
+
+  const { data: slot, error: sErr } = await admin
+    .from("daily_slots").select("final_translation, final_translation_es").eq("id", c.daily_slot_id).single();
+  if (sErr) throw new Error(`slot_read_failed: ${sErr.message}`);
+  const s = slot as { final_translation: string | null; final_translation_es: string | null };
+  // Which field this correction wrote — inferred by which one currently holds it.
+  let field: "final_translation" | "final_translation_es";
+  if (s.final_translation === c.corrected_translation) field = "final_translation";
+  else if (s.final_translation_es === c.corrected_translation) field = "final_translation_es";
+  else throw new Error("the slot text has changed since this correction — revert it by hand");
+
+  const now = new Date().toISOString();
+  const reviewerUuid = staff.userId ?? FALLBACK_REVIEWER_ID;
+
+  const { data: sess, error: seErr } = await admin
+    .from("review_sessions").insert({ reviewer_id: reviewerUuid, started_at: now }).select("id").single();
+  if (seErr) throw new Error(`review_session_open_failed: ${seErr.message}`);
+  const sessionId = (sess as { id: string }).id;
+
+  const { error: updErr } = await admin.from("daily_slots").update({ [field]: c.original_translation }).eq("id", c.daily_slot_id);
+  if (updErr) throw new Error(`slot_revert_failed: ${updErr.message}`);
+
+  const { data: rev, error: rErr } = await admin.from("corrections_log").insert({
+    daily_slot_id: c.daily_slot_id,
+    action_type: "bounty_revert",
+    original_verse_ref: c.original_verse_ref,
+    original_translation: c.corrected_translation, // what was live, now being undone
+    corrected_translation: c.original_translation, // the restored (pre-correction) text
+    reason: `revert of correction ${c.id}`,
+    category: "error_bounty",
+    corrected_by: reviewerUuid,
+    corrected_at: now,
+    review_session_id: sessionId,
+  }).select("id").single();
+  if (rErr) throw new Error(`revert_log_write_failed: ${rErr.message}`);
+
+  await admin.from("review_sessions").update({ ended_at: now, ended_cleanly: true }).eq("id", sessionId);
+  return { corrections_log_id: c.id, revert_log_id: (rev as { id: string }).id, slot_id: c.daily_slot_id, field };
+}
+
 // ─── credit ledger (read-only) ───────────────────────────────────────────────
 
 export interface CreditRow {

@@ -82,6 +82,17 @@ export default function BountyManager({
     } catch (e) { setError(e instanceof Error ? e.message : "error"); } finally { setBusy(null); }
   }
 
+  async function revert(id: string) {
+    setError(null); setNote(null); setBusy(id);
+    try {
+      const res = await fetch("/api/admin/bounty/revert", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ corrections_log_id: id }) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "revert failed");
+      setNote("Correction reverted — the live slot text was restored. (The reward credit is unchanged.)");
+      await refresh();
+    } catch (e) { setError(e instanceof Error ? e.message : "error"); } finally { setBusy(null); }
+  }
+
   return (
     <>
       <div className="admin-head">
@@ -219,9 +230,9 @@ export default function BountyManager({
       <h2 style={{ margin: "20px 0 10px" }}>Corrections published</h2>
       <div className="sim-scroll">
         <table className="table">
-          <thead><tr><th>Verse</th><th>Action</th><th>Before → After</th><th>When</th></tr></thead>
+          <thead><tr><th>Verse</th><th>Action</th><th>Before → After</th><th>When</th>{canPublish && <th></th>}</tr></thead>
           <tbody>
-            {corrections.length === 0 && <tr><td colSpan={4} className="muted">No corrections published yet.</td></tr>}
+            {corrections.length === 0 && <tr><td colSpan={canPublish ? 5 : 4} className="muted">No corrections published yet.</td></tr>}
             {corrections.map((c) => (
               <tr key={c.id}>
                 <td className="mono">{c.original_verse_ref ?? "—"}</td>
@@ -231,6 +242,11 @@ export default function BountyManager({
                   <div>→ &ldquo;{truncate(c.corrected_translation)}&rdquo;</div>
                 </td>
                 <td className="muted" style={{ whiteSpace: "nowrap" }}>{when(c.corrected_at)}</td>
+                {canPublish && (
+                  <td>{c.action_type === "bounty_correction" && (
+                    <button className="btn btn-ghost" style={{ padding: "6px 12px", fontSize: 12 }} disabled={!!busy} onClick={() => revert(c.id)}>Revert</button>
+                  )}</td>
+                )}
               </tr>
             ))}
           </tbody>
