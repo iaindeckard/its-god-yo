@@ -287,6 +287,10 @@ export async function resolveSlot(r: {
  *  verse generator still pins). Override via env. Single-model: the human is the gate. */
 const ASSESS_MODEL = process.env.BOUNTY_ASSESS_MODEL || "claude-sonnet-5";
 
+/** Stand-in reviewer id for the deferred-login phase — no FK on corrected_by /
+ *  reviewer_id, so any uuid is fine; matches lib/reviewFunctions' fallback. */
+const FALLBACK_REVIEWER_ID = "00000000-0000-0000-0000-000000000001";
+
 /** "John 3:16" / "1 Corinthians 13:4" / "Song of Solomon 2:1" -> {book,chapter,verse}. */
 function parseVerseRef(ref: string): { book: string; chapter: number; verse: number } | null {
   const m = ref.trim().match(/^(.+?)\s+(\d+):(\d+)$/);
@@ -575,6 +579,87 @@ export async function confirmGroup(gkey: string, decision: "confirm" | "reject",
 async function notifyAll(emails: string[], build: () => ReturnType<typeof rejectedEmail>): Promise<void> {
   const unique = [...new Set(emails.filter(Boolean))];
   await Promise.allSettled(unique.map((to) => sendBountyEmail(to, build())));
+}
+
+// ─── publish a correction to live content (Phase C) ─────────────────────────
+
+export interface PublishResult {
+  group_key: string;
+  slot_id: string;
+  corrections_log_id: string;
+  reward: ConfirmResult; // status + credit outcome from the finalize step
+}
+
+/**
+ * Approve + publish a confirmed error's fix to the live daily_slots content, fully
+ * audit-trailed. Opens a review_session, overwrites the target slot's en/es field,
+ * logs a corrections_log entry bound to that session, then delegates status +
+ * reward to confirmGroup("confirm") — so the credit fires only after a successful
+ * publish. `finalText` is the AI's proposed fix or the admin's edit. Gated at the
+ * API layer behind content.queue.publish (super_admin).
+ */
+export async function publishCorrection(gkey: string, finalText: string, staff: Staff, note?: string): Promise<PublishResult> {
+  const admin = getSupabaseAdmin();
+  if (!finalText?.trim()) throw new Error("a corrected text is required to publish");
+  const text = finalText.trim();
+
+  // Read the pending group (status still 'pending' here) to resolve the slot.
+  const { data, error } = await admin
+    .from("igy_error_reports")
+    .select("verse_ref, theme_track, report_date, text_lang")
+    .eq("group_key", gkey)
+    .eq("status", "pending")
+    .order("submitted_at", { ascending: true })
+    .limit(1);
+  if (error) throw new Error(`publish_group_read_failed: ${error.message}`);
+  const rep = (data ?? [])[0] as { verse_ref: string; theme_track: string; report_date: string; text_lang: string | null } | undefined;
+  if (!rep) throw new Error("no pending reports in this group");
+
+  const slot = await resolveSlot(rep);
+  if (!slot.ok) throw new Error(`cannot publish: ${slot.reason} — resolve the target slot first`);
+  const now = new Date().toISOString();
+  const reviewerUuid = staff.userId ?? FALLBACK_REVIEWER_ID;
+
+  // Open a review session (reuse the review apparatus at the table level).
+  const { data: sess, error: sErr } = await admin
+    .from("review_sessions")
+    .insert({ reviewer_id: reviewerUuid, started_at: now })
+    .select("id")
+    .single();
+  if (sErr) throw new Error(`review_session_open_failed: ${sErr.message}`);
+  const sessionId = (sess as { id: string }).id;
+
+  // Publish: overwrite the slot's target-language field with the corrected text.
+  const { error: slotErr } = await admin.from("daily_slots").update({ [slot.slot.field]: text }).eq("id", slot.slot.slotId);
+  if (slotErr) throw new Error(`slot_publish_failed: ${slotErr.message}`);
+
+  // Audit: corrections_log entry bound to the session (pre-image = original text).
+  const { data: corr, error: cErr } = await admin
+    .from("corrections_log")
+    .insert({
+      daily_slot_id: slot.slot.slotId,
+      action_type: "bounty_correction",
+      original_verse_ref: rep.verse_ref,
+      original_translation: slot.slot.currentText,
+      corrected_translation: text,
+      reason: note?.trim() || `error-bounty correction (${slot.slot.field === "final_translation_es" ? "es" : "en"})`,
+      category: "error_bounty",
+      corrected_by: reviewerUuid,
+      corrected_at: now,
+      review_session_id: sessionId,
+    })
+    .select("id")
+    .single();
+  if (cErr) throw new Error(`corrections_log_write_failed: ${cErr.message}`);
+  const corrId = (corr as { id: string }).id;
+
+  await admin.from("review_sessions").update({ ended_at: now, ended_cleanly: true }).eq("id", sessionId);
+
+  // Finalize: mark the group confirmed + issue the reward (reuses the confirm path;
+  // reports are still 'pending' at this point). Content is already live and logged.
+  const reward = await confirmGroup(gkey, "confirm", staff, note);
+
+  return { group_key: gkey, slot_id: slot.slot.slotId, corrections_log_id: corrId, reward };
 }
 
 // ─── credit ledger (read-only) ───────────────────────────────────────────────
