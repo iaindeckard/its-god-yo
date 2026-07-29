@@ -18,7 +18,7 @@ export async function POST(req: Request) {
     const payload: Record<string, unknown> = {
       daily_slot_id: body.daily_slot_id,
       reason: body.reason.trim(),
-      reviewer_id: reviewerId(),
+      reviewer_id: await reviewerId(),
     };
     if (body.review_session_id) payload.review_session_id = body.review_session_id;
     return NextResponse.json(await invokeReviewFn("review-reject-verse", payload));

@@ -12,8 +12,8 @@ const SECTIONS = [
 ];
 
 export default async function AdminHome() {
-  const staff = getCurrentStaff();
-  const perms = await getEffectivePermissions(staff);
+  const staff = await getCurrentStaff();
+  const perms = staff ? await getEffectivePermissions(staff) : new Set<string>();
   const visible = SECTIONS.filter((s) => perms.has(s.need));
 
   return (
@@ -21,14 +21,8 @@ export default async function AdminHome() {
       <div className="admin-head">
         <h1>Admin</h1>
         <div style={{ display: "flex", gap: 8 }}>
-          <span className="role-badge">{staff.jobRole}</span>
-          <span className="dev-badge">DEV IDENTITY (login deferred)</span>
+          <span className="role-badge">{staff?.jobRole ?? "no role"}</span>
         </div>
-      </div>
-      <div className="admin-note">
-        Staff login isn&rsquo;t wired yet, so the acting identity comes from <span className="mono">ADMIN_DEV_ROLE</span>.
-        Permission gating below is real — it reads <span className="mono">role_permissions</span> from the database for
-        the acting role. Swap in a session-based identity when login lands and nothing else changes.
       </div>
       <div className="grid cols-3">
         {visible.map((s) => (
@@ -37,7 +31,7 @@ export default async function AdminHome() {
             <p className="muted" style={{ margin: 0, fontSize: 14 }}>{s.desc}</p>
           </Link>
         ))}
-        {visible.length === 0 && <p className="muted">Your role has no admin sections enabled.</p>}
+        {visible.length === 0 && <p className="muted">This account has no admin sections enabled.</p>}
       </div>
     </>
   );

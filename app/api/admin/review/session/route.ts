@@ -13,7 +13,7 @@ export async function POST(req: Request) {
     await requirePermission("content.queue.view");
     const body = await req.json().catch(() => ({}));
     if (body.action === "start") {
-      return NextResponse.json(await invokeReviewFn("review-session-start", { reviewer_id: reviewerId() }));
+      return NextResponse.json(await invokeReviewFn("review-session-start", { reviewer_id: await reviewerId() }));
     }
     if (body.action === "end") {
       if (!body.review_session_id) {

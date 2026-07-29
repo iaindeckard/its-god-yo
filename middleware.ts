@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/supabase/publicEnv";
 
 /**
- * Admin auth gate (replaces the old ADMIN_UNLOCK 404-block + deferred-login stub).
+ * Admin auth gate (replaces the old prod hard-block + deferred-login env stub).
  *
  * Refreshes the Supabase session on every /admin(/api) request and requires that
  * SOMEONE is logged in to reach the admin surface: unauthenticated page requests
