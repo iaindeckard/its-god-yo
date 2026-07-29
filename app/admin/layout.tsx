@@ -19,8 +19,8 @@ const NAV = [
 ];
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const staff = getCurrentStaff();
-  const perms = await getEffectivePermissions(staff);
+  const staff = await getCurrentStaff();
+  const perms = staff ? await getEffectivePermissions(staff) : new Set<string>();
   const nav = NAV.filter((n) => perms.has(n.need));
 
   return (
@@ -39,7 +39,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         </nav>
         <div style={{ marginTop: "auto", paddingTop: 24, fontSize: 12, color: "var(--igy-on-dark-meta)" }}>
           <div>Acting role</div>
-          <div style={{ color: "var(--igy-admin-text)", fontWeight: 700 }}>{staff.jobRole}</div>
+          <div style={{ color: "var(--igy-admin-text)", fontWeight: 700 }}>{staff?.jobRole ?? "—"}</div>
         </div>
       </aside>
       <main className="admin-main">{children}</main>

@@ -1,23 +1,50 @@
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
+import { createServerClient } from "@supabase/ssr";
+import { NextResponse, type NextRequest } from "next/server";
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/supabase/publicEnv";
 
 /**
- * Admin surface hard-block. The admin panel has no real login yet — getCurrentStaff()
- * in lib/rbac.ts defaults the acting identity to `super_admin` (deferred-login seam).
- * Deploying that as-is would expose /admin and /api/admin/* to the public, wide open.
+ * Admin auth gate (replaces the old prod hard-block + deferred-login env stub).
  *
- * Until a session-based staff login exists, block those paths in any deployed
- * (production) environment. Set the ADMIN_UNLOCK env var to a non-empty value to
- * re-enable them deliberately (e.g. behind a trusted network). Local dev
- * (NODE_ENV !== "production") is unaffected so the panel stays usable while building.
+ * Refreshes the Supabase session on every /admin(/api) request and requires that
+ * SOMEONE is logged in to reach the admin surface: unauthenticated page requests
+ * redirect to /admin/login; unauthenticated API requests get 401. It does NOT
+ * decide WHICH permission is needed — authorization is enforced per-route by
+ * lib/rbac's requirePermission()/has_permission (a logged-in non-staff user still
+ * gets 403 there, never a default role). There is no env switch to misconfigure.
  */
-export function middleware(_req: NextRequest) {
-  const isProd = process.env.NODE_ENV === "production";
-  const unlocked = Boolean(process.env.ADMIN_UNLOCK);
-  if (isProd && !unlocked) {
-    return new NextResponse("Not found", { status: 404 });
+export async function middleware(request: NextRequest) {
+  const response = NextResponse.next({ request });
+
+  const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    cookies: {
+      getAll() {
+        return request.cookies.getAll();
+      },
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value, options }) => {
+          request.cookies.set(name, value);
+          response.cookies.set(name, value, options);
+        });
+      },
+    },
+  });
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const path = request.nextUrl.pathname;
+
+  if (!user && path.startsWith("/admin") && path !== "/admin/login") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/admin/login";
+    url.searchParams.set("next", path);
+    return NextResponse.redirect(url);
   }
-  return NextResponse.next();
+  if (!user && path.startsWith("/api/admin")) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  return response;
 }
 
 export const config = {

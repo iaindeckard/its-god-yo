@@ -18,7 +18,7 @@ export async function POST(req: Request) {
         daily_slot_id: body.daily_slot_id,
         corrected_translation: body.corrected_translation.trim(),
         reason: body.reason.trim(),
-        reviewer_id: reviewerId(),
+        reviewer_id: await reviewerId(),
       }),
     );
   } catch (e) {

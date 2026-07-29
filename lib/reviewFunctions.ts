@@ -19,8 +19,9 @@ const ANON =
  *  attribution consistent until real staff ids exist. */
 const DEV_REVIEWER_ID = "00000000-0000-0000-0000-000000000001";
 
-export function reviewerId(): string {
-  return getCurrentStaff().userId || DEV_REVIEWER_ID;
+export async function reviewerId(): Promise<string> {
+  const staff = await getCurrentStaff();
+  return staff?.userId || DEV_REVIEWER_ID;
 }
 
 export async function invokeReviewFn(name: string, payload: Record<string, unknown>): Promise<unknown> {

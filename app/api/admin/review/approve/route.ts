@@ -15,7 +15,7 @@ export async function POST(req: Request) {
     const result = await invokeReviewFn("review-approve", {
       daily_slot_id: body.daily_slot_id,
       chosen_output: body.chosen_output,
-      reviewer_id: reviewerId(),
+      reviewer_id: await reviewerId(),
     });
     return NextResponse.json(result);
   } catch (e) {
