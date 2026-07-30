@@ -19,6 +19,11 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const token = typeof body.token === "string" ? body.token.trim() : "";
   if (!token) return NextResponse.json({ error: "token is required" }, { status: 400 });
+  // welcome_token is a uuid column; a non-uuid token can't match any row (and would
+  // error the query on the cast), so treat a malformed token as not-found.
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(token)) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
 
   const sendTime = normalizeSlot(body.send_time_local);
   if (!sendTime) {
