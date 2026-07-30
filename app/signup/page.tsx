@@ -1,6 +1,6 @@
 import SignupFlow from "./SignupFlow";
 import type { Lang } from "@/lib/i18n";
-import { PURCHASES_ENABLED } from "@/lib/flags";
+import { PURCHASES_ENABLED, SPANISH_ENABLED } from "@/lib/flags";
 
 export const metadata = {
   title: "Get started — It's God, Yo!",
@@ -32,6 +32,7 @@ export default async function SignupPage({
   // TEMPORARY hard block — no customer can reach the purchase flow while
   // PURCHASES_ENABLED is false (see lib/flags.ts).
   if (!PURCHASES_ENABLED) return <ComingSoon />;
-  const initialLang: Lang = sp.lang === "es" ? "es" : "en";
+  // Ignore ?lang=es while Spanish is gated — signup is English-only.
+  const initialLang: Lang = SPANISH_ENABLED && sp.lang === "es" ? "es" : "en";
   return <SignupFlow initialLang={initialLang} initialPlan={sp.plan} />;
 }

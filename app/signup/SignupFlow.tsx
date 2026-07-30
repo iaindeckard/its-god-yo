@@ -13,6 +13,7 @@ import {
   PLANS, GROUP_BANDS, DM_ADDON, FAMILY_EXTRA_TEEN, FAMILY_BASE_TEENS, bandForCount, GROUP_CONTACT_THRESHOLD,
 } from "@/lib/plans";
 import { submitConsent, normalizePhone, type ConsentResult } from "@/lib/consent";
+import { SPANISH_ENABLED } from "@/lib/flags";
 
 const PK = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "";
 let stripePromise: Promise<StripeJs | null> | null = null;
@@ -394,7 +395,7 @@ export default function SignupFlow({
               <h2>{s.wLang}</h2>
               <p className="muted">{s.wLangSub}</p>
               <div style={{ display: "grid", gap: 12, marginTop: 20 }}>
-                {(["en", "es"] as Lang[]).map((L) => (
+                {((SPANISH_ENABLED ? ["en", "es"] : ["en"]) as Lang[]).map((L) => (
                   <div
                     key={L}
                     className={`choice ${lang === L ? "selected" : ""}`}
