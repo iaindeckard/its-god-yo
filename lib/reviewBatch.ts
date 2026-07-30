@@ -1,5 +1,6 @@
 import "server-only";
 import { getSupabaseAdmin } from "./supabaseAdmin";
+import { fetchKjvSourceMap } from "./kjvSource";
 import type { ReviewSlot } from "./reviewQueue";
 
 /**
@@ -44,10 +45,13 @@ export async function getBatchSlots(opts: {
   const { data, error } = await q.order("scheduled_date", { ascending: true });
   if (error) throw new Error(`review_batch_query_failed: ${error.message}`);
 
-  const slots: ReviewSlot[] = (data ?? []).map((r) => ({
+  const rows = data ?? [];
+  const sourceMap = await fetchKjvSourceMap(rows.map((r) => r.verse_ref));
+  const slots: ReviewSlot[] = rows.map((r) => ({
     id: r.id,
     scheduled_date: r.scheduled_date,
     verse_ref: r.verse_ref,
+    source_text: sourceMap[r.verse_ref] ?? null,
     en: {
       flagged: r.status === "needs_review",
       status: r.status,

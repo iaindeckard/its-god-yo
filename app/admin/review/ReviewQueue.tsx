@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import KjvSourceBlock from "@/components/KjvSourceBlock";
 import type { ReviewSlot, ReviewLangSide } from "@/lib/reviewQueue";
 
 interface Perms { approve: boolean; rejectVerse: boolean; rejectTranslation: boolean; }
@@ -132,6 +133,8 @@ function SlotCard({
           <span className="muted" style={{ marginLeft: 10, fontSize: 13 }}>{slot.scheduled_date}</span>
         </div>
       </div>
+
+      <KjvSourceBlock text={slot.source_text} />
 
       <div className="grid cols-2" style={{ marginTop: 12 }}>
         <LangPanel label="English" side={slot.en} />

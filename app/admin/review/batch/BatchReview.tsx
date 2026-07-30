@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import KjvSourceBlock from "@/components/KjvSourceBlock";
 import type { ReviewSlot, ReviewLangSide } from "@/lib/reviewQueue";
 import type { BatchResult } from "@/lib/reviewBatch";
 
@@ -178,6 +179,8 @@ function BatchSlotCard({
         </div>
         <StatusBadge status={slot.en.status} />
       </div>
+
+      <KjvSourceBlock text={slot.source_text} />
 
       <div className="grid cols-2" style={{ marginTop: 12 }}>
         <LangPanel label="English" side={slot.en} />

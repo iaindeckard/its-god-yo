@@ -1,5 +1,6 @@
 import "server-only";
 import { getSupabaseAdmin } from "./supabaseAdmin";
+import { fetchKjvSourceMap } from "./kjvSource";
 
 /**
  * The review queue reads daily_slots flagged for review on EITHER language.
@@ -21,6 +22,7 @@ export interface ReviewSlot {
   id: string;
   scheduled_date: string;
   verse_ref: string;
+  source_text: string | null; // canonical KJV text for verse_ref
   en: ReviewLangSide;
   es: ReviewLangSide;
 }
@@ -36,10 +38,13 @@ export async function getReviewQueue(): Promise<ReviewSlot[]> {
     .order("scheduled_date", { ascending: true });
   if (error) throw new Error(`review_queue_query_failed: ${error.message}`);
 
-  return (data ?? []).map((r) => ({
+  const rows = data ?? [];
+  const sourceMap = await fetchKjvSourceMap(rows.map((r) => r.verse_ref));
+  return rows.map((r) => ({
     id: r.id,
     scheduled_date: r.scheduled_date,
     verse_ref: r.verse_ref,
+    source_text: sourceMap[r.verse_ref] ?? null,
     en: {
       flagged: r.status === "needs_review",
       status: r.status,
