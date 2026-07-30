@@ -76,9 +76,9 @@ Deno.serve(async (req: Request) => {
   let body: { daily_slot_id?: string; reviewer_id?: string; reason?: string; review_session_id?: string };
   try { body = await req.json(); } catch { return json(400, { error: "invalid_json_body" }); }
 
-  const { daily_slot_id, reviewer_id, reason, review_session_id } = body;
-  if (!daily_slot_id || !reviewer_id || !reason) {
-    return json(400, { error: "daily_slot_id, reviewer_id, and reason are all required" });
+  const { daily_slot_id, reason, review_session_id } = body;
+  if (!daily_slot_id || !reason) {
+    return json(400, { error: "daily_slot_id and reason are required" });
   }
 
   const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
@@ -86,6 +86,27 @@ Deno.serve(async (req: Request) => {
   if (!anthropicKey || !openaiKey) return json(500, { error: "server_not_configured" });
 
   const supa = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
+
+  // ── AUTH (added 2026-07-30): require an authenticated staff member with the
+  // right permission. Defense-in-depth — the Next.js admin route also gates
+  // this, but this function is publicly reachable (the anon key is public), so
+  // it enforces its own check instead of trusting the caller. reviewer_id is
+  // derived from the verified JWT, never taken from the request body. ──
+  const authHeader = req.headers.get("Authorization") ?? "";
+  const userClient = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    { global: { headers: { Authorization: authHeader } }, auth: { persistSession: false, autoRefreshToken: false } },
+  );
+  const { data: { user }, error: authErr } = await userClient.auth.getUser();
+  if (authErr || !user) return json(401, { error: "unauthorized" });
+  const { data: allowed, error: permErr } = await supa.rpc("has_permission", {
+    p_user_id: user.id,
+    p_permission_key: "content.queue.reject_verse",
+  });
+  if (permErr) return json(500, { error: "permission_check_failed", detail: permErr.message });
+  if (allowed !== true) return json(403, { error: "forbidden", detail: "missing permission 'content.queue.reject_verse'" });
+  const reviewer_id = user.id;
 
   const { data: slot, error: fetchErr } = await supa.from("daily_slots").select("*").eq("id", daily_slot_id).single();
   if (fetchErr || !slot) return json(404, { error: "daily_slot_not_found" });

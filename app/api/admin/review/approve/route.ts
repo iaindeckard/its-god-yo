@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/rbac";
 import { apiError } from "@/lib/apiError";
-import { invokeReviewFn, reviewerId } from "@/lib/reviewFunctions";
+import { invokeReviewFn } from "@/lib/reviewFunctions";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +15,6 @@ export async function POST(req: Request) {
     const result = await invokeReviewFn("review-approve", {
       daily_slot_id: body.daily_slot_id,
       chosen_output: body.chosen_output,
-      reviewer_id: await reviewerId(),
     });
     return NextResponse.json(result);
   } catch (e) {

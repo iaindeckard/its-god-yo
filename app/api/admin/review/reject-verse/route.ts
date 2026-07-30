@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/rbac";
 import { apiError } from "@/lib/apiError";
-import { invokeReviewFn, reviewerId } from "@/lib/reviewFunctions";
+import { invokeReviewFn } from "@/lib/reviewFunctions";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +18,6 @@ export async function POST(req: Request) {
     const payload: Record<string, unknown> = {
       daily_slot_id: body.daily_slot_id,
       reason: body.reason.trim(),
-      reviewer_id: await reviewerId(),
     };
     if (body.review_session_id) payload.review_session_id = body.review_session_id;
     return NextResponse.json(await invokeReviewFn("review-reject-verse", payload));

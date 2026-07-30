@@ -25,13 +25,31 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS_HEADERS });
   if (req.method !== "POST") return json(405, { error: "method_not_allowed" });
 
-  let body: { reviewer_id?: string };
-  try { body = await req.json(); } catch { return json(400, { error: "invalid_json_body" }); }
-
-  const { reviewer_id } = body;
-  if (!reviewer_id) return json(400, { error: "reviewer_id is required" });
+  // No body fields are required — reviewer_id is derived from the authenticated
+  // JWT (below), so the request body is not parsed.
 
   const supa = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
+
+  // ── AUTH (added 2026-07-30): require an authenticated staff member with the
+  // right permission. Defense-in-depth — the Next.js admin route also gates
+  // this, but this function is publicly reachable (the anon key is public), so
+  // it enforces its own check instead of trusting the caller. reviewer_id is
+  // derived from the verified JWT, never taken from the request body. ──
+  const authHeader = req.headers.get("Authorization") ?? "";
+  const userClient = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    { global: { headers: { Authorization: authHeader } }, auth: { persistSession: false, autoRefreshToken: false } },
+  );
+  const { data: { user }, error: authErr } = await userClient.auth.getUser();
+  if (authErr || !user) return json(401, { error: "unauthorized" });
+  const { data: allowed, error: permErr } = await supa.rpc("has_permission", {
+    p_user_id: user.id,
+    p_permission_key: "content.queue.view",
+  });
+  if (permErr) return json(500, { error: "permission_check_failed", detail: permErr.message });
+  if (allowed !== true) return json(403, { error: "forbidden", detail: "missing permission 'content.queue.view'" });
+  const reviewer_id = user.id;
 
   const { data: session, error: insertErr } = await supa
     .from("review_sessions")

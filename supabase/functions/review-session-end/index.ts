@@ -47,6 +47,26 @@ Deno.serve(async (req: Request) => {
 
   const supa = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 
+  // ── AUTH (added 2026-07-30): require an authenticated staff member with the
+  // right permission. Defense-in-depth — the Next.js admin route also gates
+  // this, but this function is publicly reachable (the anon key is public), so
+  // it enforces its own check instead of trusting the caller. Escalation
+  // attribution still uses the session's own reviewer_id (loaded below). ──
+  const authHeader = req.headers.get("Authorization") ?? "";
+  const userClient = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    { global: { headers: { Authorization: authHeader } }, auth: { persistSession: false, autoRefreshToken: false } },
+  );
+  const { data: { user }, error: authErr } = await userClient.auth.getUser();
+  if (authErr || !user) return json(401, { error: "unauthorized" });
+  const { data: allowed, error: permErr } = await supa.rpc("has_permission", {
+    p_user_id: user.id,
+    p_permission_key: "content.queue.view",
+  });
+  if (permErr) return json(500, { error: "permission_check_failed", detail: permErr.message });
+  if (allowed !== true) return json(403, { error: "forbidden", detail: "missing permission 'content.queue.view'" });
+
   // Load the session -- we need its reviewer_id for escalation rows, and we
   // must not double-end an already-ended session (that would re-escalate).
   const { data: session, error: sessErr } = await supa
