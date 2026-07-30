@@ -226,7 +226,9 @@ export default function Landing() {
         <div className={s.wrap}>
           <div className={s.eyebrow}>WHICH TEXT WE USE</div>
           <p className={s.translationCopy}>
-            Full transparency: every English message is grounded in the King James Version. Every Spanish message is grounded in the Reina-Valera 1909 revision. Both are public domain texts, so there&rsquo;s no copyrighted translation being licensed or infringed here, and there never will be.
+            {SPANISH_ENABLED
+              ? "Full transparency: every English message is grounded in the King James Version. Every Spanish message is grounded in the Reina-Valera 1909 revision. Both are public domain texts, so there’s no copyrighted translation being licensed or infringed here, and there never will be."
+              : "Full transparency: every English message is grounded in the King James Version — a public domain text, so there’s no copyrighted translation being licensed or infringed here, and there never will be."}
           </p>
           <div className={s.badges}>
             <div className={s.badge}>
