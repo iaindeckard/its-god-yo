@@ -15,6 +15,16 @@ import {
 import { submitConsent, normalizePhone, type ConsentResult } from "@/lib/consent";
 import { SPANISH_ENABLED } from "@/lib/flags";
 
+// Best-effort browser timezone (IANA) captured at signup — the purchaser-level
+// fallback for the Stage 2 send-time chain. Null if the browser can't resolve it.
+function detectTimezone(): string | null {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+  } catch {
+    return null;
+  }
+}
+
 const PK = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "";
 let stripePromise: Promise<StripeJs | null> | null = null;
 function getStripePromise() {
@@ -299,6 +309,7 @@ export default function SignupFlow({
         promo_attestation_confirmed: promoNeedsAttest ? promoAttest : false,
         promo_attestation_text: promoNeedsAttest ? promo?.attestation_text ?? null : null,
         purchaser_email: purchaserEmail.trim() || null,
+        purchaser_timezone: detectTimezone(),
         teen: {
           first_name: teenFirstName.trim(),
           phone: normalizePhone(teenPhone),
@@ -349,6 +360,7 @@ export default function SignupFlow({
         promo_attestation_confirmed: promoNeedsAttest ? promoAttest : false,
         promo_attestation_text: promoNeedsAttest ? promo?.attestation_text ?? null : null,
         purchaser_email: purchaserEmail.trim() || null,
+        purchaser_timezone: detectTimezone(),
         family_teens: familyTeens.map((tn) => ({ first_name: tn.name.trim(), phone: normalizePhone(tn.phone), birth_year: Number(tn.year) })),
         stripe: ids,
       });

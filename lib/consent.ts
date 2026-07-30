@@ -30,6 +30,10 @@ export interface ConsentPayload {
   promo_attestation_confirmed?: boolean;
   promo_attestation_text?: string | null; // the exact statement the purchaser confirmed
   purchaser_email?: string | null;
+  // Browser-detected IANA timezone of the purchaser (parent) at signup. Feeds the
+  // Stage 2 send-time fallback chain (used when a teen never sets their own tz on
+  // the welcome page). Best-effort; null if the browser can't resolve it.
+  purchaser_timezone?: string | null;
   teen?: { first_name: string; phone: string; birth_year?: number; enhanced_consent_ack?: boolean };
   family_teens?: Array<{ first_name: string; phone: string; birth_year?: number; enhanced_consent_ack?: boolean }>;
   plus_one?: {

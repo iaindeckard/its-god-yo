@@ -40,6 +40,19 @@ const REPLY = {
 
 type Lang = "en" | "es";
 
+// Post-YES, once a recipient is fully confirmed, we append a link to the teen
+// welcome page (Stage 2) so they can set their daily send time + timezone. The
+// welcome_token is the row's own unguessable handle; nothing else gates the page.
+const WELCOME_BASE = process.env.NEXT_PUBLIC_SITE_URL || "https://itsgodyo.com";
+function allSetReply(lang: Lang, welcomeToken: string | null): string {
+  const base = REPLY[lang].allSet;
+  if (!welcomeToken) return base;
+  const link = `${WELCOME_BASE}/welcome?c=${welcomeToken}`;
+  return lang === "es"
+    ? `${base} Elige tu hora diaria: ${link}`
+    : `${base} Pick your daily time: ${link}`;
+}
+
 export interface InboundResult {
   action:
     | "confirmed_created"
@@ -64,6 +77,7 @@ interface ConsentRow {
   language: string | null;
   consent_type: string | null;
   pending_signup_id: string | null;
+  welcome_token: string | null;
 }
 
 export async function processInboundReply(from: string, body: string): Promise<InboundResult> {
@@ -73,14 +87,14 @@ export async function processInboundReply(from: string, body: string): Promise<I
 
   const { data: rows, error } = await admin
     .from("consent_log")
-    .select("id, recipient_phone, consent_status, language, consent_type, pending_signup_id")
+    .select("id, recipient_phone, consent_status, language, consent_type, pending_signup_id, welcome_token")
     .eq("consent_status", "pending_confirmation")
     .limit(500);
   if (error) throw new Error(`consent_lookup_failed: ${error.message}`);
 
   const candidates = ((rows ?? []) as ConsentRow[]).filter((r) => normalizePhone(r.recipient_phone) === fromNorm);
 
-  let matched: { id: string; language: string | null } | null = null;
+  let matched: { id: string; language: string | null; welcome_token: string | null } | null = null;
   let signup: { id: string; teen_consent_id: string | null; plus_one_consent_id: string | null } | null = null;
   let familySignupId: string | null = null;
   let familyHasSub = false;
@@ -94,7 +108,7 @@ export async function processInboundReply(from: string, body: string): Promise<I
         .in("status", ["awaiting_confirmation", "subscription_created"])
         .maybeSingle();
       if (fs) {
-        matched = { id: c.id, language: c.language };
+        matched = { id: c.id, language: c.language, welcome_token: c.welcome_token };
         familySignupId = fs.id;
         familyHasSub = !!fs.stripe_subscription_id;
         break;
@@ -108,7 +122,7 @@ export async function processInboundReply(from: string, body: string): Promise<I
         .limit(1)
         .maybeSingle();
       if (s) {
-        matched = { id: c.id, language: c.language };
+        matched = { id: c.id, language: c.language, welcome_token: c.welcome_token };
         signup = s;
         break;
       }
@@ -160,7 +174,7 @@ export async function processInboundReply(from: string, body: string): Promise<I
       subId = r.subscription_id;
     }
     await reconcileFamilyExtraTeens(familySignupId); // idempotent; picks up any already-elapsed extra teens
-    return { action: "confirmed_family", reply: REPLY[lang].allSet, pending_signup_id: familySignupId, subscription_id: subId };
+    return { action: "confirmed_family", reply: allSetReply(lang, matched.welcome_token), pending_signup_id: familySignupId, subscription_id: subId };
   }
 
   // ---------- Individual / gift / +1 (confirm-all) ----------
@@ -187,8 +201,8 @@ export async function processInboundReply(from: string, body: string): Promise<I
 
   const result = await createSubscriptionForPendingSignup(signup!.id);
   if (result.status === "created")
-    return { action: "confirmed_created", reply: REPLY[lang].allSet, pending_signup_id: signup!.id, subscription_id: result.subscription_id };
+    return { action: "confirmed_created", reply: allSetReply(lang, matched.welcome_token), pending_signup_id: signup!.id, subscription_id: result.subscription_id };
   if (result.status === "already_created")
-    return { action: "already_created", reply: REPLY[lang].allSet, pending_signup_id: signup!.id, subscription_id: result.subscription_id };
+    return { action: "already_created", reply: allSetReply(lang, matched.welcome_token), pending_signup_id: signup!.id, subscription_id: result.subscription_id };
   return { action: "blocked", reply: REPLY[lang].waiting, pending_signup_id: signup!.id, detail: result.detail || result.status };
 }

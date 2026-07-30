@@ -116,6 +116,7 @@ interface Payload {
   promo_attestation_confirmed?: boolean;
   promo_attestation_text?: string;
   purchaser_email?: string;
+  purchaser_timezone?: string;
   teen?: { first_name?: string; phone?: string; birth_year?: number; enhanced_consent_ack?: boolean };
   plus_one?: PlusOne | null;
   family_teens?: Array<{ first_name?: string; phone?: string; birth_year?: number; enhanced_consent_ack?: boolean }>;
@@ -243,7 +244,7 @@ Deno.serve(async (req: Request) => {
       language: lang, theme_track: p.theme_track?.trim() || "general", plan_key: "family", base_price_id: p.base_price_id, dm_addon: false,
       referral_code: p.referral_code?.trim() || null, referral_discount_applied: !!p.referral_discount_applied,
       promo_code: p.promo_code?.trim() || null, promo_promotion_code_id: p.promo_promotion_code_id?.trim() || null,
-      purchaser_email: p.purchaser_email?.trim() || null, teen_consent_id: consentIds[0], plus_one_consent_id: null,
+      purchaser_email: p.purchaser_email?.trim() || null, purchaser_timezone: p.purchaser_timezone?.trim() || null, teen_consent_id: consentIds[0], plus_one_consent_id: null,
       stripe_customer_id: p.stripe?.customer_id ?? null, stripe_setup_intent_id: p.stripe?.setup_intent_id ?? null,
       stripe_payment_method_id: p.stripe?.payment_method_id ?? null, status: "awaiting_confirmation",
     }).select("id").single();
@@ -421,6 +422,7 @@ Deno.serve(async (req: Request) => {
     promo_code: p.promo_code?.trim() || null,
     promo_promotion_code_id: p.promo_promotion_code_id?.trim() || null,
     purchaser_email: p.purchaser_email?.trim() || null,
+    purchaser_timezone: p.purchaser_timezone?.trim() || null,
     teen_consent_id: teenRow.id,
     plus_one_consent_id: plusOneId,
     stripe_customer_id: p.stripe?.customer_id ?? null,
