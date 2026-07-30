@@ -13,9 +13,16 @@ export const dynamic = "force-dynamic";
  * Auth matches the other crons: Vercel's cron header or a CRON_SECRET bearer.
  */
 export async function GET(req: Request) {
-  const isVercelCron = req.headers.get("x-vercel-cron") === "1";
+  // When CRON_SECRET is set (production), REQUIRE the Bearer secret. Vercel injects
+  // `Authorization: Bearer $CRON_SECRET` on real cron invocations, so the scheduler
+  // passes while external requests spoofing the (unstripped, forgeable) x-vercel-cron
+  // header cannot trigger a send. Only when no secret is configured (local/dev) do we
+  // fall back to the cron header. This route sends SMS once enabled, so it must not
+  // rely on a spoofable header.
   const secret = process.env.CRON_SECRET;
-  const authed = isVercelCron || (!!secret && req.headers.get("authorization") === `Bearer ${secret}`);
+  const authed = secret
+    ? req.headers.get("authorization") === `Bearer ${secret}`
+    : req.headers.get("x-vercel-cron") === "1";
   if (!authed) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const dryRun = new URL(req.url).searchParams.get("dry_run") === "1";
