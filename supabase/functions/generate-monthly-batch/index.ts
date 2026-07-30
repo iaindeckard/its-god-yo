@@ -102,6 +102,25 @@ Deno.serve(async (req: Request) => {
 
   const supa = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 
+  // AUTH: require an authenticated staff member with content.generate. The
+  // gateway verify_jwt only proves *some* valid JWT (the public anon key
+  // satisfies it), and this triggers real dual-AI generation (cost) under the
+  // service role -- so confirm the caller is staff, not just anyone.
+  const authHeader = req.headers.get("Authorization") ?? "";
+  const userClient = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+    { global: { headers: { Authorization: authHeader } }, auth: { persistSession: false, autoRefreshToken: false } },
+  );
+  const { data: { user }, error: authErr } = await userClient.auth.getUser();
+  if (authErr || !user) return json(401, { error: "unauthorized" });
+  const { data: allowed, error: permErr } = await supa.rpc("has_permission", {
+    p_user_id: user.id,
+    p_permission_key: "content.generate",
+  });
+  if (permErr) return json(500, { error: "permission_check_failed", detail: permErr.message });
+  if (allowed !== true) return json(403, { error: "forbidden", detail: "missing permission 'content.generate'" });
+
   const dates = daysInMonth(targetMonth);
 
   // Per-track 12-month dedup.
