@@ -6,11 +6,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 // generation time -- so a verse that gets generated but never approved never
 // counts against the 12-month dedup window.
 //
-// NOTE ON AUTH: reviewer_id is currently just an accepted UUID parameter,
-// not tied to a real authenticated session or checked against
-// staff_job_roles/role_permissions. That enforcement layer doesn't exist
-// yet -- this function trusts whatever caller invokes it. Fine for internal
-// testing, a real gap before any non-Iain reviewer uses this for real.
+// NOTE ON AUTH: reviewer_id is now derived from the caller's verified JWT and
+// re-checked against has_permission('content.queue.approve') below -- this
+// function no longer trusts a client-supplied reviewer_id.
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -39,11 +37,11 @@ Deno.serve(async (req: Request) => {
 
   const supa = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 
-  // ── AUTH (added 2026-07-30): require an authenticated staff member with the
-  // right permission. Defense-in-depth — the Next.js admin route also gates
-  // this, but this function is publicly reachable (the anon key is public), so
-  // it enforces its own check instead of trusting the caller. reviewer_id is
-  // derived from the verified JWT, never taken from the request body. ──
+  // AUTH: require an authenticated staff member with the right permission.
+  // Defense-in-depth -- the Next.js admin route also gates this, but this
+  // function is publicly reachable (the anon key is public), so it enforces its
+  // own check instead of trusting the caller. reviewer_id is derived from the
+  // verified JWT, never taken from the request body.
   const authHeader = req.headers.get("Authorization") ?? "";
   const userClient = createClient(
     Deno.env.get("SUPABASE_URL")!,

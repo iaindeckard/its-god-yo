@@ -8,8 +8,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 // rejected during THIS session must reach an approved/sent state before the
 // session can be ended cleanly.
 //
-// No external AI calls -- free to run. reviewer_id is a trusted parameter
-// (real auth is a known, separately-tracked gap, not built here).
+// No external AI calls -- free to run. reviewer_id is derived from the caller's
+// verified JWT (has_permission('content.queue.view')), not a body parameter.
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
