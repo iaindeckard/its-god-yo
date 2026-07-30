@@ -16,3 +16,14 @@ export const PURCHASES_ENABLED = false;
  * conditional), so this only removes the option — it doesn't break the flow.
  */
 export const SPANISH_ENABLED = false;
+
+/**
+ * Master switch for the Stage 2 daily send (the /api/cron/daily-send tick).
+ * While false, the cron runs in DRY mode: it still computes who is due and
+ * whether approved content exists, but makes NO Twilio calls and writes NO
+ * daily_send_log rows — so it can be deployed and observed harmlessly. Flip to
+ * true ONLY after the full send path is verified AND Twilio toll-free
+ * verification clears (locked sequencing: content+send verified → Twilio → then
+ * this, then PURCHASES_ENABLED). Never enable this in isolation.
+ */
+export const DAILY_SEND_ENABLED = false;
