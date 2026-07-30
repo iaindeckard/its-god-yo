@@ -183,7 +183,7 @@ export async function processInboundReply(from: string, body: string): Promise<I
       .from("consent_log")
       .update({ consent_status: "opted_out", opted_out_at: new Date().toISOString(), opt_out_method: "sms_stop", confirmation_reply_received: true, confirmation_reply_at: new Date().toISOString(), confirmation_reply_raw: body })
       .eq("id", matched.id);
-    await admin.from("pending_signups").update({ status: "cancelled" }).eq("id", signup!.id);
+    await admin.from("pending_signups").update({ status: "canceled" }).eq("id", signup!.id);
     return { action: "opted_out", reply: REPLY[lang].optedOut, pending_signup_id: signup!.id };
   }
   if (intent !== "confirm") return { action: "unknown", reply: REPLY[lang].unknown };

@@ -2,6 +2,7 @@ import "server-only";
 import { getSupabaseAdmin } from "./supabaseAdmin";
 import { DAILY_SEND_ENABLED, SPANISH_ENABLED } from "./flags";
 import { smsCostCents, TWILIO_US_SEGMENT_PRICE_CENTS, TWILIO_US_TOLLFREE_CARRIER_FEE_CENTS } from "./costs";
+import { evaluateDue } from "./sendTiming";
 
 /**
  * Stage 2 daily-send tick (spec: docs/STAGE-2-SEND-MECHANISM-SPEC.md). Invoked
@@ -33,27 +34,6 @@ interface AudienceRow {
   send_time_local: string; // "HH:MM:SS"
   timezone: string;        // IANA
   confirmed_at: string | null;
-}
-
-/** Current local date ("YYYY-MM-DD") and minutes-since-midnight in `tz`. */
-function localParts(atMs: number, tz: string): { dateStr: string; minutes: number } {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: tz,
-    year: "numeric", month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit", hour12: false,
-  }).formatToParts(new Date(atMs));
-  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
-  let hour = get("hour");
-  if (hour === "24") hour = "00"; // some ICU builds emit "24" at midnight
-  return {
-    dateStr: `${get("year")}-${get("month")}-${get("day")}`,
-    minutes: Number(hour) * 60 + Number(get("minute")),
-  };
-}
-
-function hhmmToMinutes(t: string): number {
-  const [h, m] = t.split(":").map(Number);
-  return h * 60 + m;
 }
 
 async function sendSms(to: string, body: string): Promise<{ sid: string; segments: number | null }> {
@@ -132,13 +112,8 @@ export async function runDailySend(opts: { dryRun?: boolean } = {}): Promise<Dai
 
   for (const r of rows) {
     const tz = r.timezone || "America/Chicago";
-    const { dateStr, minutes } = localParts(nowMs, tz);
-    const sendMin = hhmmToMinutes(r.send_time_local);
-    const confirmedDate = r.confirmed_at ? localParts(new Date(r.confirmed_at).getTime(), tz).dateStr : null;
-
-    // Decision B: no same-day send on the confirmation local date.
-    const dayZero = confirmedDate !== null && dateStr <= confirmedDate;
-    if (minutes < sendMin || dayZero) { summary.not_due++; continue; }
+    const { due, localDate: dateStr } = evaluateDue(nowMs, tz, r.send_time_local, r.confirmed_at);
+    if (!due) { summary.not_due++; continue; }
     summary.due++;
 
     const lang = r.language === "es" ? "es" : "en";
