@@ -78,10 +78,10 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS_HEADERS });
   if (req.method !== "POST") return json(405, { error: "method_not_allowed" });
 
-  let body: { daily_slot_id?: string; reviewer_id?: string; reason?: string; review_session_id?: string };
+  let body: { daily_slot_id?: string; reviewer_id?: string; reason?: string; category?: string; review_session_id?: string };
   try { body = await req.json(); } catch { return json(400, { error: "invalid_json_body" }); }
 
-  const { daily_slot_id, reason, review_session_id } = body;
+  const { daily_slot_id, reason, category, review_session_id } = body;
   if (!daily_slot_id || !reason) {
     return json(400, { error: "daily_slot_id and reason are required" });
   }
@@ -126,6 +126,7 @@ Deno.serve(async (req: Request) => {
     action_type: "reject_verse",
     original_verse_ref: slot.verse_ref,
     reason,
+    category: category ?? null,
     corrected_by: reviewer_id,
     review_session_id: review_session_id ?? null,
   });

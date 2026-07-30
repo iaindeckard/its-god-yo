@@ -22,10 +22,10 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS_HEADERS });
   if (req.method !== "POST") return json(405, { error: "method_not_allowed" });
 
-  let body: { daily_slot_id?: string; reviewer_id?: string; corrected_translation?: string; reason?: string };
+  let body: { daily_slot_id?: string; reviewer_id?: string; corrected_translation?: string; reason?: string; category?: string };
   try { body = await req.json(); } catch { return json(400, { error: "invalid_json_body" }); }
 
-  const { daily_slot_id, corrected_translation, reason } = body;
+  const { daily_slot_id, corrected_translation, reason, category } = body;
   if (!daily_slot_id || !corrected_translation || !reason) {
     return json(400, { error: "daily_slot_id, corrected_translation, and reason are all required" });
   }
@@ -66,6 +66,7 @@ Deno.serve(async (req: Request) => {
     original_translation: `AI-A (claude-sonnet-4-6): ${slot.ai_output_a ?? "(none)"}\nAI-B (gpt-4o): ${slot.ai_output_b ?? "(none)"}`,
     corrected_translation,
     reason,
+    category: category ?? null,
     corrected_by: reviewer_id,
   });
   if (logErr) return json(500, { error: "failed_to_log_correction", detail: logErr.message });

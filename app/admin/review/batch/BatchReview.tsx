@@ -6,6 +6,7 @@ import Link from "next/link";
 import KjvSourceBlock from "@/components/KjvSourceBlock";
 import type { ReviewSlot, ReviewLangSide } from "@/lib/reviewQueue";
 import type { BatchResult } from "@/lib/reviewBatch";
+import { reasonsFor, OTHER_KEY } from "@/lib/rejectionReasons";
 
 interface Perms { approve: boolean; rejectVerse: boolean; rejectTranslation: boolean; }
 
@@ -148,6 +149,7 @@ function BatchSlotCard({
 }) {
   const [busy, setBusy] = useState(false);
   const [rejectMode, setRejectMode] = useState<null | "verse" | "translation">(null);
+  const [category, setCategory] = useState("");
   const [reason, setReason] = useState("");
   const [corrected, setCorrected] = useState("");
 
@@ -163,7 +165,7 @@ function BatchSlotCard({
       });
       const data = await res.json();
       if (!res.ok) { onError(data.error || "Action failed"); return; }
-      setRejectMode(null); setReason(""); setCorrected("");
+      setRejectMode(null); setCategory(""); setReason(""); setCorrected("");
       onChanged();
     } finally {
       setBusy(false);
@@ -218,20 +220,26 @@ function BatchSlotCard({
               {rejectMode === "translation" && (
                 <textarea className="field" style={{ width: "100%", minHeight: 60 }} placeholder="Corrected translation" value={corrected} onChange={(e) => setCorrected(e.target.value)} />
               )}
-              <input className="field" style={{ width: "100%" }} placeholder="Reason" value={reason} onChange={(e) => setReason(e.target.value)} />
+              <select className="field" style={{ width: "100%" }} value={category} onChange={(e) => { setCategory(e.target.value); if (e.target.value !== OTHER_KEY) setReason(""); }}>
+                <option value="">Reason…</option>
+                {reasonsFor(rejectMode).map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+              </select>
+              {category === OTHER_KEY && (
+                <input className="field" style={{ width: "100%", marginTop: 8 }} placeholder="Reason (required)" value={reason} onChange={(e) => setReason(e.target.value)} />
+              )}
               <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                 <button
                   className="btn btn-primary"
-                  disabled={busy || !reason.trim() || (rejectMode === "translation" && !corrected.trim())}
+                  disabled={busy || !category || (category === OTHER_KEY && !reason.trim()) || (rejectMode === "translation" && !corrected.trim())}
                   onClick={() =>
                     rejectMode === "verse"
-                      ? call("reject-verse", { reason, ...(sessionId ? { review_session_id: sessionId } : {}) })
-                      : call("reject-translation", { corrected_translation: corrected, reason })
+                      ? call("reject-verse", { category, reason, ...(sessionId ? { review_session_id: sessionId } : {}) })
+                      : call("reject-translation", { corrected_translation: corrected, category, reason })
                   }
                 >
                   {busy ? "Working…" : "Confirm"}
                 </button>
-                <button className="btn btn-ghost" disabled={busy} onClick={() => setRejectMode(null)}>Cancel</button>
+                <button className="btn btn-ghost" disabled={busy} onClick={() => { setRejectMode(null); setCategory(""); setReason(""); setCorrected(""); }}>Cancel</button>
               </div>
             </div>
           )}
