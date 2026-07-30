@@ -9,6 +9,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 // reviewer in the same response -- it does NOT auto-approve the new content,
 // the reviewer still has to look at it and take a real approve action.
 //
+// CHANGED 2026-07-30: the replacement is drawn ONLY from the rejected slot's own
+// curated, human-approved track pool (verse_theme_tags via get_theme_track_pool)
+// -- NOT a random full-KJV sample. Rejecting a verse must never re-inject an
+// unreviewed one into the batch. Mirrors the generator functions' pool change.
+//
 // COSTS REAL MONEY -- two fresh AI calls, same ~$0.005 estimate as a single
 // generation. Logs the rejection to corrections_log either way.
 //
@@ -137,10 +142,14 @@ Deno.serve(async (req: Request) => {
     (batchRows || []).forEach((r: { verse_ref: string }) => usedRefs.add(r.verse_ref));
   }
 
-  const { data: candidates, error: candErr } = await supa.rpc("get_random_kjv_verses", { sample_size: 1000 });
-  if (candErr) return json(500, { error: "failed_to_read_kjv_verses", detail: candErr.message });
+  // Replacement comes ONLY from the rejected slot's curated, human-approved track
+  // pool (get_theme_track_pool) -- never a random full-KJV sample. This closes the
+  // same leak fixed in the generators: a rejection must not re-inject unreviewed
+  // scripture. An exhausted pool 409s rather than silently falling back.
+  const { data: candidates, error: candErr } = await supa.rpc("get_theme_track_pool", { p_track: slot.theme_track });
+  if (candErr) return json(500, { error: "failed_to_read_theme_pool", detail: candErr.message });
   const eligible = (candidates || []).filter((v: { book: string; chapter: number; verse: number }) => !usedRefs.has(`${v.book} ${v.chapter}:${v.verse}`));
-  if (eligible.length === 0) return json(500, { error: "no_eligible_replacement_verse" });
+  if (eligible.length === 0) return json(409, { error: "no_eligible_replacement_verse", detail: `Track '${slot.theme_track}' has no approved, un-used replacement verse. Approve more verse_theme_tags for this track.` });
   const newVerse = eligible[Math.floor(Math.random() * eligible.length)];
   const newVerseRef = `${newVerse.book} ${newVerse.chapter}:${newVerse.verse}`;
 

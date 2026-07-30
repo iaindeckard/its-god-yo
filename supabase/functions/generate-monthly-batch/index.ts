@@ -8,11 +8,10 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 // ADDED 2026-07-22: theme/mood tracks via `theme_track` (default "general").
 // Run this ONCE PER TRACK per month — 7 tracks = 7 batches (7x review workload),
 // which is the whole shape of Option A.
-//   - "general": random from the full eligible KJV pool (unchanged).
-//   - a themed track: candidate pool = that track's APPROVED verse_theme_tags
-//     only (via get_theme_track_pool). If a track has fewer approved verses than
-//     days in the month, some days report no_eligible_verses_in_sample — approve
-//     more tags and re-run.
+//   - EVERY track (incl. "general") draws ONLY from that track's APPROVED
+//     verse_theme_tags (via get_theme_track_pool). The random-full-KJV path is
+//     gone. If a track has fewer approved verses than days in the window, some
+//     days report no_eligible_verses_in_sample — approve more tags and re-run.
 // Dedup (used_verses) is per-track. This function is English-only; Spanish is a
 // separate per-slot generate-daily-verse(language="es") pass, unchanged.
 
@@ -131,13 +130,12 @@ Deno.serve(async (req: Request) => {
   if (usedErr) return json(500, { error: "failed_to_read_used_verses", detail: usedErr.message });
   const usedRefs = new Set((usedRows || []).map((r: { verse_ref: string }) => r.verse_ref));
 
-  // Candidate pool: full eligible pool for 'general', else the track's approved tags.
+  // Candidate pool: ALL tracks (incl. "general") draw ONLY from the curated,
+  // human-approved verse_theme_tags for that track (via get_theme_track_pool).
+  // The random-full-KJV path is gone -- no track can silently pull unreviewed
+  // scripture; an exhausted pool surfaces as no_eligible_verses_in_sample per day.
   let candidates: Array<{ book: string; chapter: number; verse: number; text: string }>;
-  if (themeTrack === "general") {
-    const { data, error } = await supa.rpc("get_random_kjv_verses", { sample_size: 3000 });
-    if (error) return json(500, { error: "failed_to_read_kjv_verses", detail: error.message });
-    candidates = data || [];
-  } else {
+  {
     const { data, error } = await supa.rpc("get_theme_track_pool", { p_track: themeTrack });
     if (error) return json(500, { error: "failed_to_read_theme_pool", detail: error.message });
     candidates = data || [];

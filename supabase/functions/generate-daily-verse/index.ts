@@ -1,8 +1,9 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
-// Daily verse generation (single slot). FIXED 2026-07-20: candidate verse pool
-// comes from get_random_kjv_verses() (real server-side random sample).
+// Daily verse generation (single slot). CHANGED 2026-07-30: candidate verse
+// pool comes from the curated, human-approved verse_theme_tags for the track
+// (get_theme_track_pool) -- no longer a random full-KJV sample.
 //
 // ADDED 2026-07-20: bilingual support via `language` param (en default / es).
 //   es does NOT pick a verse — it reuses the reference already chosen for the
@@ -10,11 +11,12 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 //
 // ADDED 2026-07-22: theme/mood tracks via `theme_track` param (default
 // "general"). daily_slots is now one row per (scheduled_date, theme_track).
-//   - "general": unchanged — random from the full eligible KJV pool.
-//   - a themed track: the candidate pool is the track's APPROVED
-//     verse_theme_tags only (AI-proposed + human-approved). Dedup (used_verses)
-//     is per-track. Everything downstream (dual-AI translate, agreement,
-//     completeness, review) is identical to general.
+// CHANGED 2026-07-30: EVERY track (incl. "general") now draws ONLY from that
+// track's APPROVED verse_theme_tags (AI-proposed + human-reviewed), via
+// get_theme_track_pool. The old random-full-KJV path for "general" is GONE --
+// no track can silently emit unreviewed scripture; an empty pool 409s. Dedup
+// (used_verses) is per-track. Downstream (dual-AI translate, agreement,
+// completeness, review) is identical across tracks.
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -222,21 +224,15 @@ Deno.serve(async (req: Request) => {
     if (usedErr) return json(500, { error: "failed_to_read_used_verses", detail: usedErr.message });
     const usedRefs = new Set((usedRows || []).map((r: { verse_ref: string }) => r.verse_ref));
 
-    if (themeTrack === "general") {
-      // Full eligible pool, random sample.
-      const { data: candidates, error: candErr } = await supa.rpc("get_random_kjv_verses", { sample_size: 1000 });
-      if (candErr) return json(500, { error: "failed_to_read_kjv_verses", detail: candErr.message });
-      const eligible = (candidates || []).filter((v: { book: string; chapter: number; verse: number }) => !usedRefs.has(`${v.book} ${v.chapter}:${v.verse}`));
-      if (eligible.length === 0) return json(500, { error: "no_eligible_verses_in_sample" });
-      verseRow = eligible[Math.floor(Math.random() * eligible.length)];
-    } else {
-      // Themed track: only APPROVED tags for this track (with source text).
-      const { data: pool, error: poolErr } = await supa.rpc("get_theme_track_pool", { p_track: themeTrack });
-      if (poolErr) return json(500, { error: "failed_to_read_theme_pool", detail: poolErr.message });
-      const eligible = (pool || []).filter((v: { book: string; chapter: number; verse: number }) => !usedRefs.has(`${v.book} ${v.chapter}:${v.verse}`));
-      if (eligible.length === 0) return json(409, { error: "no_approved_verses_for_track", detail: `Track '${themeTrack}' has no approved, un-used verses. Run propose-theme-verses and approve some first.` });
-      verseRow = eligible[Math.floor(Math.random() * eligible.length)];
-    }
+    // ALL tracks (incl. "general") draw ONLY from the curated, human-approved
+    // pool in verse_theme_tags via get_theme_track_pool. No random-full-KJV
+    // fallback exists for any track -- an exhausted pool 409s rather than
+    // silently emitting unreviewed scripture.
+    const { data: pool, error: poolErr } = await supa.rpc("get_theme_track_pool", { p_track: themeTrack });
+    if (poolErr) return json(500, { error: "failed_to_read_theme_pool", detail: poolErr.message });
+    const eligible = (pool || []).filter((v: { book: string; chapter: number; verse: number }) => !usedRefs.has(`${v.book} ${v.chapter}:${v.verse}`));
+    if (eligible.length === 0) return json(409, { error: "no_approved_verses_for_track", detail: `Track '${themeTrack}' has no approved, un-used verses. Add approved verse_theme_tags for this track first.` });
+    verseRow = eligible[Math.floor(Math.random() * eligible.length)];
   }
 
   const verseRef = `${verseRow!.book} ${verseRow!.chapter}:${verseRow!.verse}`;
