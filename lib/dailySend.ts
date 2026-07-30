@@ -1,6 +1,7 @@
 import "server-only";
 import { getSupabaseAdmin } from "./supabaseAdmin";
 import { DAILY_SEND_ENABLED, SPANISH_ENABLED } from "./flags";
+import { smsCostCents, TWILIO_US_SEGMENT_PRICE_CENTS, TWILIO_US_TOLLFREE_CARRIER_FEE_CENTS } from "./costs";
 
 /**
  * Stage 2 daily-send tick (spec: docs/STAGE-2-SEND-MECHANISM-SPEC.md). Invoked
@@ -60,13 +61,19 @@ async function sendSms(to: string, body: string): Promise<{ sid: string; segment
   const token = process.env.TWILIO_AUTH_TOKEN;
   const from = process.env.TWILIO_FROM_NUMBER;
   if (!accountSid || !token || !from) throw new Error("twilio_not_configured");
+  const form: Record<string, string> = { From: from, To: to, Body: body };
+  // Point Twilio at the delivery-status webhook so /api/twilio/status can advance
+  // daily_send_log (sent -> delivered/undelivered/failed) and alert on failure.
+  const statusUrl = process.env.TWILIO_STATUS_URL
+    || (process.env.NEXT_PUBLIC_SITE_URL ? `${process.env.NEXT_PUBLIC_SITE_URL}/api/twilio/status` : "");
+  if (statusUrl) form.StatusCallback = statusUrl;
   const resp = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
     method: "POST",
     headers: {
       Authorization: "Basic " + Buffer.from(`${accountSid}:${token}`).toString("base64"),
       "Content-Type": "application/x-www-form-urlencoded",
     },
-    body: new URLSearchParams({ From: from, To: to, Body: body }).toString(),
+    body: new URLSearchParams(form).toString(),
   });
   const data = await resp.json().catch(() => ({} as Record<string, unknown>));
   if (!resp.ok) throw new Error(`twilio_${resp.status}: ${String((data as { message?: string })?.message ?? "").slice(0, 140)}`);
@@ -179,6 +186,22 @@ export async function runDailySend(opts: { dryRun?: boolean } = {}): Promise<Dai
     try {
       const { sid, segments } = await sendSms(r.recipient_phone, text!);
       await admin.from("daily_send_log").update({ status: "sent", message_sid: sid, segments, updated_at: new Date().toISOString() }).eq("id", logId);
+      // Stamp the financial cost row (segment-based, per lib/costs.ts constants).
+      // Exactly-once already guaranteed by the claim, so no dup cost rows.
+      const seg = segments ?? 1;
+      const { error: costErr } = await admin.from("igy_sms_log").insert({
+        message_sid: sid,
+        direction: "outbound",
+        segments: seg,
+        unit_price_cents: seg * TWILIO_US_SEGMENT_PRICE_CENTS,
+        carrier_fee_cents: seg * TWILIO_US_TOLLFREE_CARRIER_FEE_CENTS,
+        cost_cents: smsCostCents(seg),
+        sent_on: dateStr,
+        sent_at: new Date().toISOString(),
+        pending_signup_id: r.pending_signup_id,
+        notes: `daily-send ${r.theme_track}/${lang}`,
+      });
+      if (costErr) console.error(`[daily-send] cost_log_failed sid=${sid}: ${costErr.message}`);
       summary.sent++;
       summary.details.push({ ...base, result: "sent", sid });
     } catch (e) {
