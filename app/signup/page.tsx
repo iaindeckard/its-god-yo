@@ -3,7 +3,7 @@ import type { Lang } from "@/lib/i18n";
 import { PURCHASES_ENABLED, SPANISH_ENABLED } from "@/lib/flags";
 
 export const metadata = {
-  title: "Get started — It's God, Yo!",
+  title: "Get started — It's God, Yo!™",
 };
 
 function ComingSoon() {

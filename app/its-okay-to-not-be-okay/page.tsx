@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import s from "./iotnbo.module.css";
 
 export const metadata: Metadata = {
-  title: "It's Okay to Not Be Okay — It's God, Yo!",
+  title: "It's Okay to Not Be Okay — It's God, Yo!™",
   description:
     "A message from the founder of It's God, Yo about mental health, the pressure teens and the adults who love them face, and why asking for help matters — with free, confidential crisis resources.",
 };

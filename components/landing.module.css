@@ -11,12 +11,12 @@
 
 /* ---------- Gate ---------- */
 .gate { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; }
-.gateReceived { align-self: flex-start; margin-left: max(0px, calc(50% - 340px)); margin-bottom: 44px; }
-.gateReceived :global(.wordmark) { font-size: 36px; }
+.gateReceived { align-self: center; margin-bottom: 48px; }
+.gateReceived :global(.wordmark) { font-size: 60px; }
 .gateQuestion { font-size: 32px; font-weight: 700; margin-bottom: 12px; text-align: center; }
 .gateSub { font-size: 15px; color: #a9bad6; margin-bottom: 40px; max-width: 400px; text-align: center; }
 .gateChoices { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
-.gateCard { width: 230px; background: #111b30; border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 32px 24px; cursor: pointer; color: #fff; text-align: center; font: inherit; transition: border-color .15s, background .15s; }
+.gateCard { width: 256px; background: #111b30; border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 38px 30px; cursor: pointer; color: #fff; text-align: center; font: inherit; transition: border-color .15s, background .15s; }
 .gateCard:hover, .gateCard:focus-visible { border-color: #378ADD; background: #15223f; outline: none; }
 .gateIcon { width: 48px; height: 48px; border-radius: 50%; background: rgba(55,138,221,0.15); color: #7ea8e0; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; }
 .gateIcon svg { width: 24px; height: 24px; }
@@ -164,6 +164,6 @@
   .pricingGrid { grid-template-columns: 1fr 1fr; }
   .iotnboBanner { flex-direction: column; align-items: flex-start; }
   .gateQuestion { font-size: 24px; }
-  .gateReceived { margin-left: 0; align-self: center; }
-  .gateReceived :global(.wordmark) { font-size: 26px; }
+  .gateReceived { align-self: center; }
+  .gateReceived :global(.wordmark) { font-size: 40px; }
 }
