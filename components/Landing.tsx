@@ -161,14 +161,14 @@ export default function Landing() {
           </div>
           <div className={s.fineprint}>
             {audience === "parent" && !PURCHASES_ENABLED
-              ? "Signups aren't open just yet — you can look around, but you can't be charged. Check back soon."
+              ? "Signups aren't open just yet, so you can look around but you can't be charged. Check back soon."
               : c!.fineprint}
           </div>
 
           {audience === "teen" && showShare && (
             <div className={s.sharePanel}>
               <div className={s.sharePanelTitle}>Send this to a parent or guardian</div>
-              <div className={s.sharePanelSub}>They set it up and pay — you just reply YES when your text arrives.</div>
+              <div className={s.sharePanelSub}>They set it up and pay. You just reply YES when your text arrives.</div>
               <div className={s.shareBtns}>
                 <a className={s.shareBtn} href={smsHref}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
@@ -183,7 +183,7 @@ export default function Landing() {
                   Copy link
                 </button>
               </div>
-              {copied && <div className={s.shareCopied}>Link copied — paste it wherever you talk to them.</div>}
+              {copied && <div className={s.shareCopied}>Link copied. Paste it wherever you talk to them.</div>}
             </div>
           )}
         </div>
@@ -239,7 +239,7 @@ export default function Landing() {
             </div>
             <div>
               <div className={s.stepIcon}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-1 4 8.5 8.5 0 0 1-7.5 4.5 8.4 8.4 0 0 1-4-1L3 20l1-5.5a8.4 8.4 0 0 1-1-4 8.5 8.5 0 0 1 4.5-7.5 8.4 8.4 0 0 1 4-1h.5a8.5 8.5 0 0 1 8 8v.5z" /><path d="M9 12l2 2 4-4" /></svg></div>
-              <div className={s.stepTitle}>They confirm</div>
+              <div className={s.stepTitle}>{audience === "teen" ? "You confirm" : "They confirm"}</div>
               <div className={s.stepBody}>{c!.step2}</div>
             </div>
             <div>
@@ -257,7 +257,7 @@ export default function Landing() {
           <p className={s.translationCopy}>
             {SPANISH_ENABLED
               ? "Full transparency: every English message is grounded in the King James Version. Every Spanish message is grounded in the Reina-Valera 1909 revision. Both are public domain texts, so there’s no copyrighted translation being licensed or infringed here, and there never will be."
-              : "Full transparency: every English message is grounded in the King James Version — a public domain text, so there’s no copyrighted translation being licensed or infringed here, and there never will be."}
+              : "Full transparency: every English message is grounded in the King James Version, a public domain text. There’s no copyrighted translation being licensed or infringed here, and there never will be."}
           </p>
           <div className={s.badges}>
             <div className={s.badge}>
@@ -307,7 +307,7 @@ export default function Landing() {
           <div className={s.eyebrow}>WHY WE DO THIS</div>
           <h2 className={s.whyHeadline}>Every child deserves to hear it.</h2>
           <p className={s.translationCopy}>
-            Every generation gets its own slang. The Bible wasn&rsquo;t written in ours &mdash; it was Hebrew, Greek, Latin, Old English, whatever the moment called for. Somebody was always translating the delivery, never the message. We&rsquo;re doing the same thing, just for right now. Teens who need the Word but don&rsquo;t always take to how it&rsquo;s usually said deserve the same shot at hearing it as anyone else. That&rsquo;s the whole point of It&rsquo;s God, Yo!&trade;
+            Every generation gets its own slang. The Bible wasn&rsquo;t written in ours. It was Hebrew, Greek, Latin, Old English, whatever the moment called for. Somebody was always translating the delivery, never the message. We&rsquo;re doing the same thing, just for right now. Teens who need the Word but don&rsquo;t always take to how it&rsquo;s usually said deserve the same shot at hearing it as anyone else. That&rsquo;s the whole point of It&rsquo;s God, Yo!&trade;
           </p>
           <div className={s.whyCards}>
             <div className={s.whyCard}>

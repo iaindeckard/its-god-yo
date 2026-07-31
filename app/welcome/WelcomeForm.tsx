@@ -27,7 +27,7 @@ const COPY = {
     saving: "Saving…",
     saved: "Saved! Your daily verse will arrive around",
     savedTz: "in",
-    err: "Couldn't save that — please try again.",
+    err: "Couldn't save that. Please try again.",
     floorNote: "Earliest is 7:00 AM.",
   },
   es: {

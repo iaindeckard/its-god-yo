@@ -47,7 +47,7 @@ export default function InquiryForm() {
 
       {done ? (
         <div className="card">
-          <p className="strong" style={{ fontSize: 18, marginBottom: 6 }}>Thanks &mdash; we&rsquo;ll be in touch. 🙏</p>
+          <p className="strong" style={{ fontSize: 18, marginBottom: 6 }}>Thanks, we&rsquo;ll be in touch. 🙏</p>
           <p className="muted">We received your note and someone will follow up personally.</p>
           <a className="btn btn-ghost" href="/" style={{ marginTop: 16 }}>Back home</a>
         </div>

@@ -31,7 +31,7 @@ export default async function SponsorsPage() {
         <p className={s.sub}>It&rsquo;s God, Yo runs because people who believe in this work choose to support it directly. Every name and logo below is one of them.</p>
 
         {sponsors.length === 0 ? (
-          <p className={s.empty}>Our sponsor list is being updated — check back soon.</p>
+          <p className={s.empty}>Our sponsor list is being updated. Check back soon.</p>
         ) : (
           <div className={s.grid}>
             {sponsors.map((sp) => (

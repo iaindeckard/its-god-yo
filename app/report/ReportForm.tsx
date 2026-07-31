@@ -57,7 +57,7 @@ export default function ReportForm({ defaults }: { defaults: Defaults }) {
 
       {done ? (
         <div className="card">
-          <p className="strong" style={{ fontSize: 18, marginBottom: 6 }}>Thanks — got it. 🙏</p>
+          <p className="strong" style={{ fontSize: 18, marginBottom: 6 }}>Thanks, got it. 🙏</p>
           <p className="muted">
             Your report is in the review queue. Nothing pays out automatically; a human confirms real issues first. If
             yours is confirmed and you were the first to report it, a credit will be earned to your account.
