@@ -26,8 +26,10 @@
 .gateChoices { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
 .gateCard { width: 256px; background: #111b30; border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 38px 30px; cursor: pointer; color: #fff; text-align: center; font: inherit; transition: border-color .15s, background .15s; }
 .gateCard:hover, .gateCard:focus-visible { border-color: #378ADD; background: #15223f; outline: none; }
-.gateIcon { width: 48px; height: 48px; border-radius: 50%; background: rgba(55,138,221,0.15); color: #7ea8e0; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; }
-.gateIcon svg { width: 24px; height: 24px; }
+/* gate card photography (AI-generated, per-card, with a visible disclosure caption) */
+.gateFigure { margin: 0 0 16px; }
+.gateImg { display: block; width: 100%; height: 132px; object-fit: cover; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); }
+.gateAiTag { display: block; margin-top: 8px; font-size: 10.5px; letter-spacing: 0.02em; color: #8ea2c0; }
 .gateCardTitle { font-size: 16px; font-weight: 500; margin-bottom: 6px; }
 .gateCardBody { font-size: 12.5px; color: #a9bad6; line-height: 1.5; }
 

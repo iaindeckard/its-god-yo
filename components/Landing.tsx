@@ -101,16 +101,18 @@ export default function Landing() {
           <div className={s.gateSub}>We&rsquo;ll tailor everything on this site to you, so it actually makes sense.</div>
           <div className={s.gateChoices}>
             <button className={s.gateCard} onClick={() => setAudience("parent")}>
-              <div className={s.gateIcon} aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" /><circle cx="10" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
-              </div>
+              <figure className={s.gateFigure}>
+                <img className={s.gateImg} src="/gate/parent.jpg" width={480} height={384} alt="A multi-generational family — parents and a grandmother gathered around a teenager at sunset (AI-generated image)" />
+                <figcaption className={s.gateAiTag}>AI-generated image</figcaption>
+              </figure>
               <div className={s.gateCardTitle}>I&rsquo;m a parent or caregiver</div>
               <div className={s.gateCardBody}>Set up and pay for a daily scripture text for your teen.</div>
             </button>
             <button className={s.gateCard} onClick={() => setAudience("teen")}>
-              <div className={s.gateIcon} aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="5" /><path d="M20 21a8 8 0 0 0-16 0" /></svg>
-              </div>
+              <figure className={s.gateFigure}>
+                <img className={s.gateImg} src="/gate/teen.jpg" width={480} height={320} alt="Two teenagers sitting at a skatepark, smiling at a phone together (AI-generated image)" />
+                <figcaption className={s.gateAiTag}>AI-generated image</figcaption>
+              </figure>
               <div className={s.gateCardTitle}>I&rsquo;m a teen</div>
               <div className={s.gateCardBody}>See what it is, then loop in a parent or guardian to set it up.</div>
             </button>
