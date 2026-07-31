@@ -21,7 +21,7 @@ const CONTENT: Record<Audience, {
   parent: {
     headline: "A daily verse,<br>texted the way<br>they&rsquo;d actually read it.",
     subhead:
-      "Send your teen scripture rendered as short casual messages that sound like a friend, not a lecture. One a day, in English or Spanish.",
+      "Send your teen scripture rendered as short casual messages that sound like a friend, not a lecture. One a day, in English.",
     cta: "Get started",
     fineprint: "No charge until your teen texts back YES. Cancel anytime.",
     navCta: "Get started",
@@ -32,7 +32,7 @@ const CONTENT: Record<Audience, {
   teen: {
     headline: "A daily verse,<br>texted the way<br>you&rsquo;d actually read it.",
     subhead:
-      "Scripture, rendered as short casual messages that sound like a friend, not a lecture. One a day, in English or Spanish.",
+      "Scripture, rendered as short casual messages that sound like a friend, not a lecture. One a day, in English.",
     cta: "Show a parent",
     fineprint: "A parent or guardian sets this up and pays. You just have to reply YES to start.",
     navCta: "Show a parent",
@@ -278,7 +278,7 @@ export default function Landing() {
           <div className={s.eyebrow}>WHY WE DO THIS</div>
           <h2 className={s.whyHeadline}>Every child deserves to hear it.</h2>
           <p className={s.translationCopy}>
-            Every generation gets its own slang. The Bible wasn&rsquo;t written in ours &mdash; it was Hebrew, Greek, Latin, Old English, whatever the moment called for. Somebody was always translating the delivery, never the message. We&rsquo;re doing the same thing, just for right now. Teens who need the Word but don&rsquo;t always take to how it&rsquo;s usually said deserve the same shot at hearing it as anyone else. That&rsquo;s the whole point of Yo.
+            Every generation gets its own slang. The Bible wasn&rsquo;t written in ours &mdash; it was Hebrew, Greek, Latin, Old English, whatever the moment called for. Somebody was always translating the delivery, never the message. We&rsquo;re doing the same thing, just for right now. Teens who need the Word but don&rsquo;t always take to how it&rsquo;s usually said deserve the same shot at hearing it as anyone else. That&rsquo;s the whole point of It&rsquo;s God, Yo!&trade;
           </p>
           <div className={s.whyCards}>
             <div className={s.whyCard}>
