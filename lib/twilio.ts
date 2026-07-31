@@ -1,5 +1,6 @@
 import "server-only";
 import crypto from "crypto";
+import { phoneKey } from "./phone";
 
 /**
  * Twilio helpers for the inbound SMS ("YES") handler. Delivery (outbound) lives
@@ -29,12 +30,11 @@ export function verifyTwilioSignature(
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
-/** Digits-only, last-10 (US/CA/MX national number) for tolerant phone matching
- *  between the as-typed number stored at signup and Twilio's E.164 `From`. */
-export function normalizePhone(raw: string | null | undefined): string {
-  const digits = (raw || "").replace(/\D/g, "");
-  return digits.length > 10 ? digits.slice(-10) : digits;
-}
+/** Tolerant phone-matching key (digits-only, last-10). Kept under the historical
+ *  `normalizePhone` name for back-compat; the single source of truth is
+ *  `phoneKey` in lib/phone.ts. Use this ONLY for matching, never for storage —
+ *  stored/sent numbers must be canonical E.164 (lib/phone.toE164). */
+export const normalizePhone = phoneKey;
 
 export type ReplyIntent = "confirm" | "stop" | "help" | "unknown";
 

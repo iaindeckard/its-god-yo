@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Wordmark from "./Wordmark";
 import SponsorRotator from "./SponsorRotator";
-import { PURCHASES_ENABLED } from "@/lib/flags";
+import { PURCHASES_ENABLED, SPANISH_ENABLED } from "@/lib/flags";
 import s from "./landing.module.css";
 
 type Audience = "parent" | "teen";
@@ -129,7 +129,7 @@ export default function Landing() {
             <a href="#how">How it works</a>
             <a href="#pricing">Pricing</a>
             <a href="/its-okay-to-not-be-okay" className={s.iotnbo}>&#10084; It&rsquo;s okay to not be okay</a>
-            <a href="/?lang=es" className={s.lang}>Espa&ntilde;ol</a>
+            {SPANISH_ENABLED && <a href="/?lang=es" className={s.lang}>Espa&ntilde;ol</a>}
             <button className={s.switch} onClick={() => setAudience(audience === "parent" ? "teen" : "parent")}>{c!.switchLabel}</button>
             {audience === "parent"
               ? (PURCHASES_ENABLED
@@ -226,17 +226,21 @@ export default function Landing() {
         <div className={s.wrap}>
           <div className={s.eyebrow}>WHICH TEXT WE USE</div>
           <p className={s.translationCopy}>
-            Full transparency: every English message is grounded in the King James Version. Every Spanish message is grounded in the Reina-Valera 1909 revision. Both are public domain texts, so there&rsquo;s no copyrighted translation being licensed or infringed here, and there never will be.
+            {SPANISH_ENABLED
+              ? "Full transparency: every English message is grounded in the King James Version. Every Spanish message is grounded in the Reina-Valera 1909 revision. Both are public domain texts, so there’s no copyrighted translation being licensed or infringed here, and there never will be."
+              : "Full transparency: every English message is grounded in the King James Version — a public domain text, so there’s no copyrighted translation being licensed or infringed here, and there never will be."}
           </p>
           <div className={s.badges}>
             <div className={s.badge}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" /></svg>
               <div><div className={s.label}>English</div><div className={s.value}>King James Version (public domain)</div></div>
             </div>
+            {SPANISH_ENABLED && (
             <div className={s.badge}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" /></svg>
               <div><div className={s.label}>Espa&ntilde;ol</div><div className={s.value}>Reina-Valera 1909 (dominio p&uacute;blico)</div></div>
             </div>
+            )}
           </div>
         </div>
       </section>

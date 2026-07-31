@@ -1,98 +1,99 @@
 # IGY Launch Checklist
 
-Hard blockers must be **done** before IGY revenue goes live. A blocker is not a
-nice-to-have; shipping without it means a downstream system is silently wrong.
+Hard blockers must be **done** before IGY revenue goes live (`PURCHASES_ENABLED → true`).
+A blocker is not a nice-to-have; shipping without it means a downstream system is silently
+wrong, or a paying customer gets nothing. **Last refreshed: 2026-07-30.**
 
-## 🚫 BLOCKERS
+Current state: **`PURCHASES_ENABLED = false`** (deliberately re-gated) — see blockers below.
 
-- [ ] **Row-level `subscription_payments` table fed by the IGY Stripe webhook — must land
-  BEFORE IGY takes its first dollar, not merely "before launch".**
-  Every realized recurring charge must land as a row in IGY's own DB (mirroring USN's
-  `sponsor_payments`), carrying at minimum: stripe subscription id, stripe invoice/payment
-  id, gross/fee/net cents, status, period, created_at.
+## 🔒 Sequencing constraint (load-bearing — do not violate)
 
-  **Why this is a blocker, not a nice-to-have:** the DEI holding-company rollup recomputes
-  IGY's MRR *independently* to USN's canonical definition (recurring subscription-backed net
-  revenue × 12) and compares it against IGY's own reported `mrr_cents` — a divergence check
-  that catches "IGY's dashboard and DEI's dashboard disagree and nobody noticed." That check
-  can only compute the independent number from a row-level payments source. **No table →
-  `recomputed_mrr_cents` stays NULL forever → the divergence check never turns on** and IGY's
-  self-reported revenue is trusted with nothing cross-checking it. This is the classic launch
-  deferral that never gets done; it is listed here specifically so it does not slip.
+Each stage must be **built AND verified working** before the next; never enable one in isolation:
 
-  **Why "first dollar", not "launch":** the DEI rollup handles unverified revenue by
-  exclude-and-flag — unverified IGY revenue is shown as a separate flagged amount, NOT folded
-  into the consolidated total. That is the correct behavior, but it has a failure mode: from
-  the moment IGY takes real money until this table exists, that revenue is real, unverified,
-  and sitting *outside* the DEI headline — so the holding-company dashboard confidently
-  *understates* the business. The only way that window never opens is for this table to be
-  live before the first charge is ever taken. If it lands in time, the entire unverified-IGY
-  branch stays theoretical and the headline is trustworthy from dollar one.
+1. **Content pipeline** (eligible-verse pool + human-approved batch) **and Stage 2 send mechanism** — built & verified, THEN
+2. **Twilio / opt-in delivery** — wired & verified (the "reply YES" opt-in SMS actually delivers), THEN
+3. **`PURCHASES_ENABLED → true`.**
 
-  DEI side is already built and waiting: `igy_mirror_monthly_financials` in `dei-financial`
-  has `source_mrr_cents`, `recomputed_mrr_cents`, and a three-state `mrr_verification_status`
-  (`unverified` until this lands). See dei-financial migration
-  `20260725123000_igy_divergence_three_state_null_aware.sql`.
+Rationale: wiring Twilio/opt-in alone enables YES → subscription → a real charge 7 days later (post-trial). If the daily send doesn't exist yet, you'd be charging real customers for texts that never come. Order is load-bearing.
 
-- [ ] **Production Stripe webhook delivery is BROKEN — no endpoint is actually
-  receiving events.** Distinct from and more urgent than the `subscription_payments`
-  work above: that table can only be fed if the webhook receives events at all, and
-  right now it does not.
-  - **Supposedly fixed 2026-07-24:** the webhook was recreated (endpoint `we_1Twkc…`,
-    signing secret placed in Vercel) after a wrong-secret 400 outage.
-  - **Actually missing (verified 2026-07-28):** the Stripe account has **0 registered
-    webhook endpoints**. The `we_1Twkc…` endpoint is gone, so prod's
-    `STRIPE_WEBHOOK_SECRET` points at a non-existent endpoint and **no Stripe event is
-    delivered to `itsgodyo.com/api/stripe/webhook`**. The route itself is deployed and
-    healthy (correctly rejects bad signatures) — it simply never receives anything.
-  - **CONFIRMED BROKEN — prod `STRIPE_SECRET_KEY` is wrong (2026-07-28 test).** With a
-    valid signed test event delivered to the endpoint, the handler's
-    `stripe.charges.retrieve()` returned **404 "No such charge"** for a charge that
-    definitely exists in `acct_1TvPFiGZ9WDMHywo` test mode. A 404 (not 401) means the
-    key authenticates but points at a **different account or live mode** — i.e. the
-    still-open 2026-07-24 "update `STRIPE_SECRET_KEY` to the rotated `sk_test`" item is
-    unresolved. Effect: every webhook capture that needs a Stripe API call (charge /
-    balance_transaction retrieval) fails and is swallowed by `safeCapture` → **no rows
-    are ever written**, silently. This must be fixed (set prod `STRIPE_SECRET_KEY` to
-    the correct current key for `acct_1TvPFiGZ9WDMHywo`) before the ledger works at all,
-    and it is separate from the endpoint/secret fix above.
-  - **Real fix required before ANY real purchase:** register a **live-mode** endpoint →
-    `itsgodyo.com/api/stripe/webhook` subscribed to at least `invoice.paid`,
-    `charge.refunded`, `charge.dispute.created`; set its signing secret as the
-    production `STRIPE_WEBHOOK_SECRET`; and confirm `STRIPE_SECRET_KEY` is current for
-    the right account. **Any test-mode endpoint registration verifies the code path
-    only — it is NOT this fix.**
+## 🚫 BLOCKERS (must be done before purchases reopen)
 
-## Near-term follow-ups (not a blocker, but do NOT let this slide)
+- [ ] **Verse eligibility pool + regenerated, human-approved `general` batch.**
+  The `general` track draws a random verse from the *entire* KJV, which serves thin/unsuitable
+  verses (itineraries, ceremonial lists, mid-narrative fragments, harsh judgment) — proven by
+  the first batch's rejections. Build the Hybrid eligibility pool: AI-classify all ~31k KJV
+  verses against the signed-off criteria (substance + self-contained + teen-appropriate tone) →
+  human spot-review → curated eligible pool reusing the `verse_theme_tags` machinery. Point
+  `general` generation at the pool, **regenerate the batch** (the current Sep 1–14 batch came
+  from the OLD unfiltered pool and must be discarded), and human-approve it via `/admin/review/batch`.
+  No thin/unsuitable verse may ever reach a subscriber. *(Full-KJV AI eligibility pass running 2026-07-30.)*
 
-- [ ] **Backfill / reconciliation job for `subscription_payments`.** The webhook
-  capture is intentionally **best-effort**: a ledger-insert failure is logged and
-  swallowed (`safeCapture` in `app/api/stripe/webhook/route.ts`) so it can never
-  break the subscription status update or referral/outreach clawback that share the
-  same Stripe event cases. That decouples ledger durability from the live webhook —
-  which means a dropped or failed capture has **no automatic retry**. This job IS
-  the safety net for that design: periodically replay Stripe balance transactions
-  (charges + refunds + disputes) into `subscription_payments`, idempotent on
-  `balance_transaction_id`, and alert on any gap vs Stripe. Until it exists, a
-  swallowed capture failure is a silently missing row and the DEI rollup would
-  under-read that revenue. Build alongside / just after the table lands — this is
-  the corresponding safety net, not optional polish.
+- [ ] **Teen send-time + timezone capture — LOCKED spec 2026-07-30 (build *after* Stage 2 design).**
+  The teen sets their daily send time on a **new web "welcome" page** reached via a link in the
+  post-YES confirmation SMS. The reply-YES stays as-is (TCPA consent + subscription trigger).
+  - **Time:** 30-minute slots, **7:00 AM local floor** (no earlier — anti-accident/joke), default **12:00 PM** if unset.
+  - **Timezone:** browser-auto-detected on the welcome page (editable). Fallback chain:
+    teen `consent_log.timezone` → `purchaser_timezone` (**new**, browser-detected at parent web signup)
+    → coarse country/area-code default → `America/Chicago`.
+  - **Storage:** add `consent_log.send_time_local time` + `consent_log.timezone text` (per teen);
+    add `pending_signups.purchaser_timezone text`. (Parent signup captures **no** TZ today; teen touchpoint
+    is SMS-only — no web page, no time/TZ captured; only `recipient_country_code` derived from phone.)
+  - Stage 2 resolves each subscriber's UTC send instant from `(send_time_local ?? noon)` in the resolved TZ.
+  - Full spec: memory `project_igy_send_time_spec`. **Feeds Stage 2 — do not build until Stage 2 design is locked.**
 
-## Tech debt / cleanup (not blocking)
+- [ ] **Stage 2 — the daily send mechanism.** *(Largest net-new piece — does not exist.)*
+  No Vercel cron, no pg_cron, no send code. Needs: an **active-subscriber delivery model**
+  (track / language / timezone / phone / consent status; there is no `subscribers` table today),
+  a **scheduled job** that selects each subscriber's approved slot for "today" and sends at their
+  local window, **idempotency** (never double-send a day), `igy_sms_log` logging + cost, and
+  missing-content handling (skip/fallback when a track has no approved day). Verify end-to-end
+  against a **test number** before Twilio goes live.
 
-- [ ] **Reconcile IGY's migration history: local files vs remote `schema_migrations`.**
-  As of 2026-07-28 the two are badly out of sync — **18 local migration files
-  (sequential stamps like `20260722000001`) vs 36 applied migrations on remote
-  (timestamp stamps like `20260722124348`), with only 2 versions in common.** The
-  remote has clearly been maintained via `apply_migration` / dashboard, not
-  `supabase db push` against these files, so **`db push` is currently unsafe on IGY**
-  (it would refuse on history mismatch, or try to replay ~15 already-applied
-  migrations). `subscription_payments` (`20260728000001`) was applied via
-  `apply_migration` for exactly this reason. Cleanup options: `supabase migration
-  repair` to reconcile, or re-baseline the local migrations dir to match remote.
-  Not urgent, but until it's fixed the local `supabase/migrations/` dir is NOT a
-  reliable source of truth for what's deployed, and `db push` must not be run.
+- [ ] **Twilio outbound delivery — live.**
+  Outbound is **not delivering**: `igy_sms_log` has **0 rows ever**, and toll-free verification is
+  still pending. Until it delivers, the opt-in "reply YES" SMS never arrives → no subscription →
+  no charge → no daily texts (it fails *closed*, which is why no money is at risk today). Resolve
+  the toll-free (or 10DLC) verification, set prod `TWILIO_ACCOUNT_SID/AUTH_TOKEN/FROM_NUMBER`, and
+  prove a real opt-in round-trip: YES → confirmed subscriber → first daily verse delivered.
 
-## Other launch items
+## 🔐 Security hardening (before public traffic)
 
-_(append as identified)_
+- [ ] **Harden the generate-* edge functions with `has_permission()`.**
+  `generate-monthly-batch`, `generate-daily-verse` (and likely `propose-theme-verses`) are gated
+  by `verify_jwt` only — which the **public anon key** satisfies — so anyone can trigger dual-AI
+  generation = an **AI-spend / wallet-DoS** vector. Apply the same pattern as the review functions
+  (item 2): `auth.getUser()` + `has_permission()`, actor derived from the verified JWT; forward a
+  real staff JWT from the caller. Not revenue-blocking, but a live exposure the moment the site
+  sees traffic.
+
+## ✅ Resolved / verified — 2026-07-30 (unless noted)
+
+_These were previously listed as blockers; confirmed done against current state._
+
+- **Stripe live-mode config** — `sk_live_` in Vercel Prod; `pk_live_` bundle-verified as *served*;
+  live webhook endpoint `we_1TvfM4GZ9WDMHywotCPbht9W` (livemode, `invoice.paid` / `charge.refunded`
+  / `charge.dispute.created`); signature verified **both sides** (client POST 200 + Vercel runtime
+  log 200 on the current prod deploy). → **Supersedes** the old "webhook delivery broken / 0 endpoints"
+  and "wrong `sk_test` key (404)" blockers.
+- **`subscription_payments` ledger + reconcile/backfill cron** — table live (schema carries
+  `settled_amount/fee/net_cents` + original-currency), fed **real-time** by the webhook
+  (`capturePaidInvoice` → `upsertSubscriptionPayment`); daily reconcile cron live
+  (`/api/cron/reconcile-payments`). → **Supersedes** the old "no table" + "no backfill job" blockers.
+- **Self-signup disabled** — Supabase Auth `disable_signup = true`; staff onboard via invite (2026-07-30).
+- **Review edge-fn auth hardened** — the 5 `review-*` functions require a staff JWT + `has_permission()`,
+  verified both directions (anon → 401, authorized → succeeds) (2026-07-30, item 2).
+- **Full-batch content review UI** — `/admin/review/batch` shows every slot (incl. AI-`agreed`, which the
+  exceptions queue hid), with the canonical **KJV source** rendered next to Output A/B (2026-07-30).
+- **Spanish gated** — `SPANISH_ENABLED = false` hides Spanish at signup (language step + `?lang=es`) and on
+  the landing (toggle, RV1909 badge, transparency copy) until a reviewed Spanish batch exists (2026-07-30).
+
+## Tech debt / downstream (not blocking launch)
+
+- [ ] **IGY migration history drift** — local `supabase/migrations/` vs remote `schema_migrations`
+  are out of sync; **use MCP `apply_migration` for IGY DDL, NOT `supabase db push`** (db push is
+  unsafe here). Still true; `get_kjv_text_for_refs` RPC was added via `apply_migration` 2026-07-30.
+- [ ] **DEI holding-co rollup recompute** — recompute IGY MRR from `subscription_payments` once real
+  revenue lands (the original reason the ledger was a blocker; `igy_mirror_monthly_financials` in
+  `dei-financial` is built and waiting for `recomputed_mrr_cents`).
+- [ ] **Rejection "Reason" → category dropdown** — make rejection data queryable over time (awaiting a
+  real category list).

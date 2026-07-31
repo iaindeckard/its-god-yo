@@ -2,7 +2,9 @@ import "server-only";
 import { getSupabaseAdmin } from "./supabaseAdmin";
 import { createSubscriptionForPendingSignup } from "./createSubscription";
 import { createFamilyBaseSubscription, reconcileFamilyExtraTeens } from "./familyBilling";
-import { normalizePhone, classifyReply } from "./twilio";
+import { classifyReply } from "./twilio";
+import { toE164, phoneKey } from "./phone";
+import { cancelSubscriptionForSignup, cancelFamilyBaseIfNoActiveTeens } from "./cancelSubscription";
 
 /**
  * Core inbound-reply logic for the Twilio "YES" handler.
@@ -40,6 +42,19 @@ const REPLY = {
 
 type Lang = "en" | "es";
 
+// Post-YES, once a recipient is fully confirmed, we append a link to the teen
+// welcome page (Stage 2) so they can set their daily send time + timezone. The
+// welcome_token is the row's own unguessable handle; nothing else gates the page.
+const WELCOME_BASE = process.env.NEXT_PUBLIC_SITE_URL || "https://itsgodyo.com";
+function allSetReply(lang: Lang, welcomeToken: string | null): string {
+  const base = REPLY[lang].allSet;
+  if (!welcomeToken) return base;
+  const link = `${WELCOME_BASE}/welcome?c=${welcomeToken}`;
+  return lang === "es"
+    ? `${base} Elige tu hora diaria: ${link}`
+    : `${base} Pick your daily time: ${link}`;
+}
+
 export interface InboundResult {
   action:
     | "confirmed_created"
@@ -64,23 +79,87 @@ interface ConsentRow {
   language: string | null;
   consent_type: string | null;
   pending_signup_id: string | null;
+  welcome_token: string | null;
+}
+
+// A pending_signup with a live subscription (i.e. a CONFIRMED subscriber). Used
+// to gate the confirmed-subscriber STOP path below. Excludes 'awaiting_confirmation'
+// (still pending — handled by the pending path) and 'canceled' (already off).
+const ACTIVE_SIGNUP_STATUSES = ["subscription_created", "active"];
+
+interface ConfirmedMatch {
+  consentId: string;
+  consentType: string | null;
+  signupId: string;
+  language: string | null;
+}
+
+/**
+ * Find a CONFIRMED consent row for `from` that is tied to an ACTIVE pending_signup
+ * — i.e. a live subscriber (they are never in the pending_confirmation set). Match
+ * is scale-safe: a targeted exact `.eq` on the canonical E.164 form first, then a
+ * bounded phoneKey JS-scan fallback for any legacy rows stored non-E.164.
+ *
+ * SCALE FOLLOW-UP: add a normalized, indexed `phone_key` column (+ backfill) so the
+ * fallback scan can be dropped. Deferred per Iain — no column / no backfill now.
+ */
+async function findConfirmedActiveSubscriber(
+  admin: ReturnType<typeof getSupabaseAdmin>,
+  fromE164: string,
+  fromKey: string,
+): Promise<ConfirmedMatch | null> {
+  type Row = { id: string; recipient_phone: string; consent_type: string | null; pending_signup_id: string | null; language: string | null };
+
+  // Primary: targeted exact-match on canonical E.164 (indexable, cheap).
+  const { data: exact } = await admin
+    .from("consent_log")
+    .select("id, recipient_phone, consent_type, pending_signup_id, language")
+    .eq("recipient_phone", fromE164)
+    .eq("consent_status", "confirmed")
+    .limit(50);
+  let rows = (exact ?? []) as Row[];
+
+  // Fallback: bounded phoneKey scan for legacy non-E.164 rows only.
+  if (rows.length === 0) {
+    const { data: scan } = await admin
+      .from("consent_log")
+      .select("id, recipient_phone, consent_type, pending_signup_id, language")
+      .eq("consent_status", "confirmed")
+      .limit(1000);
+    rows = ((scan ?? []) as Row[]).filter((r) => phoneKey(r.recipient_phone) === fromKey);
+  }
+
+  for (const r of rows) {
+    if (!r.pending_signup_id) continue;
+    const { data: ps } = await admin
+      .from("pending_signups")
+      .select("id, status")
+      .eq("id", r.pending_signup_id)
+      .in("status", ACTIVE_SIGNUP_STATUSES)
+      .maybeSingle();
+    if (ps) return { consentId: r.id, consentType: r.consent_type, signupId: ps.id, language: r.language };
+  }
+  return null;
 }
 
 export async function processInboundReply(from: string, body: string): Promise<InboundResult> {
   const admin = getSupabaseAdmin();
   const intent = classifyReply(body);
-  const fromNorm = normalizePhone(from);
+  // Canonical E.164 for exact matching; phoneKey (digits-only last-10) for tolerant
+  // matching against legacy / prefix-divergent rows.
+  const fromE164 = toE164(from);
+  const fromKey = phoneKey(from);
 
   const { data: rows, error } = await admin
     .from("consent_log")
-    .select("id, recipient_phone, consent_status, language, consent_type, pending_signup_id")
+    .select("id, recipient_phone, consent_status, language, consent_type, pending_signup_id, welcome_token")
     .eq("consent_status", "pending_confirmation")
     .limit(500);
   if (error) throw new Error(`consent_lookup_failed: ${error.message}`);
 
-  const candidates = ((rows ?? []) as ConsentRow[]).filter((r) => normalizePhone(r.recipient_phone) === fromNorm);
+  const candidates = ((rows ?? []) as ConsentRow[]).filter((r) => phoneKey(r.recipient_phone) === fromKey);
 
-  let matched: { id: string; language: string | null } | null = null;
+  let matched: { id: string; language: string | null; welcome_token: string | null } | null = null;
   let signup: { id: string; teen_consent_id: string | null; plus_one_consent_id: string | null } | null = null;
   let familySignupId: string | null = null;
   let familyHasSub = false;
@@ -94,7 +173,7 @@ export async function processInboundReply(from: string, body: string): Promise<I
         .in("status", ["awaiting_confirmation", "subscription_created"])
         .maybeSingle();
       if (fs) {
-        matched = { id: c.id, language: c.language };
+        matched = { id: c.id, language: c.language, welcome_token: c.welcome_token };
         familySignupId = fs.id;
         familyHasSub = !!fs.stripe_subscription_id;
         break;
@@ -108,7 +187,7 @@ export async function processInboundReply(from: string, body: string): Promise<I
         .limit(1)
         .maybeSingle();
       if (s) {
-        matched = { id: c.id, language: c.language };
+        matched = { id: c.id, language: c.language, welcome_token: c.welcome_token };
         signup = s;
         break;
       }
@@ -121,10 +200,50 @@ export async function processInboundReply(from: string, body: string): Promise<I
 
   if (!matched || (!signup && !familySignupId)) {
     if (intent === "stop") {
-      await admin
+      // FIRST-CLASS confirmed-subscriber STOP. A confirmed, active subscriber is
+      // never in the pending_confirmation candidate set above, so historically
+      // their STOP fell here and only touched consent_log (via a RAW recipient_phone
+      // .eq) — never canceling Stripe or updating pending_signups. That let BILLING
+      // CONTINUE after opt-out. Now we cancel for real.
+      const confirmed = await findConfirmedActiveSubscriber(admin, fromE164, fromKey);
+      if (confirmed) {
+        const clang: Lang = confirmed.language === "es" ? "es" : "en";
+        const nowIso = new Date().toISOString();
+        // Opt this recipient's own consent row out (by id).
+        await admin
+          .from("consent_log")
+          .update({ consent_status: "opted_out", opted_out_at: nowIso, opt_out_method: "sms_stop", confirmation_reply_raw: body })
+          .eq("id", confirmed.consentId);
+
+        if (confirmed.consentType === "family_teen") {
+          // One teen opting out never cancels the whole family: drop THEIR $28
+          // extra-teen line, then cancel the base ONLY if no confirmed teen remains.
+          await reconcileFamilyExtraTeens(confirmed.signupId);
+          await cancelFamilyBaseIfNoActiveTeens(confirmed.signupId);
+        } else {
+          // Individual / gift: cancel the subscription outright.
+          await cancelSubscriptionForSignup(confirmed.signupId, "sms_stop");
+        }
+        return { action: "opted_out", reply: REPLY[clang].optedOut, pending_signup_id: confirmed.signupId };
+      }
+
+      // Defensive safety net: a STOP from a known-but-otherwise-unmatched phone
+      // still records opt-out. Matched by phoneKey (tolerant), NEVER a raw .eq, so
+      // legacy / prefix-divergent rows are still opted out.
+      const { data: knownRows } = await admin
         .from("consent_log")
-        .update({ consent_status: "opted_out", opted_out_at: new Date().toISOString(), opt_out_method: "sms_stop", confirmation_reply_raw: body })
-        .eq("recipient_phone", from);
+        .select("id, recipient_phone")
+        .neq("consent_status", "opted_out")
+        .limit(1000);
+      const optOutIds = ((knownRows ?? []) as Array<{ id: string; recipient_phone: string }>)
+        .filter((r) => phoneKey(r.recipient_phone) === fromKey)
+        .map((r) => r.id);
+      if (optOutIds.length) {
+        await admin
+          .from("consent_log")
+          .update({ consent_status: "opted_out", opted_out_at: new Date().toISOString(), opt_out_method: "sms_stop", confirmation_reply_raw: body })
+          .in("id", optOutIds);
+      }
       return { action: "opted_out", reply: REPLY.en.optedOut };
     }
     return { action: "not_found", reply: REPLY.en.notFound };
@@ -160,7 +279,7 @@ export async function processInboundReply(from: string, body: string): Promise<I
       subId = r.subscription_id;
     }
     await reconcileFamilyExtraTeens(familySignupId); // idempotent; picks up any already-elapsed extra teens
-    return { action: "confirmed_family", reply: REPLY[lang].allSet, pending_signup_id: familySignupId, subscription_id: subId };
+    return { action: "confirmed_family", reply: allSetReply(lang, matched.welcome_token), pending_signup_id: familySignupId, subscription_id: subId };
   }
 
   // ---------- Individual / gift / +1 (confirm-all) ----------
@@ -169,7 +288,7 @@ export async function processInboundReply(from: string, body: string): Promise<I
       .from("consent_log")
       .update({ consent_status: "opted_out", opted_out_at: new Date().toISOString(), opt_out_method: "sms_stop", confirmation_reply_received: true, confirmation_reply_at: new Date().toISOString(), confirmation_reply_raw: body })
       .eq("id", matched.id);
-    await admin.from("pending_signups").update({ status: "cancelled" }).eq("id", signup!.id);
+    await admin.from("pending_signups").update({ status: "canceled" }).eq("id", signup!.id);
     return { action: "opted_out", reply: REPLY[lang].optedOut, pending_signup_id: signup!.id };
   }
   if (intent !== "confirm") return { action: "unknown", reply: REPLY[lang].unknown };
@@ -187,8 +306,8 @@ export async function processInboundReply(from: string, body: string): Promise<I
 
   const result = await createSubscriptionForPendingSignup(signup!.id);
   if (result.status === "created")
-    return { action: "confirmed_created", reply: REPLY[lang].allSet, pending_signup_id: signup!.id, subscription_id: result.subscription_id };
+    return { action: "confirmed_created", reply: allSetReply(lang, matched.welcome_token), pending_signup_id: signup!.id, subscription_id: result.subscription_id };
   if (result.status === "already_created")
-    return { action: "already_created", reply: REPLY[lang].allSet, pending_signup_id: signup!.id, subscription_id: result.subscription_id };
+    return { action: "already_created", reply: allSetReply(lang, matched.welcome_token), pending_signup_id: signup!.id, subscription_id: result.subscription_id };
   return { action: "blocked", reply: REPLY[lang].waiting, pending_signup_id: signup!.id, detail: result.detail || result.status };
 }
