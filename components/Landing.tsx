@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Wordmark from "./Wordmark";
+import BubbleMark from "./BubbleMark";
 import SponsorRotator from "./SponsorRotator";
 import { PURCHASES_ENABLED, SPANISH_ENABLED } from "@/lib/flags";
 import s from "./landing.module.css";
@@ -19,7 +20,7 @@ const CONTENT: Record<Audience, {
   step2: string;
 }> = {
   parent: {
-    headline: "A daily verse,<br>texted the way<br>they&rsquo;d actually read it.",
+    headline: "A daily verse,<br>texted the way<br>they&rsquo;d actually <span class=\"hero-kw\">read it.</span>",
     subhead:
       "Send your teen scripture rendered as short casual messages that sound like a friend, not a lecture. One a day, in English.",
     cta: "Get started",
@@ -30,7 +31,7 @@ const CONTENT: Record<Audience, {
     step2: "The recipient gets a text and has to reply YES themselves. No card is charged until they do.",
   },
   teen: {
-    headline: "A daily verse,<br>texted the way<br>you&rsquo;d actually read it.",
+    headline: "A daily verse,<br>texted the way<br>you&rsquo;d actually <span class=\"hero-kw\">read it.</span>",
     subhead:
       "Scripture, rendered as short casual messages that sound like a friend, not a lecture. One a day, in English.",
     cta: "Show a parent",
@@ -145,6 +146,7 @@ export default function Landing() {
       </div>
 
       <section className={`${s.wrap} ${s.hero}`}>
+        <div className={s.dawn} aria-hidden="true" />
         <div>
           <div className={s.eyebrow}>FAITH THAT FITS IN A TEXT</div>
           <h1 dangerouslySetInnerHTML={{ __html: c!.headline }} />
@@ -184,18 +186,43 @@ export default function Landing() {
           )}
         </div>
 
-        <div className={s.smsCard}>
-          <div className={s.smsLabel}>Today &middot; Psalm 46:10</div>
-          <div className={s.smsBubble}>chill for a sec and just KNOW i&rsquo;m God, i got this. the whole world, all of it</div>
-          <button className={s.smsVerseLink} onClick={() => setShowVerse((v) => !v)} type="button" style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", padding: 0 }}>
-            {showVerse ? "Hide full verse" : "Read Psalm 46:10 in full"} &rarr;
-          </button>
-          {showVerse && (
-            <p style={{ fontSize: 13, color: "#a9bad6", lineHeight: 1.6, marginTop: 10 }}>
-              &ldquo;Be still, and know that I am God: I will be exalted among the heathen, I will be exalted in the earth.&rdquo;
-              <br /><span style={{ color: "#7686a0" }}>— Psalm 46:10, King James Version (public domain)</span>
-            </p>
-          )}
+        {/* The living thread — Read Receipts motif. Presentational: the sequence
+            plays once on mount via CSS animation (transform/opacity only) and is
+            fully stilled under prefers-reduced-motion. The "read full verse"
+            transparency toggle is preserved below the messages. */}
+        <div className={s.device}>
+          <div className={s.thread}>
+            <div className={s.threadHead}>
+              <BubbleMark size={38} className={s.avatar} title="It's God, Yo" />
+              <div>
+                <div className={s.threadName}>It&rsquo;s God, Yo</div>
+                <div className={s.threadDay}>Today &middot; Psalm 46:10</div>
+              </div>
+              <span className={s.threadLive}><span className={s.livePulse} aria-hidden="true" />DELIVERED</span>
+            </div>
+
+            <div className={`${s.msg} ${s.msgIn} ${s.m1}`}>
+              <div className={s.bubbleIn}>chill for a sec and just KNOW i&rsquo;m God, i got this. the whole world, all of it &#9728;&#65039;</div>
+            </div>
+            <div className={`${s.receipt} ${s.r1}`}>&#10003;&#10003; Read 7:02 AM</div>
+
+            <div className={`${s.msg} ${s.msgOut} ${s.m2}`}>
+              <div className={s.bubbleOut}>ok that actually hits &#128293;</div>
+            </div>
+
+            <div className={s.typing} aria-hidden="true"><span /><span /><span /></div>
+
+            <button className={s.smsVerseLink} onClick={() => setShowVerse((v) => !v)} type="button" style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", padding: 0 }}>
+              {showVerse ? "Hide full verse" : "Read Psalm 46:10 in full"} &rarr;
+            </button>
+            {showVerse && (
+              <p style={{ fontSize: 13, color: "#a9bad6", lineHeight: 1.6, marginTop: 10 }}>
+                &ldquo;Be still, and know that I am God: I will be exalted among the heathen, I will be exalted in the earth.&rdquo;
+                <br /><span style={{ color: "#7686a0" }}>— Psalm 46:10, King James Version (public domain)</span>
+              </p>
+            )}
+          </div>
+          <span className={s.threadTag}>One text a day. That&rsquo;s the whole thing.</span>
         </div>
       </section>
 
