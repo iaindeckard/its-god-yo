@@ -1,3 +1,5 @@
+import { toE164 } from "./phone";
+
 /**
  * Client helper that POSTs the finished signup to the `submit-consent` Edge
  * Function. That function has verify_jwt=true, so the browser must send a valid
@@ -72,12 +74,10 @@ export async function submitConsent(payload: ConsentPayload): Promise<ConsentRes
   return data as ConsentResult;
 }
 
-/** Light E.164 normalization: bare 10-digit US numbers get a +1. */
+/** Canonical E.164 normalization for storage/sending. Delegates to the shared
+ *  lib/phone.toE164 (single source of truth). Country is unknown at this client
+ *  call site, so bare 10-digit numbers default to +1; the submit-consent Edge
+ *  Function re-canonicalizes with each recipient's derived country. */
 export function normalizePhone(raw: string): string {
-  const trimmed = raw.trim();
-  const digits = trimmed.replace(/[^\d]/g, "");
-  if (trimmed.startsWith("+")) return trimmed;
-  if (digits.length === 10) return `+1${digits}`;
-  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
-  return trimmed;
+  return toE164(raw);
 }

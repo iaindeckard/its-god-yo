@@ -155,6 +155,22 @@ function parseCountryFromPhone(phone: string): string | null {
   return null;
 }
 
+// Canonical E.164 for STORAGE + SENDING. KEEP IN SYNC WITH lib/phone.ts toE164
+// (this is a Deno edge fn and cannot import the Next lib/). Idempotent. Bare
+// 10-digit numbers are prefixed by the recipient's derived country (MX -> +52,
+// else +1), so a Mexican number is no longer mis-stored as +1.
+function toE164(raw: string | null | undefined, country?: string | null): string {
+  const trimmed = (raw ?? "").trim();
+  if (trimmed.startsWith("+")) return "+" + trimmed.slice(1).replace(/[\s\-().]/g, "");
+  const digits = trimmed.replace(/\D/g, "");
+  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
+  if (digits.length === 10) {
+    const cc = country === "MX" ? "52" : "1";
+    return `+${cc}${digits}`;
+  }
+  return digits ? `+${digits}` : trimmed;
+}
+
 type GateDecision = "standard" | "enhanced" | "block";
 interface GateResult {
   decision: GateDecision;
@@ -227,9 +243,10 @@ Deno.serve(async (req: Request) => {
       const gate = evaluateAgeGate(teens[i].phone!.trim(), teens[i].birth_year as number, yr, thresholds);
       if (gate.decision === "block") return json(403, { error: "age_consent_blocked", who: `family_teens[${i}]`, country: gate.country, computed_age: gate.age, min_age: gate.minAge });
       if (gate.decision === "enhanced" && teens[i].enhanced_consent_ack !== true) return json(422, { error: "enhanced_consent_required", who: `family_teens[${i}]`, country: gate.country, threshold: gate.minAge });
+      const phoneE164 = toE164(teens[i].phone!.trim(), gate.country); // canonical form for storage + Twilio
       const sms = confirmationSms(lang, name, "primary");
       const { data: row, error: cErr } = await supa.from("consent_log").insert({
-        recipient_phone: teens[i].phone!.trim(), recipient_first_name: name, language: lang,
+        recipient_phone: phoneE164, recipient_first_name: name, language: lang,
         consent_type: "family_teen", teen_index: i + 1,
         attestation_text: ATTESTATION[lang](name), attestation_text_version: CONSENT_VERSION,
         disclosure_text: DISCLOSURE[lang](name), disclosure_text_version: CONSENT_VERSION,
@@ -238,7 +255,7 @@ Deno.serve(async (req: Request) => {
       }).select("id").single();
       if (cErr) return json(500, { error: "failed_to_write_family_consent", detail: cErr.message });
       consentIds.push(row.id);
-      stubs.push({ to: teens[i].phone!.trim(), body: sms, cid: row.id });
+      stubs.push({ to: phoneE164, body: sms, cid: row.id });
     }
     const { data: signup, error: sErr } = await supa.from("pending_signups").insert({
       language: lang, theme_track: p.theme_track?.trim() || "general", plan_key: "family", base_price_id: p.base_price_id, dm_addon: false,
@@ -358,10 +375,11 @@ Deno.serve(async (req: Request) => {
   const stubs: Array<{ kind: string; to: string; body: string }> = [];
 
   // 1) primary subscriber consent row (the teen)
+  const teenPhoneE164 = toE164(p.teen!.phone!.trim(), teenGate.country); // canonical for storage + Twilio
   const teenSms = confirmationSms(lang, teenName, "primary");
-  stubs.push({ kind: "primary", to: p.teen!.phone!.trim(), body: teenSms });
+  stubs.push({ kind: "primary", to: teenPhoneE164, body: teenSms });
   const { data: teenRow, error: teenErr } = await supa.from("consent_log").insert({
-    recipient_phone: p.teen!.phone!.trim(),
+    recipient_phone: teenPhoneE164,
     recipient_first_name: teenName,
     language: lang,
     consent_type: "primary_subscriber",
@@ -385,9 +403,10 @@ Deno.serve(async (req: Request) => {
     const poSms = confirmationSms(lang, poName, "plus_one", {
       honorific: po.gifter_honorific, first: po.gifter_first_name, relationship: po.gifter_relationship,
     });
-    stubs.push({ kind: "plus_one", to: po.recipient_phone!.trim(), body: poSms });
+    const poPhoneE164 = toE164(po.recipient_phone!.trim(), poGate!.country); // canonical for storage + Twilio
+    stubs.push({ kind: "plus_one", to: poPhoneE164, body: poSms });
     const { data: poRow, error: poErr } = await supa.from("consent_log").insert({
-      recipient_phone: po.recipient_phone!.trim(),
+      recipient_phone: poPhoneE164,
       recipient_first_name: po.recipient_first_name?.trim() || null,
       language: lang,
       consent_type: "plus_one_gift",
