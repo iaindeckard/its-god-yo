@@ -40,7 +40,7 @@ export const SPONSORS_ENABLED = false;
  * only gates the customer-facing intake. Default off until the program launches;
  * flip to true (same pattern as SPONSORS_ENABLED) to open enrollment.
  */
-export const CORNERSTONE_ENABLED = false;
+export const CORNERSTONE_ENABLED = true;
 
 /**
  * Master switch for the Stage 2 daily send (the /api/cron/daily-send tick).
