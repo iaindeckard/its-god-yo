@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { getActiveSponsors, type PublicSponsor } from "@/lib/sponsors";
+import { SPONSORS_ENABLED } from "@/lib/flags";
 import s from "./sponsors.module.css";
 
 export const metadata: Metadata = {
@@ -16,6 +18,9 @@ export const dynamic = "force-dynamic";
  * PLACEHOLDER pending final wording.
  */
 export default async function SponsorsPage() {
+  // Sponsor Program deprioritized 2026-08-01 — hidden from public view (see lib/flags).
+  if (!SPONSORS_ENABLED) notFound();
+
   let sponsors: PublicSponsor[] = [];
   try {
     sponsors = await getActiveSponsors();

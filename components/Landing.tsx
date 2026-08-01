@@ -4,7 +4,7 @@ import { useState } from "react";
 import Wordmark from "./Wordmark";
 import BubbleMark from "./BubbleMark";
 import SponsorRotator from "./SponsorRotator";
-import { PURCHASES_ENABLED, SPANISH_ENABLED } from "@/lib/flags";
+import { PURCHASES_ENABLED, SPANISH_ENABLED, SPONSORS_ENABLED, CORNERSTONE_ENABLED } from "@/lib/flags";
 import s from "./landing.module.css";
 
 type Audience = "parent" | "teen";
@@ -337,8 +337,9 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Sponsor rotator — renders only when there are active sponsors. */}
-      <SponsorRotator />
+      {/* Sponsor rotator — renders only when there are active sponsors AND the
+          Sponsor Program is enabled (deprioritized 2026-08-01, see lib/flags). */}
+      {SPONSORS_ENABLED && <SponsorRotator />}
 
       <footer className={s.footer}>
         <div className={`${s.wrap} ${s.footerRow}`}>
@@ -348,8 +349,13 @@ export default function Landing() {
             <a href="/terms">Terms</a>
             <a href="/cookies">Cookies</a>
             <a href="/its-okay-to-not-be-okay" className={s.gold}>It&rsquo;s okay to not be okay</a>
-            <a href="/sponsors">Sponsors</a>
-            <a href="/sponsor-inquiry">Interested in sponsoring?</a>
+            {(CORNERSTONE_ENABLED || PURCHASES_ENABLED) && <a href="/program-terms">Program Terms</a>}
+            {SPONSORS_ENABLED && (
+              <>
+                <a href="/sponsors">Sponsors</a>
+                <a href="/sponsor-inquiry">Interested in sponsoring?</a>
+              </>
+            )}
           </div>
         </div>
       </footer>
