@@ -4,7 +4,7 @@
 .page { background: #0B1830; color: #fff; min-height: 100vh; font-family: 'Poppins', system-ui, -apple-system, sans-serif; }
 .wrap { max-width: 1000px; margin: 0 auto; padding: 64px 24px; }
 .head { text-align: center; margin-bottom: 36px; }
-.eyebrow { color: #7ea8e0; font-weight: 700; font-size: 12px; letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 14px; }
+.eyebrow { color: #378ADD; font-weight: 700; font-size: 12px; letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 14px; }
 .headline { font-size: 34px; line-height: 1.12; font-weight: 700; margin-bottom: 12px; }
 .sub { color: #a9bad6; font-size: 15px; line-height: 1.6; max-width: 620px; margin: 0 auto; }
 
@@ -16,10 +16,10 @@
   border-radius: 10px; padding: 9px 12px; font-size: 14px; min-width: 150px;
 }
 .apply {
-  background: #00ABBC; color: #fff; border: none; border-radius: 10px;
+  background: #378ADD; color: #fff; border: none; border-radius: 10px;
   padding: 10px 18px; font-weight: 600; font-size: 14px; cursor: pointer;
 }
-.clear { color: #7ea8e0; text-decoration: none; font-size: 14px; padding: 10px 4px; align-self: center; }
+.clear { color: #378ADD; text-decoration: none; font-size: 14px; padding: 10px 4px; align-self: center; }
 .clear:hover { text-decoration: underline; }
 .count { text-align: center; color: #a9bad6; font-size: 13px; margin-bottom: 18px; }
 
@@ -35,9 +35,9 @@
 .name a:hover { text-decoration: underline; }
 .meta { color: #a9bad6; font-size: 13px; line-height: 1.5; }
 .badge { display: inline-flex; align-self: flex-start; margin-top: 4px; gap: 8px; align-items: center; }
-.num { color: #FFDC52; font-weight: 700; font-size: 14px; }
-.year { color: #7ea8e0; font-size: 13px; }
-.site { color: #00ABBC; font-size: 13px; text-decoration: none; margin-top: 2px; }
+.num { color: #378ADD; font-weight: 700; font-size: 14px; }
+.year { color: #378ADD; font-size: 13px; }
+.site { color: #378ADD; font-size: 13px; text-decoration: none; margin-top: 2px; }
 .site:hover { text-decoration: underline; }
 
 .empty { color: #a9bad6; font-size: 15px; text-align: center; margin: 40px 0; }
@@ -46,7 +46,7 @@
 .ctaTitle { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
 .ctaSub { color: #a9bad6; font-size: 14px; margin-bottom: 18px; }
 .ctaBtn {
-  display: inline-block; background: #FFDC52; color: #0B1830; text-decoration: none;
+  display: inline-block; background: #378ADD; color: #fff; text-decoration: none;
   border-radius: 10px; padding: 12px 22px; font-weight: 700; font-size: 15px;
 }
 

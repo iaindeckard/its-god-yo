@@ -6,7 +6,7 @@ import s from "./cornerstone-partners.module.css";
 
 export const metadata: Metadata = {
   title: "Cornerstone Partners — It's God, Yo!™",
-  description: "The churches recognized as Cornerstone Partners of It's God, Yo — founding supporters helping keep teenagers connected to Scripture.",
+  description: "The churches recognized as Cornerstone Partners of It's God, Yo. Founding supporters who help keep teenagers connected to Scripture.",
 };
 
 export const dynamic = "force-dynamic";
@@ -41,7 +41,7 @@ export default async function CornerstonePartnersPage({
           <h1 className={s.headline}>The churches who helped build this</h1>
           <p className={s.sub}>
             These churches joined during the founding stage of It&rsquo;s God, Yo! and are permanently recognized as
-            Cornerstone Partners &mdash; helping keep teenagers connected to Scripture between Sundays.
+            Cornerstone Partners, helping keep teenagers connected to Scripture between Sundays.
           </p>
         </div>
 
