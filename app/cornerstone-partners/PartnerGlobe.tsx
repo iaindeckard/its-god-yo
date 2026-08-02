@@ -84,18 +84,30 @@ export default function PartnerGlobe({ points }: { points: GlobePoint[] }) {
         // (~180ms) so a single-frame raycast miss at the point's edge can't restart the
         // rotation mid-hover — the tooltip stays reliably attached without the user
         // chasing a moving target.
+        const paint = () => world
+          .pointColor((d: object) => colorFor(d, hovered))
+          .pointRadius((d: object) => radiusFor(d, hovered)); // refresh colors + sizes
         world.onPointHover((pt: object | null, coords?: unknown) => {
-          hovered = (pt as GlobePoint) ?? null;
-          if (hovered) {
+          const next = (pt as GlobePoint) ?? null;
+          if (next) {
+            // Entering / staying on a point: hold rotation and the tooltip immediately.
             if (resumeTimer) { clearTimeout(resumeTimer); resumeTimer = null; }
+            hovered = next;
             controls.autoRotate = false;
+            paint();
+            setHover(next);
           } else if (!resumeTimer) {
-            resumeTimer = setTimeout(() => { controls.autoRotate = true; resumeTimer = null; }, 180);
+            // Leaving a point: debounce the clear so a single-frame raycast miss at the
+            // point's edge doesn't drop the tooltip or restart rotation mid-hover. Both
+            // the tooltip and auto-rotation resume together after a genuine hover-out.
+            resumeTimer = setTimeout(() => {
+              resumeTimer = null;
+              hovered = null;
+              controls.autoRotate = true;
+              paint();
+              setHover(null);
+            }, 180);
           }
-          world
-            .pointColor((d: object) => colorFor(d, hovered))
-            .pointRadius((d: object) => radiusFor(d, hovered)); // refresh colors + sizes
-          setHover(hovered);
           void coords;
         });
 
