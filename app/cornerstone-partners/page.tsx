@@ -77,8 +77,8 @@ export default async function CornerstonePartnersPage({
           </form>
         )}
 
-        {/* The globe — visual centerpiece. The flat list below is always present as
-            the fallback (devices/connections where a 3D globe doesn't render). */}
+        {/* The globe is the visual centerpiece. The flat list below is always present
+            as the fallback (devices/connections where a 3D globe doesn't render). */}
         <PartnerGlobe points={points} />
 
         {all.length === 0 ? (
