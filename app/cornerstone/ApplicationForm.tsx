@@ -104,6 +104,7 @@ export default function ApplicationForm() {
         <div className="field">
           <label>Address</label>
           <input value={f.address} onChange={(e) => set("address", e.target.value)} placeholder="123 Main St" />
+          <p className="hint">Used only to show your church&rsquo;s approximate location on our public partner map — never sold, never used to mail you.</p>
         </div>
         <div className="row">
           <div className="field"><label>City</label><input value={f.city} onChange={(e) => set("city", e.target.value)} /></div>

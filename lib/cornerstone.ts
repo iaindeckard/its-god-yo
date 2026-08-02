@@ -1,6 +1,7 @@
 import "server-only";
 import crypto from "crypto";
 import { getSupabaseAdmin } from "./supabaseAdmin";
+import { geocodeAddress, countryCentroid } from "./geocode";
 import {
   sendCornerstoneEmail,
   applicationReceivedEmail, applicationApprovedEmail, applicationDeclinedEmail,
@@ -251,6 +252,24 @@ export async function submitApplication(input: ApplicationInput): Promise<{ appl
     .single();
   if (aErr) throw new Error(`application_insert_failed: ${aErr.message}`);
 
+  // Geocode the church address for the partner map — best-effort, at intake, once
+  // per applicant regardless of approval outcome. A failure NEVER fails the
+  // submission: we log, leave lat/lng null, and the globe falls back to a
+  // country-level position for that church.
+  try {
+    const coord = await geocodeAddress({
+      address: input.church.address, city: input.church.city, state: input.church.state_province,
+      postalCode: input.church.postal_code, country: input.church.country,
+    });
+    if (coord) {
+      await admin.from("churches")
+        .update({ latitude: coord.lat, longitude: coord.lng, geocoded_at: new Date().toISOString() })
+        .eq("id", church.id);
+    }
+  } catch (e) {
+    console.error(`[cornerstone] geocode failed for church ${church.id}:`, e instanceof Error ? e.message : e);
+  }
+
   // #1 Application received — best-effort, never blocks the submission.
   await sendCornerstoneEmail(input.contact_email?.trim() || null, applicationReceivedEmail(input.church.name.trim()));
 
@@ -485,6 +504,49 @@ export interface PublicDirectoryEntry {
   website: string | null;
   logoUrl: string | null; // only when the church authorized logo display
   yearJoined: number;
+  latitude: number | null;  // church's public geocoded location (or null)
+  longitude: number | null;
+}
+
+/** A single plottable globe point — SAFE fields only (identical to the flat list),
+ *  plus resolved coordinates. `approx` = plotted at a country centroid because the
+ *  church itself couldn't be geocoded. NEVER carries contact info, street address,
+ *  youth-group size, or any private field. */
+export interface GlobePoint {
+  partnerNumber: number;
+  churchName: string;
+  city: string | null;
+  stateProvince: string | null;
+  country: string | null;
+  yearJoined: number;
+  lat: number;
+  lng: number;
+  approx: boolean;
+}
+
+/**
+ * Build the globe points from directory entries. Uses the church's real
+ * coordinates when geocoded; otherwise falls back to a country-level centroid
+ * (approx=true) rather than dropping the church. An entry with neither coordinates
+ * nor a known country is omitted from the globe (it still shows in the flat list).
+ * Returns SAFE fields only — nothing here that isn't already in the flat list.
+ */
+export function toGlobePoints(entries: PublicDirectoryEntry[]): GlobePoint[] {
+  const out: GlobePoint[] = [];
+  for (const e of entries) {
+    let lat = e.latitude, lng = e.longitude, approx = false;
+    if (lat == null || lng == null) {
+      const c = countryCentroid(e.country);
+      if (!c) continue; // can't place it — flat list still lists it
+      lat = c.lat; lng = c.lng; approx = true;
+    }
+    out.push({
+      partnerNumber: e.partnerNumber, churchName: e.churchName, city: e.city,
+      stateProvince: e.stateProvince, country: e.country, yearJoined: e.yearJoined,
+      lat, lng, approx,
+    });
+  }
+  return out;
 }
 
 export interface DirectoryFilters {
@@ -503,14 +565,14 @@ export async function listPublicCornerstonePartners(): Promise<PublicDirectoryEn
   const admin = getSupabaseAdmin();
   const { data, error } = await admin
     .from("cornerstone_partners")
-    .select("partner_number, recognition_date, church:churches(name, city, state_province, country, website, logo_url, logo_display_opt_in)")
+    .select("partner_number, recognition_date, church:churches(name, city, state_province, country, website, logo_url, logo_display_opt_in, latitude, longitude)")
     .eq("public_listing_status", "listed")
     .neq("cornerstone_status", "revoked")
     .order("partner_number", { ascending: true });
   if (error) throw new Error(`cornerstone_directory_query_failed: ${error.message}`);
   const rows = (data ?? []) as unknown as {
     partner_number: number; recognition_date: string;
-    church: { name: string; city: string | null; state_province: string | null; country: string | null; website: string | null; logo_url: string | null; logo_display_opt_in: boolean } | null;
+    church: { name: string; city: string | null; state_province: string | null; country: string | null; website: string | null; logo_url: string | null; logo_display_opt_in: boolean; latitude: number | null; longitude: number | null } | null;
   }[];
   return rows.map((r) => ({
     partnerNumber: r.partner_number,
@@ -521,6 +583,8 @@ export async function listPublicCornerstonePartners(): Promise<PublicDirectoryEn
     website: r.church?.website ?? null,
     logoUrl: r.church?.logo_display_opt_in && r.church?.logo_url ? r.church.logo_url : null,
     yearJoined: Number(r.recognition_date.slice(0, 4)),
+    latitude: r.church?.latitude ?? null,
+    longitude: r.church?.longitude ?? null,
   }));
 }
 
