@@ -4,6 +4,7 @@ import { getStripe } from "./stripe";
 import { getSupabaseAdmin } from "./supabaseAdmin";
 import { PLANS, FAMILY_EXTRA_TEEN, FAMILY_BASE_TEENS } from "./plans";
 import { promoAttestationSatisfied } from "./promoCodes";
+import { reconcileDmAddon } from "./dmAddon";
 
 /**
  * Family multi-teen billing. Model (all decisions locked 2026-07-21, verified via
@@ -68,8 +69,10 @@ export async function createFamilyBaseSubscription(pendingSignupId: string): Pro
  * Reconcile the extra-teen quantity for one Family purchase. Idempotent — safe to
  * call on every teen confirmation AND on the scheduled trial-end job. Sets the
  * extra-teen line quantity to max(0, billableConfirmedTeens - FAMILY_BASE_TEENS),
- * where "billable" = confirmed AND past their 7-day trial. Any increase is
- * invoiced immediately, prorated for the remaining cycle.
+ * where "billable" = confirmed AND past their 7-day trial. An increase is invoiced
+ * immediately (prorated for the remaining cycle); a decrease/removal issues NO
+ * credit for unused capacity already paid (parity with DM from Him's no-refund
+ * policy, greenlit 2026-08-01).
  */
 export async function reconcileFamilyExtraTeens(pendingSignupId: string): Promise<{ target: number; changed: boolean }> {
   const admin = getSupabaseAdmin();
@@ -103,10 +106,20 @@ export async function reconcileFamilyExtraTeens(pendingSignupId: string): Promis
   const sub = await stripe.subscriptions.retrieve(ps.stripe_subscription_id);
   const extraItem = sub.items.data.find((i) => i.price.id === FAMILY_EXTRA_TEEN.price_id);
   const current = extraItem?.quantity ?? 0;
-  if (target === current) return { target, changed: false };
+  if (target === current) {
+    // Extra-teen count unchanged, but a teen's trial elapsing or an opt-out can
+    // still change the DM billable count — keep the DM quantity in sync too.
+    await syncDm(pendingSignupId);
+    return { target, changed: false };
+  }
 
+  // Direction-aware proration (greenlit 2026-08-01, for parity with DM from Him's
+  // no-refund policy): a teen being ADDED charges the prorated amount now
+  // (always_invoice); a teen being REMOVED issues NO credit for the unused
+  // capacity already paid (proration_behavior 'none').
   if (!extraItem) {
     if (target > 0) {
+      // First extra teen(s) → charge the prorated amount now.
       await stripe.subscriptionItems.create({
         subscription: sub.id,
         price: FAMILY_EXTRA_TEEN.price_id,
@@ -114,12 +127,31 @@ export async function reconcileFamilyExtraTeens(pendingSignupId: string): Promis
         proration_behavior: "always_invoice",
       });
     }
-  } else if (target > 0) {
+  } else if (target > current) {
+    // More extra teens → charge the prorated increase now.
     await stripe.subscriptionItems.update(extraItem.id, { quantity: target, proration_behavior: "always_invoice" });
+  } else if (target > 0) {
+    // Fewer extra teens (a teen removed) → NO credit for unused capacity.
+    await stripe.subscriptionItems.update(extraItem.id, { quantity: target, proration_behavior: "none" });
   } else {
-    await stripe.subscriptionItems.del(extraItem.id, { proration_behavior: "always_invoice" });
+    // Down to zero extras → remove the line, NO credit.
+    await stripe.subscriptionItems.del(extraItem.id, { proration_behavior: "none" });
   }
+
+  // DM from Him quantity tracks the family's teen count (when DM is on). Hooked
+  // into the SAME add/remove flow rather than a separate mechanism. Best-effort —
+  // a DM sync failure must never break the core extra-teen billing.
+  await syncDm(pendingSignupId);
   return { target, changed: true };
+}
+
+/** Best-effort DM add-on quantity sync (never throws into the extra-teen path). */
+async function syncDm(pendingSignupId: string): Promise<void> {
+  try {
+    await reconcileDmAddon(pendingSignupId);
+  } catch (e) {
+    console.error("[familyBilling] DM reconcile failed", pendingSignupId, e instanceof Error ? e.message : e);
+  }
 }
 
 /** Cron entry point: reconcile every active Family purchase (picks up teens

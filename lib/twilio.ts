@@ -36,12 +36,17 @@ export function verifyTwilioSignature(
  *  stored/sent numbers must be canonical E.164 (lib/phone.toE164). */
 export const normalizePhone = phoneKey;
 
-export type ReplyIntent = "confirm" | "stop" | "help" | "unknown";
+export type ReplyIntent = "confirm" | "stop" | "help" | "dm_on" | "dm_off" | "unknown";
 
 /** Classify an inbound SMS body. Carrier/Twilio Advanced Opt-Out may intercept
  *  STOP/HELP before we ever see them; we still handle them defensively. */
 export function classifyReply(body: string): ReplyIntent {
   const t = body.trim().toUpperCase().replace(/[.!¡¿?]/g, "");
+  const c = t.replace(/\s+/g, " "); // whitespace-collapsed, for the two-word DM commands
+  // DM from Him add-on toggle — checked first (exact strings, no overlap with the
+  // base commands: "DM OFF" is not "STOP", "DM ON" is not "YES").
+  if (["DM ON", "DMON"].includes(c)) return "dm_on";
+  if (["DM OFF", "DMOFF"].includes(c)) return "dm_off";
   if (["YES", "Y", "YEAH", "YEP", "SI", "SÍ", "SI!", "START", "UNSTOP"].includes(t)) return "confirm";
   if (["STOP", "STOPALL", "UNSUBSCRIBE", "CANCEL", "END", "QUIT", "REVOKE", "OPTOUT", "NO"].includes(t)) return "stop";
   if (["HELP", "INFO", "AYUDA"].includes(t)) return "help";

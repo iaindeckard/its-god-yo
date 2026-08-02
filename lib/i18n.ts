@@ -48,7 +48,7 @@ export const t = {
     // pricing
     pricingEyebrow: "Pricing",
     pricingTitle: "Simple plans, honest prices",
-    pricingSub: "Billing only starts after the recipient confirms by text. Add “DM from Him” to any plan for +$1.99/mo.",
+    pricingSub: "Billing only starts after the recipient confirms by text. Add “DM from Him” to any plan for +$2.99/mo.",
     perMonth: "/mo",
     perYear: "/yr",
     perTeenYear: "/teen · yr",
@@ -65,7 +65,7 @@ export const t = {
     from: "from",
     choosePlan: "Choose plan",
     dmAddonName: "DM from Him add-on",
-    dmAddonDesc: "A personal invite text from whoever gifted it — +$1.99/mo.",
+    dmAddonDesc: "Your teen’s same daily verse, wrapped in a personal, first-person note — like a text straight from Him. +$2.99/mo.",
     // footer
     footerTagline: "God's Word in your words.",
     footerRights: "All rights reserved.",
@@ -102,10 +102,10 @@ export const t = {
     enhancedTodo: "Pending: the exact verification method is being confirmed with our legal team. This shell collects intent only; it does not yet perform verified consent.",
     enhancedAck: "I understand additional consent verification will be required before this can activate.",
 
-    wPlusOneTitle: "Add a “DM from Him”?",
+    wPlusOneTitle: "Add “DM from Him”?",
     wPlusOneSub:
-      "Gift a second person a daily verse too — with a personal invite text from you. +$1.99/mo.",
-    addPlusOne: "Yes, add a +1",
+      "Same daily verse — rewrapped as a personal, first-person note, like a text straight from Him. +$2.99/mo.",
+    addPlusOne: "Yes, add DM from Him",
     noThanks: "No thanks",
     fromWho: "Who's it from?",
     honorificLabel: "Title (optional)",
@@ -180,7 +180,7 @@ export const t = {
     how3Body: "Cada mañana, un versículo en palabras que de verdad llegan.",
     pricingEyebrow: "Precios",
     pricingTitle: "Planes simples, precios honestos",
-    pricingSub: "El cobro empieza solo después de que la persona confirme por texto. Agrega “DM de Él” a cualquier plan por +$1.99/mes.",
+    pricingSub: "El cobro empieza solo después de que la persona confirme por texto. Agrega “DM de Él” a cualquier plan por +$2.99/mes.",
     perMonth: "/mes",
     perYear: "/año",
     perTeenYear: "/chavo · año",
@@ -197,7 +197,7 @@ export const t = {
     from: "desde",
     choosePlan: "Elegir plan",
     dmAddonName: "Complemento “DM de Él”",
-    dmAddonDesc: "Un texto de invitación personal de quien lo regaló — +$1.99/mes.",
+    dmAddonDesc: "El mismo versículo diario, envuelto en una nota personal en primera persona — como un texto de parte de Él. +$2.99/mes.",
     footerTagline: "La Palabra de Dios en tus palabras.",
     footerRights: "Todos los derechos reservados.",
 
@@ -232,10 +232,10 @@ export const t = {
     enhancedTodo: "Pendiente: el método exacto de verificación se está confirmando con nuestro equipo legal. Este formulario solo registra la intención; todavía no realiza el consentimiento verificado.",
     enhancedAck: "Entiendo que se requerirá verificación de consentimiento adicional antes de activar esto.",
 
-    wPlusOneTitle: "¿Agregar un “DM de Él”?",
+    wPlusOneTitle: "¿Agregar “DM de Él”?",
     wPlusOneSub:
-      "Regálale un versículo diario a una segunda persona — con un texto de invitación personal tuyo. +$1.99/mes.",
-    addPlusOne: "Sí, agregar un +1",
+      "El mismo versículo diario — envuelto como una nota personal en primera persona, como un texto de parte de Él. +$2.99/mes.",
+    addPlusOne: "Sí, agregar DM de Él",
     noThanks: "No, gracias",
     fromWho: "¿De parte de quién?",
     honorificLabel: "Título (opcional)",

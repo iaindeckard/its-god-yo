@@ -38,17 +38,9 @@ export interface ConsentPayload {
   purchaser_timezone?: string | null;
   teen?: { first_name: string; phone: string; birth_year?: number; enhanced_consent_ack?: boolean };
   family_teens?: Array<{ first_name: string; phone: string; birth_year?: number; enhanced_consent_ack?: boolean }>;
-  plus_one?: {
-    gifter_first_name?: string;
-    gifter_last_name?: string;
-    gifter_honorific?: string;
-    gifter_relationship?: string;
-    recipient_first_name?: string;
-    recipient_phone?: string;
-    recipient_birth_year?: number;
-    attestation_confirmed?: boolean;
-    enhanced_consent_ack?: boolean;
-  } | null;
+  // NOTE: the former `plus_one` (second-recipient) input was removed 2026-08-01 when
+  // DM from Him was redefined as a single-subscriber add-on that wraps the SAME
+  // recipient's daily verse (no second person). `dm_addon` above is the toggle now.
   stripe?: { customer_id?: string; setup_intent_id?: string; payment_method_id?: string };
 }
 

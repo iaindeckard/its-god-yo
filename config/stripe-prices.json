@@ -13,7 +13,8 @@
       "group_1_50":          { "price_id": "price_1TvfM0GZ9WDMHywoGY7AnnTU", "amount_usd": 28.00, "interval": "year",  "lookup_key": "igy_group_1_50",   "per": "teen" },
       "group_51_150":        { "price_id": "price_1TvfM1GZ9WDMHywoFuQyW2X8", "amount_usd": 32.00, "interval": "year",  "lookup_key": "igy_group_51_150", "per": "teen" },
       "group_151_300":       { "price_id": "price_1TvfM1GZ9WDMHywoXpTFTFrI", "amount_usd": 36.00, "interval": "year",  "lookup_key": "igy_group_151_300","per": "teen" },
-      "dm_addon_monthly":    { "price_id": "price_1TvfM1GZ9WDMHywoXcIddFVk", "amount_usd": 1.99,  "interval": "month", "lookup_key": "igy_dm_addon_monthly" }
+      "dm_addon_monthly":    { "price_id": "price_1TzmqjGZ9WDMHywot5MQB1D4", "amount_usd": 2.99,  "interval": "month", "lookup_key": "igy_dm_addon_monthly", "note": "raised $1.99->$2.99 2026-08-01; old price_1TvfM1... deactivated" },
+      "dm_addon_annual":     { "price_id": "price_1TznctGZ9WDMHywoTzCElUGm", "amount_usd": 35.88, "interval": "year",  "lookup_key": "igy_dm_addon_annual", "note": "12x$2.99; interval-matched to annual base plans (family/individual_annual/gift/group), added 2026-08-01" }
     },
     "products": {
       "individual": "prod_UvWOctWmwkDkRc",
@@ -39,7 +40,8 @@
       "group_1_50":          { "price_id": "price_1TyZ73GZ9WDMHywogZQdnkmZ", "amount_usd": 28.00, "interval": "year",  "lookup_key": "igy_group_1_50" },
       "group_51_150":        { "price_id": "price_1TyZ74GZ9WDMHywo21eIjfeR", "amount_usd": 32.00, "interval": "year",  "lookup_key": "igy_group_51_150" },
       "group_151_300":       { "price_id": "price_1TyZ74GZ9WDMHywotms9j27k", "amount_usd": 36.00, "interval": "year",  "lookup_key": "igy_group_151_300" },
-      "dm_addon_monthly":    { "price_id": "price_1TyZ75GZ9WDMHywoyPZvBfNz", "amount_usd": 1.99,  "interval": "month", "lookup_key": "igy_dm_addon_monthly" }
+      "dm_addon_monthly":    { "price_id": "price_1TzmrJGZ9WDMHywotvlZCNIK", "amount_usd": 2.99,  "interval": "month", "lookup_key": "igy_dm_addon_monthly", "note": "raised $1.99->$2.99 2026-08-01; old price_1TyZ75... deactivated" },
+      "dm_addon_annual":     { "price_id": "price_1Tznd8GZ9WDMHywo5TGChJIJ", "amount_usd": 35.88, "interval": "year",  "lookup_key": "igy_dm_addon_annual", "note": "12x$2.99; interval-matched to annual base plans, added 2026-08-01" }
     },
     "products": {
       "individual": "prod_UyW9DH2Hc0S3m8",

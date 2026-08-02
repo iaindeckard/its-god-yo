@@ -5,6 +5,7 @@ import { createFamilyBaseSubscription, reconcileFamilyExtraTeens } from "./famil
 import { classifyReply } from "./twilio";
 import { toE164, phoneKey } from "./phone";
 import { cancelSubscriptionForSignup, cancelFamilyBaseIfNoActiveTeens } from "./cancelSubscription";
+import { setDmAddon } from "./dmAddon";
 
 /**
  * Core inbound-reply logic for the Twilio "YES" handler.
@@ -26,9 +27,11 @@ const REPLY = {
     allSet: "You're all set! You'll start getting daily Good News from It's God, Yo! 🙏",
     waiting: "Thanks — you're confirmed! We're just waiting on one more person before this starts.",
     optedOut: "You've been unsubscribed and won't receive messages. Reply START to opt back in.",
-    help: "It's God, Yo! sends daily encouragement texts. Reply YES to confirm, STOP to cancel. Msg & data rates may apply.",
+    help: "It's God, Yo! sends daily encouragement texts. Reply YES to confirm, STOP to cancel. Add or remove DM from Him with DM ON / DM OFF. Msg & data rates may apply.",
     notFound: "We couldn't find a pending confirmation for this number. If you signed up recently, please try again.",
     unknown: "Reply YES to confirm your daily texts from It's God, Yo!, or STOP to opt out.",
+    dmOn: "DM from Him is on 💛 Your daily verse will come as a personal note. Reply DM OFF anytime to turn it off.",
+    dmOff: "DM from Him is off — you'll get your daily verse as usual. Reply DM ON anytime to turn it back on.",
   },
   es: {
     allSet: "¡Todo listo! Empezarás a recibir Buenas Nuevas diarias de It's God, Yo! 🙏",
@@ -37,6 +40,8 @@ const REPLY = {
     help: "It's God, Yo! envía textos diarios de ánimo. Responde SÍ para confirmar, STOP para cancelar.",
     notFound: "No encontramos una confirmación pendiente para este número. Si te registraste hace poco, inténtalo de nuevo.",
     unknown: "Responde SÍ para confirmar tus textos diarios de It's God, Yo!, o STOP para cancelar.",
+    dmOn: "DM de Él está activado 💛 Tu versículo diario llegará como una nota personal. Responde DM OFF para desactivarlo.",
+    dmOff: "DM de Él está desactivado — recibirás tu versículo diario como siempre. Responde DM ON para reactivarlo.",
   },
 } as const;
 
@@ -65,6 +70,8 @@ export interface InboundResult {
     | "not_found"
     | "help"
     | "unknown"
+    | "dm_on"
+    | "dm_off"
     | "blocked";
   reply: string;
   pending_signup_id?: string;
@@ -197,6 +204,20 @@ export async function processInboundReply(from: string, body: string): Promise<I
   const lang: Lang = matched?.language === "es" ? "es" : "en";
 
   if (intent === "help") return { action: "help", reply: REPLY[lang].help };
+
+  // ---------- DM from Him add-on toggle (DM ON / DM OFF) ----------
+  // Toggles ONLY the add-on — never the base subscription (STOP does that). Works
+  // for a confirmed active subscriber OR a still-pending signup (flag applied when
+  // their subscription is later created).
+  if (intent === "dm_on" || intent === "dm_off") {
+    const on = intent === "dm_on";
+    const confirmed = await findConfirmedActiveSubscriber(admin, fromE164, fromKey);
+    const targetSignupId = confirmed?.signupId ?? signup?.id ?? familySignupId ?? null;
+    const dlang: Lang = (confirmed?.language ?? matched?.language) === "es" ? "es" : "en";
+    if (!targetSignupId) return { action: "not_found", reply: REPLY[dlang].notFound };
+    await setDmAddon(targetSignupId, on);
+    return { action: on ? "dm_on" : "dm_off", reply: on ? REPLY[dlang].dmOn : REPLY[dlang].dmOff, pending_signup_id: targetSignupId };
+  }
 
   if (!matched || (!signup && !familySignupId)) {
     if (intent === "stop") {

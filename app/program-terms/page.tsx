@@ -109,23 +109,23 @@ export default function ProgramTermsPage() {
 
       <h3>2.1 What it is</h3>
       <p>
-        &ldquo;DM from Him&rdquo; is an optional paid add-on that a purchaser may add to any It&rsquo;s God, Yo! subscription plan at signup.
+        &ldquo;DM from Him&rdquo; is an optional paid add-on that a purchaser may add to any It&rsquo;s God, Yo! subscription. It is <strong>not</strong> a second, separately-selected message and does not send different or additional content. It takes the <strong>same</strong> daily verse the recipient already receives and re-frames it as a personal, first-person note &mdash; the feel of a text written directly to the recipient rather than a citation. The underlying Scripture selected for that day is unchanged; only the wording and framing of the message differ.
       </p>
-      <div className={s.ph}>
-        <span className={s.tag}>Pending &mdash; product definition unresolved</span>
-        The exact content and delivery of the DM from Him add-on &mdash; specifically whether it augments/wraps the recipient&rsquo;s existing daily verse or delivers separate, additional messages, and the nature and cadence of that content &mdash; has not yet been finalized internally and is intentionally not described here. This section must be completed with the confirmed product definition before these terms are treated as final.
-      </div>
 
       <h3>2.2 Pricing and billing</h3>
       <p>
-        The DM from Him add-on is billed at <strong>$1.99 per month</strong>. It is always billed as its own separate monthly line item, independent of the base subscription plan it is added to. As with all IGY subscriptions, no charge occurs until the recipient personally confirms by text; the add-on is then billed as part of the resulting subscription. Current pricing is shown at signup and may change on a going-forward basis; a change will not retroactively affect an active subscription&rsquo;s current billing period.
+        The DM from Him add-on is billed at <strong>$2.99 per month</strong>. It is always billed as its own separate monthly line item, independent of the base subscription plan it is added to. As with all IGY subscriptions, no charge occurs until the recipient personally confirms by text; the add-on is then billed as part of the resulting subscription. Current pricing is shown at signup and may change on a going-forward basis; a change will not retroactively affect an active subscription&rsquo;s current billing period.
       </p>
 
-      <h3>2.3 Adding, removing, and cancelling</h3>
-      <div className={s.ph}>
-        <span className={s.tag}>Pending &mdash; add-on lifecycle unresolved</span>
-        Whether the DM from Him add-on can be added or removed mid-subscription (and any proration on doing so), how cancelling the add-on alone works versus cancelling the whole subscription, and how the add-on interacts with the base plan&rsquo;s trial and opt-out (STOP) behavior are not yet finalized. Confirm the intended add-on lifecycle before finalizing.
-      </div>
+      <h3>2.3 Trial, adding, removing, and cancelling</h3>
+      <p>
+        The add-on shares the base subscription&rsquo;s single free-trial period &mdash; there is no separate trial for the add-on, and no charge for it occurs until the base subscription&rsquo;s trial ends. Because It&rsquo;s God, Yo! has no separate account login, the add-on is managed by text message:
+      </p>
+      <ul>
+        <li>The add-on can be turned on at signup, or added or removed later at any time by texting <strong>DM ON</strong> or <strong>DM OFF</strong> to the daily-message number. This changes only the add-on and does not affect the base subscription.</li>
+        <li>Turning the add-on on or off mid-cycle may be reflected as a proration on the next invoice for the affected monthly period.</li>
+        <li>Replying <strong>STOP</strong> cancels the <strong>entire</strong> subscription &mdash; the base plan and the DM from Him add-on together. There is no way to cancel only the base plan while keeping the add-on; use DM OFF to remove just the add-on.</li>
+      </ul>
 
       {/*
         SPONSOR PROGRAM TERMS — intentionally omitted. The Sponsor Program is paused

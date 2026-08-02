@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from "./supabaseAdmin";
 import { DAILY_SEND_ENABLED, SPANISH_ENABLED } from "./flags";
 import { smsCostCents, TWILIO_US_SEGMENT_PRICE_CENTS, TWILIO_US_TOLLFREE_CARRIER_FEE_CENTS } from "./costs";
 import { evaluateDue } from "./sendTiming";
+import { composeDailyMessage } from "./dmAddon";
 
 /**
  * Stage 2 daily-send tick (spec: docs/STAGE-2-SEND-MECHANISM-SPEC.md). Invoked
@@ -93,6 +94,16 @@ export async function runDailySend(opts: { dryRun?: boolean } = {}): Promise<Dai
   const rows = (audience ?? []) as AudienceRow[];
   summary.checked = rows.length;
 
+  // Which subscribers have the DM from Him add-on on — resolved from their
+  // pending_signup. Opted-in recipients get the same verse re-wrapped in
+  // first-person framing (composeDailyMessage); everyone else gets it as-is.
+  const dmBySignup = new Map<string, boolean>();
+  const signupIds = [...new Set(rows.map((r) => r.pending_signup_id).filter(Boolean))];
+  if (signupIds.length) {
+    const { data: dmRows } = await admin.from("pending_signups").select("id, dm_addon").in("id", signupIds);
+    for (const d of (dmRows ?? []) as Array<{ id: string; dm_addon: boolean | null }>) dmBySignup.set(d.id, !!d.dm_addon);
+  }
+
   // Per-run cache of the approved slot for a (localDate, track).
   const slotCache = new Map<string, { id: string; en: string | null; es: string | null } | null>();
   async function loadSlot(dateStr: string, track: string) {
@@ -130,10 +141,15 @@ export async function runDailySend(opts: { dryRun?: boolean } = {}): Promise<Dai
       else text = slot.en;
     }
 
-    const base = { consent_id: r.consent_id, local_date: dateStr, track: r.theme_track, lang, tz };
+    // DM from Him: opted-in recipients get the SAME verse wrapped in first-person
+    // framing; everyone else gets it verbatim. Never a different/second verse.
+    const dmOn = dmBySignup.get(r.pending_signup_id) === true;
+    const body = text != null ? composeDailyMessage(text, { dm: dmOn, firstName: r.recipient_first_name, lang }) : null;
+
+    const base = { consent_id: r.consent_id, local_date: dateStr, track: r.theme_track, lang, tz, dm: dmOn };
 
     if (dryRun) {
-      summary.details.push({ ...base, would: noContent ? `skip:${noContent}` : "send", preview: text ? text.slice(0, 60) : null });
+      summary.details.push({ ...base, would: noContent ? `skip:${noContent}` : "send", preview: body ? body.slice(0, 80) : null });
       if (noContent) summary.skipped_no_content++; else summary.sent++;
       continue;
     }
@@ -159,7 +175,7 @@ export async function runDailySend(opts: { dryRun?: boolean } = {}): Promise<Dai
     }
 
     try {
-      const { sid, segments } = await sendSms(r.recipient_phone, text!);
+      const { sid, segments } = await sendSms(r.recipient_phone, body!);
       await admin.from("daily_send_log").update({ status: "sent", message_sid: sid, segments, updated_at: new Date().toISOString() }).eq("id", logId);
       // Stamp the financial cost row (segment-based, per lib/costs.ts constants).
       // Exactly-once already guaranteed by the claim, so no dup cost rows.

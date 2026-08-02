@@ -7,7 +7,7 @@ import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-
 import BubbleMark from "@/components/BubbleMark";
 import Wordmark from "@/components/Wordmark";
 import {
-  t, ATTESTATION, DISCLOSURE, HONORIFICS, RELATIONSHIPS, type Lang,
+  t, ATTESTATION, DISCLOSURE, type Lang,
 } from "@/lib/i18n";
 import {
   PLANS, GROUP_BANDS, DM_ADDON, FAMILY_EXTRA_TEEN, FAMILY_BASE_TEENS, bandForCount, GROUP_CONTACT_THRESHOLD,
@@ -100,18 +100,9 @@ export default function SignupFlow({
   const [teenGate, setTeenGate] = useState<Gate | null>(null);
   const [teenEnhancedAck, setTeenEnhancedAck] = useState(false);
 
-  // plus-one (DM from Him)
-  const [poEnabled, setPoEnabled] = useState(false);
-  const [poHonorific, setPoHonorific] = useState("");
-  const [poRelationship, setPoRelationship] = useState("");
-  const [poGifterFirst, setPoGifterFirst] = useState("");
-  const [poGifterLast, setPoGifterLast] = useState("");
-  const [poRecipientName, setPoRecipientName] = useState("");
-  const [poRecipientPhone, setPoRecipientPhone] = useState("");
-  const [poBirthYear, setPoBirthYear] = useState("");
-  const [poGate, setPoGate] = useState<Gate | null>(null);
-  const [poEnhancedAck, setPoEnhancedAck] = useState(false);
-  const [poAttest, setPoAttest] = useState(false);
+  // DM from Him add-on — a single toggle for the SAME recipient (wraps their own
+  // daily verse in a personal, first-person note). No second recipient.
+  const [dmEnabled, setDmEnabled] = useState(false);
 
   // referral
   const [referralInput, setReferralInput] = useState("");
@@ -155,19 +146,6 @@ export default function SignupFlow({
     return () => { cancelled = true; };
   }, [step, teenPhone, teenBirthYear]);
 
-  useEffect(() => {
-    let cancelled = false;
-    if (poEnabled && poRecipientPhone.trim() && validYear(poBirthYear)) {
-      fetch("/api/age-gate/check", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: normalizePhone(poRecipientPhone), birth_year: Number(poBirthYear) }),
-      }).then((r) => (r.ok ? r.json() : null)).then((g) => { if (!cancelled) setPoGate(g); }).catch(() => {});
-    } else {
-      setPoGate(null);
-    }
-    return () => { cancelled = true; };
-  }, [poEnabled, poRecipientPhone, poBirthYear]);
-
   // ---- derived plan ----
   const band = planChoice === "group" ? bandForCount(teenCount) : null;
   const isGroupContact = planChoice === "group" && teenCount >= GROUP_CONTACT_THRESHOLD;
@@ -207,10 +185,9 @@ export default function SignupFlow({
     setResult(null);
     setError(null);
     setTeenFirstName(""); setPurchaserEmail(""); setTeenPhone(""); setPrimaryAttest(false);
-    setPoEnabled(false); setPoAttest(false); setStripeIds(null); setReferralApplied(false); setReferralInput(""); setReferralError(null);
+    setDmEnabled(false); setStripeIds(null); setReferralApplied(false); setReferralInput(""); setReferralError(null);
     setPromo(null); setPromoInput(""); setPromoError(null); setPromoAttest(false);
     setTeenBirthYear(""); setTeenGate(null); setTeenEnhancedAck(false);
-    setPoBirthYear(""); setPoGate(null); setPoEnhancedAck(false);
   }
 
   async function applyPromo() {
@@ -300,8 +277,8 @@ export default function SignupFlow({
         plan_key: resolved!.key,
         base_price_id: resolved!.price_id!,
         group_teen_count: planChoice === "group" ? teenCount : null,
-        dm_addon: poEnabled,
-        dm_addon_price_id: poEnabled ? DM_ADDON.price_id : null,
+        dm_addon: dmEnabled,
+        dm_addon_price_id: dmEnabled ? DM_ADDON.price_id : null,
         referral_code: referralApplied ? referralInput.trim() : null,
         referral_discount_applied: false, // retired: referrals reward via balance credit, not a signup discount
         promo_code: promo?.code ?? null,
@@ -316,19 +293,6 @@ export default function SignupFlow({
           birth_year: Number(teenBirthYear),
           enhanced_consent_ack: teenGate?.decision === "enhanced" ? teenEnhancedAck : undefined,
         },
-        plus_one: poEnabled
-          ? {
-              gifter_first_name: poGifterFirst.trim(),
-              gifter_last_name: poGifterLast.trim() || undefined,
-              gifter_honorific: poHonorific || undefined,
-              gifter_relationship: poRelationship || undefined,
-              recipient_first_name: poRecipientName.trim() || undefined,
-              recipient_phone: normalizePhone(poRecipientPhone),
-              recipient_birth_year: Number(poBirthYear),
-              attestation_confirmed: poAttest,
-              enhanced_consent_ack: poGate?.decision === "enhanced" ? poEnhancedAck : undefined,
-            }
-          : null,
         stripe: stripeIds ?? undefined,
       });
       await attachReferral((res as { pending_signup_id?: string }).pending_signup_id);
@@ -632,89 +596,25 @@ export default function SignupFlow({
             </section>
           )}
 
-          {/* ---------- 3. Plus-one ---------- */}
+          {/* ---------- 3. DM from Him add-on ---------- */}
           {step === STEP.PLUSONE && (
             <section>
               <h2>{s.wPlusOneTitle}</h2>
               <p className="muted">{s.wPlusOneSub}</p>
               <div style={{ marginTop: 16 }}>
-                <div className={`choice ${poEnabled ? "selected" : ""}`} onClick={() => setPoEnabled(true)} role="button" tabIndex={0}>
+                <div className={`choice ${dmEnabled ? "selected" : ""}`} onClick={() => setDmEnabled(true)} role="button" tabIndex={0}>
                   <div className="c-title">{s.addPlusOne}</div>
                   <div className="c-price">+{money(DM_ADDON.amount)}{s.perMonth}</div>
                 </div>
-                <div className={`choice ${!poEnabled ? "selected" : ""}`} onClick={() => setPoEnabled(false)} role="button" tabIndex={0}>
+                <div className={`choice ${!dmEnabled ? "selected" : ""}`} onClick={() => setDmEnabled(false)} role="button" tabIndex={0}>
                   <div className="c-title">{s.noThanks}</div>
                 </div>
               </div>
-
-              {poEnabled && (
-                <div style={{ marginTop: 12 }}>
-                  <h3 style={{ fontSize: 17 }}>{s.fromWho}</h3>
-                  <div className="row">
-                    <div className="field">
-                      <label>{s.honorificLabel}</label>
-                      <select value={poHonorific} onChange={(e) => { setPoHonorific(e.target.value); if (e.target.value) setPoRelationship(""); }}>
-                        <option value="">{s.honorificNone}</option>
-                        {HONORIFICS[lang].map((h) => <option key={h} value={h}>{h}</option>)}
-                      </select>
-                    </div>
-                    <div className="field">
-                      <label>{s.relationshipLabel}</label>
-                      <select value={poRelationship} onChange={(e) => setPoRelationship(e.target.value)} disabled={!!poHonorific}>
-                        <option value="">{s.relationshipPick}</option>
-                        {RELATIONSHIPS[lang].map((r) => <option key={r} value={r}>{r}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                  <div className="row">
-                    <div className="field">
-                      <label>{s.gifterFirstName}</label>
-                      <input value={poGifterFirst} onChange={(e) => setPoGifterFirst(e.target.value)} />
-                    </div>
-                    <div className="field">
-                      <label>{s.gifterLastName}</label>
-                      <input value={poGifterLast} onChange={(e) => setPoGifterLast(e.target.value)} />
-                    </div>
-                  </div>
-                  <div className="field">
-                    <label>{s.plusOneRecipientName}</label>
-                    <input value={poRecipientName} onChange={(e) => setPoRecipientName(e.target.value)} />
-                  </div>
-                  <div className="field">
-                    <label>{s.plusOneRecipientPhone}</label>
-                    <input value={poRecipientPhone} onChange={(e) => setPoRecipientPhone(e.target.value)} placeholder="+1 555 123 4567" />
-                  </div>
-                  <div className="field">
-                    <label>{s.birthYearLabel}</label>
-                    <input type="number" inputMode="numeric" value={poBirthYear} onChange={(e) => setPoBirthYear(e.target.value)} placeholder="2010" min={new Date().getFullYear() - 120} max={new Date().getFullYear()} />
-                    <p className="hint">{s.birthYearHint}</p>
-                  </div>
-                  <AgeGateNotice gate={poGate} lang={lang} ackChecked={poEnhancedAck} onAck={setPoEnhancedAck} />
-                  <div className="consent-box">{ATTESTATION[lang](poRecipientName.trim() || (lang === "es" ? "esta persona" : "them"))}</div>
-                  <div className="consent-box">{DISCLOSURE[lang](poRecipientName.trim() || (lang === "es" ? "Esta persona" : "They"))}</div>
-                  <label className="check">
-                    <input type="checkbox" checked={poAttest} onChange={(e) => setPoAttest(e.target.checked)} />
-                    <span>{s.iConfirm}</span>
-                  </label>
-                </div>
-              )}
+              {dmEnabled && <p className="hint" style={{ marginTop: 12 }}>{s.dmAddonDesc}</p>}
 
               <div className="wizard-nav">
                 <button className="btn btn-ghost" onClick={() => setStep(STEP.RECIPIENT)}>{s.back}</button>
-                <button
-                  className="btn btn-primary"
-                  disabled={
-                    poEnabled && !(
-                      poGifterFirst.trim() && (poHonorific || poRelationship) && poRecipientPhone.trim() && poAttest &&
-                      validYear(poBirthYear) &&
-                      poGate !== null && poGate.decision !== "block" &&
-                      (poGate.decision !== "enhanced" || poEnhancedAck)
-                    )
-                  }
-                  onClick={() => setStep(STEP.REFERRAL)}
-                >
-                  {s.continue}
-                </button>
+                <button className="btn btn-primary" onClick={() => setStep(STEP.REFERRAL)}>{s.continue}</button>
               </div>
             </section>
           )}
@@ -759,7 +659,7 @@ export default function SignupFlow({
                   <span>{s.plan}</span>
                   <span>{planChoice === "group" ? `${teenCount} × ${money(band?.amount ?? 0)}` : money(baseAmount)} / {baseInterval === "month" ? s.perMonth.replace("/", "") : s.perYear.replace("/", "")}</span>
                 </div>
-                {poEnabled && (
+                {dmEnabled && (
                   <div className="summary-line">
                     <span>{s.addon}</span>
                     <span>+{money(DM_ADDON.amount)}{s.perMonth}</span>

@@ -11,16 +11,36 @@
  * lookup silently resolves to the fallback on the client, which would ship the
  * sandbox price IDs to a live build. Keep these literal.
  *
- * DM-from-Him is ALWAYS its own separate monthly item ($1.99/mo), independent of
- * the base plan's cadence — never folded into the base price.
+ * DM-from-Him is its own separate add-on line item, priced per teen ($2.99/mo or
+ * $35.88/yr = 12 x $2.99). Its interval MUST MATCH the base plan's interval —
+ * Stripe rejects mixed-interval items in one subscription — so a MONTHLY base
+ * (individual_monthly) gets the monthly variant and every ANNUAL base
+ * (individual_annual / family / gift / group) gets the annual variant. (Price
+ * raised $1.99 -> $2.99 and the annual variant added 2026-08-01; old $1.99 prices
+ * deactivated, lookup key igy_dm_addon_monthly transferred to the new monthly.)
  */
 
 export const DM_ADDON = {
   plan_key: "dm_addon_monthly",
-  price_id: process.env.NEXT_PUBLIC_PRICE_DM_ADDON_MONTHLY || "price_1TyZ75GZ9WDMHywoyPZvBfNz",
-  amount: 1.99,
+  monthly_price_id: process.env.NEXT_PUBLIC_PRICE_DM_ADDON_MONTHLY || "price_1TzmrJGZ9WDMHywotvlZCNIK",
+  annual_price_id: process.env.NEXT_PUBLIC_PRICE_DM_ADDON_ANNUAL || "price_1Tznd8GZ9WDMHywo5TGChJIJ",
+  monthly_amount: 2.99,
+  annual_amount: 35.88,
+  // Back-compat: legacy .price_id / .amount / .interval = the monthly variant.
+  price_id: process.env.NEXT_PUBLIC_PRICE_DM_ADDON_MONTHLY || "price_1TzmrJGZ9WDMHywotvlZCNIK",
+  amount: 2.99,
   interval: "month" as const,
 };
+
+/** A base plan_key bills annually unless it's the one monthly plan. */
+export function baseIntervalForPlanKey(planKey: string | null | undefined): "month" | "year" {
+  return planKey === "individual_monthly" ? "month" : "year";
+}
+
+/** The DM add-on price id whose interval matches a base plan's interval. */
+export function dmPriceForBaseInterval(interval: "month" | "year"): string {
+  return interval === "month" ? DM_ADDON.monthly_price_id : DM_ADDON.annual_price_id;
+}
 
 // Family plan: base $99/yr covers up to FAMILY_BASE_TEENS confirmed teens; each
 // additional confirmed teen is $28/yr on the extra-teen line (added at that

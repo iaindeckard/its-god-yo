@@ -3,6 +3,7 @@ import type Stripe from "stripe";
 import { getStripe } from "./stripe";
 import { getSupabaseAdmin } from "./supabaseAdmin";
 import { promoAttestationSatisfied } from "./promoCodes";
+import { baseIntervalForPlanKey, dmPriceForBaseInterval } from "./plans";
 
 /**
  * Deferred, consent-gated subscription creation — the linchpin of the
@@ -56,9 +57,16 @@ export async function createSubscriptionForPendingSignup(pendingSignupId: string
   const quantity = isGroup && ps.group_teen_count ? ps.group_teen_count : 1;
 
   const items: Stripe.SubscriptionCreateParams.Item[] = [{ price: ps.base_price_id, quantity }];
-  // The "DM from Him" +1 is ALWAYS its own monthly item, independent of the
-  // base plan's cadence.
-  if (ps.dm_addon && ps.dm_addon_price_id) items.push({ price: ps.dm_addon_price_id });
+  // DM from Him is its own line item, priced per teen. This path is
+  // individual/gift/group (family uses lib/familyBilling), so the DM quantity is
+  // the SAME as the base quantity — group_teen_count for a group, 1 for
+  // individual/gift. The add-on price MUST match the base plan's interval —
+  // monthly base -> monthly add-on, annual base -> annual add-on — or Stripe
+  // rejects the mixed interval.
+  if (ps.dm_addon) {
+    const dmPrice = dmPriceForBaseInterval(baseIntervalForPlanKey(ps.plan_key));
+    items.push({ price: dmPrice, quantity });
+  }
 
   // Promo codes still apply; the old 10%-off referral coupon was retired —
   // referrals now reward via a customer-balance credit at conversion (lib/referral.ts).

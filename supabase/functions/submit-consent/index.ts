@@ -296,15 +296,9 @@ Deno.serve(async (req: Request) => {
   if (!p.teen?.phone?.trim()) return json(400, { error: "teen.phone is required" });
   if (!p.plan_key || !p.base_price_id) return json(400, { error: "plan_key and base_price_id are required" });
 
-  const optedInPlusOne = !!(p.plus_one && (p.plus_one.recipient_phone || p.plus_one.gifter_first_name));
-  if (optedInPlusOne) {
-    if (!p.plus_one!.gifter_first_name?.trim()) return json(400, { error: "plus_one.gifter_first_name is required when opting into the +1 add-on" });
-    if (!p.plus_one!.recipient_phone?.trim()) return json(400, { error: "plus_one.recipient_phone is required when opting into the +1 add-on" });
-    if (p.plus_one!.attestation_confirmed !== true) return json(400, { error: "plus_one.attestation_confirmed must be true before the +1 phone can be submitted" });
-    const hasHonorific = !!p.plus_one!.gifter_honorific?.trim();
-    const hasRelationship = !!p.plus_one!.gifter_relationship?.trim();
-    if (!hasHonorific && !hasRelationship) return json(400, { error: "plus_one requires a gifter_relationship (or a gifter_honorific)" });
-  }
+  // DM from Him is now a single-subscriber add-on (dm_addon boolean), NOT a second
+  // recipient — the former plus_one (gifter/second-recipient) intake was removed
+  // 2026-08-01. Any plus_one field on the payload is ignored.
 
   const supa = createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -319,11 +313,6 @@ Deno.serve(async (req: Request) => {
 
   const teenBirthYear = validBirthYear(p.teen?.birth_year);
   if (teenBirthYear === null) return json(400, { error: "teen.birth_year is required (a 4-digit year)" });
-  let poBirthYear: number | null = null;
-  if (optedInPlusOne) {
-    poBirthYear = validBirthYear(p.plus_one!.recipient_birth_year);
-    if (poBirthYear === null) return json(400, { error: "plus_one.recipient_birth_year is required (a 4-digit year)" });
-  }
 
   const { data: thrRows, error: thrErr } = await supa
     .from("age_consent_thresholds")
@@ -333,12 +322,10 @@ Deno.serve(async (req: Request) => {
   for (const r of thrRows ?? []) thresholds.set(r.country_code, { min: r.minimum_age_for_self_consent, confirmed: r.attorney_confirmed });
 
   const teenGate = evaluateAgeGate(p.teen!.phone!.trim(), teenBirthYear, currentYear, thresholds);
-  const poGate = optedInPlusOne ? evaluateAgeGate(p.plus_one!.recipient_phone!.trim(), poBirthYear!, currentYear, thresholds) : null;
 
   const gates: Array<{ who: string; gate: GateResult; ack: boolean }> = [
     { who: "teen", gate: teenGate, ack: p.teen?.enhanced_consent_ack === true },
   ];
-  if (poGate) gates.push({ who: "plus_one", gate: poGate, ack: p.plus_one?.enhanced_consent_ack === true });
 
   for (const g of gates) {
     if (g.gate.decision === "block") {
@@ -369,7 +356,6 @@ Deno.serve(async (req: Request) => {
     }
   }
   const teenGateDecision = teenGate.decision === "enhanced" ? "enhanced_pending_mechanism" : "standard";
-  const poGateDecision = poGate ? (poGate.decision === "enhanced" ? "enhanced_pending_mechanism" : "standard") : null;
 
   const teenName = p.teen!.first_name!.trim();
   const stubs: Array<{ kind: string; to: string; body: string }> = [];
@@ -395,37 +381,9 @@ Deno.serve(async (req: Request) => {
   }).select("id").single();
   if (teenErr) return json(500, { error: "failed_to_write_teen_consent", detail: teenErr.message });
 
-  // 2) optional +1 recipient consent row
-  let plusOneId: string | null = null;
-  if (optedInPlusOne) {
-    const po = p.plus_one!;
-    const poName = po.recipient_first_name?.trim() || "your friend";
-    const poSms = confirmationSms(lang, poName, "plus_one", {
-      honorific: po.gifter_honorific, first: po.gifter_first_name, relationship: po.gifter_relationship,
-    });
-    const poPhoneE164 = toE164(po.recipient_phone!.trim(), poGate!.country); // canonical for storage + Twilio
-    stubs.push({ kind: "plus_one", to: poPhoneE164, body: poSms });
-    const { data: poRow, error: poErr } = await supa.from("consent_log").insert({
-      recipient_phone: poPhoneE164,
-      recipient_first_name: po.recipient_first_name?.trim() || null,
-      language: lang,
-      consent_type: "plus_one_gift",
-      gifter_first_name: po.gifter_first_name?.trim() || null,
-      gifter_last_name: po.gifter_last_name?.trim() || null,
-      gifter_honorific: po.gifter_honorific?.trim() || null,
-      gifter_relationship: po.gifter_relationship?.trim() || null,
-      attestation_text: ATTESTATION[lang](poName),
-      attestation_text_version: CONSENT_VERSION,
-      disclosure_text: DISCLOSURE[lang](poName),
-      disclosure_text_version: CONSENT_VERSION,
-      consent_status: "pending_confirmation",
-      recipient_birth_year: poBirthYear,
-      recipient_country_code: poGate!.country,
-      age_gate_decision: poGateDecision,
-    }).select("id").single();
-    if (poErr) return json(500, { error: "failed_to_write_plus_one_consent", detail: poErr.message });
-    plusOneId = poRow.id;
-  }
+  // (The former +1 second-recipient consent row was removed 2026-08-01 — DM from
+  // Him no longer creates a second recipient; it's a single-subscriber add-on.)
+  const plusOneId: string | null = null;
 
   // 3) pending signup: plan + saved (uncharged) payment method + consent links
   const { data: signup, error: signupErr } = await supa.from("pending_signups").insert({
@@ -496,7 +454,6 @@ Deno.serve(async (req: Request) => {
     plus_one_consent_id: plusOneId,
     age_gate: {
       teen: { country: teenGate.country, computed_age: teenGate.age, decision: teenGateDecision },
-      plus_one: poGate ? { country: poGate.country, computed_age: poGate.age, decision: poGateDecision } : null,
     },
     sms_stubbed: !smsSent,
     sms_sent_count: sentCount,
