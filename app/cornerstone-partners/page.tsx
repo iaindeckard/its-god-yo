@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { CORNERSTONE_ENABLED } from "@/lib/flags";
-import { listPublicCornerstonePartners, directoryFacets, filterDirectory } from "@/lib/cornerstone";
+import { listPublicCornerstonePartners, directoryFacets, filterDirectory, toGlobePoints } from "@/lib/cornerstone";
+import PartnerGlobe from "./PartnerGlobe";
 import s from "./cornerstone-partners.module.css";
 
 export const metadata: Metadata = {
@@ -32,6 +33,9 @@ export default async function CornerstonePartnersPage({
   const filters = { country: sp.country || null, stateProvince: sp.state || null, year: yearNum };
   const shown = filterDirectory(all, filters);
   const filtered = !!(filters.country || filters.stateProvince || filters.year);
+  // Globe points = the SAME set shown in the list below (safe fields + resolved
+  // coordinates; real geocode, else country-centroid). Kept in lockstep with the list.
+  const points = toGlobePoints(shown);
 
   return (
     <main className={s.page}>
@@ -72,6 +76,10 @@ export default async function CornerstonePartnersPage({
             {filtered && <a href="/cornerstone-partners" className={s.clear}>Clear</a>}
           </form>
         )}
+
+        {/* The globe is the visual centerpiece. The flat list below is always present
+            as the fallback (devices/connections where a 3D globe doesn't render). */}
+        <PartnerGlobe points={points} />
 
         {all.length === 0 ? (
           <p className={s.empty}>Our Cornerstone Partners will appear here soon.</p>
