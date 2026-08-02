@@ -49,6 +49,7 @@ export default function PartnerGlobe({ points }: { points: GlobePoint[] }) {
     if (!points.length) return;
     let cancelled = false;
     let hovered: GlobePoint | null = null;
+    let resumeTimer: ReturnType<typeof setTimeout> | null = null;
 
     (async () => {
       try {
@@ -79,10 +80,18 @@ export default function PartnerGlobe({ points }: { points: GlobePoint[] }) {
         world.pointOfView({ lat: 25, lng: -75, altitude: 2.3 }); // Americas-forward (partners skew US)
 
         // Hover: pause auto-rotation so the globe holds still and the tooltip attaches
-        // to a stationary point; resume rotation on hover-out.
+        // to a stationary point; resume rotation on hover-out. The resume is debounced
+        // (~180ms) so a single-frame raycast miss at the point's edge can't restart the
+        // rotation mid-hover — the tooltip stays reliably attached without the user
+        // chasing a moving target.
         world.onPointHover((pt: object | null, coords?: unknown) => {
           hovered = (pt as GlobePoint) ?? null;
-          controls.autoRotate = !hovered;
+          if (hovered) {
+            if (resumeTimer) { clearTimeout(resumeTimer); resumeTimer = null; }
+            controls.autoRotate = false;
+          } else if (!resumeTimer) {
+            resumeTimer = setTimeout(() => { controls.autoRotate = true; resumeTimer = null; }, 180);
+          }
           world
             .pointColor((d: object) => colorFor(d, hovered))
             .pointRadius((d: object) => radiusFor(d, hovered)); // refresh colors + sizes
@@ -124,6 +133,7 @@ export default function PartnerGlobe({ points }: { points: GlobePoint[] }) {
 
     return () => {
       cancelled = true;
+      if (resumeTimer) { clearTimeout(resumeTimer); resumeTimer = null; }
       try { globeRef.current?._destructor?.(); } catch { /* noop */ }
       if (mountRef.current) mountRef.current.innerHTML = "";
       globeRef.current = null;
