@@ -3,21 +3,25 @@
 import { useEffect, useRef, useState } from "react";
 import type { GlobePoint } from "@/lib/cornerstone";
 
-// Locked IGY brand values: navy background/globe, IGY blue (the brand mark's
-// message-bubble blue) for points, gold for hover highlight.
-const NAVY = "#0B1830";
-const GLOBE_NAVY = "#152847"; // a touch lighter than the bg so the sphere reads
-const IGY_BLUE = "#378ADD";
+// IGY locked-brand palette (IGY-Brand-Identity-Mark-LOCKED-2026-07-27): primary
+// blue #378ADD (the message-bubble blue) for partner points + atmosphere, and
+// white for the hover highlight. NAVY/GLOBE_NAVY are a neutral dark ground (they
+// match the page's existing dark background so the sphere and blue points read) —
+// they are NOT brand colors. No gold is used here: the locked brass-gold is
+// reserved for the "God," wordmark shadow only, never as a UI accent.
+const NAVY = "#0B1830";        // neutral dark ground (matches the page background)
+const GLOBE_NAVY = "#152847";  // a touch lighter than the bg so the sphere reads
+const IGY_BLUE = "#378ADD";    // locked IGY primary blue
 const IGY_BLUE_DIM = "rgba(55,138,221,0.4)"; // approx points: dimmer/translucent so
 // a country-centroid blob never reads as a precise church pin.
-const GOLD = "#FFDC52";
+const WHITE = "#FFFFFF";       // locked IGY glyph white — used for the hover highlight
 
 // A church we couldn't geocode is plotted at its country's centroid (approx=true).
 // It must NOT look like a precisely-located pin: crisp + solid = exact; smaller +
-// translucent = approximate. Hover always wins (gold), for either kind.
+// translucent = approximate. Hover always wins (white), for either kind.
 const isApprox = (d: object) => (d as GlobePoint).approx === true;
 const colorFor = (d: object, hovered: GlobePoint | null) =>
-  d === hovered ? GOLD : isApprox(d) ? IGY_BLUE_DIM : IGY_BLUE;
+  d === hovered ? WHITE : isApprox(d) ? IGY_BLUE_DIM : IGY_BLUE;
 const radiusFor = (d: object) => (isApprox(d) ? 0.3 : 0.42);
 
 /**
@@ -110,7 +114,7 @@ export default function PartnerGlobe({ points }: { points: GlobePoint[] }) {
       <div ref={mountRef} style={{ width: "100%", minHeight: 360 }} aria-hidden="true" />
       {status !== "ready" && (
         <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#a9bad6", fontSize: 14, pointerEvents: "none", textAlign: "center", padding: 24 }}>
-          {status === "loading" ? "Loading the partner globe…" : "Interactive globe isn’t available on this device — see the full list below."}
+          {status === "loading" ? "Loading the partner globe…" : "Interactive globe isn’t available on this device. See the full list below."}
         </div>
       )}
       {status === "ready" && (
@@ -127,13 +131,13 @@ export default function PartnerGlobe({ points }: { points: GlobePoint[] }) {
         </div>
       )}
       {hover && (
-        <div style={{ position: "fixed", zIndex: 50, left: tip.x + 16, top: tip.y - 60, pointerEvents: "none", background: "#111b30", border: `1px solid ${GOLD}66`, borderRadius: 10, padding: "9px 12px", color: "#fff", fontSize: 13, maxWidth: 240 }}>
+        <div style={{ position: "fixed", zIndex: 50, left: tip.x + 16, top: tip.y - 60, pointerEvents: "none", background: "#111b30", border: `1px solid ${IGY_BLUE}66`, borderRadius: 10, padding: "9px 12px", color: "#fff", fontSize: 13, maxWidth: 240 }}>
           <div style={{ fontWeight: 700 }}>{hover.churchName}</div>
           {(loc || hover.country) && <div style={{ color: "#a9bad6", fontSize: 12 }}>{[loc, hover.country].filter(Boolean).join(" · ")}</div>}
-          <div style={{ color: GOLD, fontSize: 12, marginTop: 3 }}>Cornerstone Partner #{hover.partnerNumber} · Joined {hover.yearJoined}</div>
+          <div style={{ color: IGY_BLUE, fontSize: 12, marginTop: 3 }}>Cornerstone Partner #{hover.partnerNumber} · Joined {hover.yearJoined}</div>
           {hover.approx && (
             <div style={{ color: "#8ea6c8", fontSize: 11, marginTop: 4, fontStyle: "italic" }}>
-              Approximate location — plotted at the country&rsquo;s center
+              Approximate location, plotted at the country&rsquo;s center
             </div>
           )}
         </div>
