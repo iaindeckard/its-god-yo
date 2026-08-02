@@ -3,21 +3,20 @@
 import { useEffect, useRef, useState } from "react";
 import type { GlobePoint } from "@/lib/cornerstone";
 
-// IGY locked-brand palette (IGY-Brand-Identity-Mark-LOCKED-2026-07-27): primary
-// blue #378ADD, white, plus the dark-thread variant values — light blue #85B7EB
-// and dark navy #042C53. Brass-gold is reserved for the "God," wordmark shadow
-// only and is NOT used here. Unlike USN's dark night-earth globe, IGY's globe is
-// deliberately LIGHT/bright: a light-blue ocean with white countries outlined in
-// IGY blue.
-const OCEAN = "#85B7EB";        // sphere / ocean — locked light blue
-const LAND = "#FFFFFF";         // country fill (white land)
-const BORDER = "#378ADD";       // country outlines — locked primary blue
+// The globe base is a "school atlas" raster (Natural Earth cross-blended hypsometric
+// tints + shaded relief + water + drainages), vendored to /public. The IGY-brand
+// accents (locked palette per IGY-Brand-Identity-Mark-LOCKED-2026-07-27) layer ON TOP:
+// primary blue #378ADD for country-border outlines, the atmosphere glow and the tooltip
+// accent; dark navy #042C53 partner pins with an enlarged IGY-blue hover. Brass-gold
+// stays reserved for the "God," wordmark shadow and is not used here.
+const ATLAS_TEXTURE = "/cornerstone/earth-hypso.webp"; // vendored, same-origin (no CDN)
+const BORDER = "#378ADD";       // country-border outlines over the atlas — locked primary blue
 const IGY_BLUE = "#378ADD";     // atmosphere glow + tooltip accent
-const POINT = "#042C53";        // partner pin — locked dark navy, reads on the light globe
+const POINT = "#042C53";        // partner pin — locked dark navy, reads over the atlas colors
 const POINT_DIM = "rgba(4,44,83,0.4)"; // approx pin: dimmer/translucent so a country-
 // centroid blob never reads as a precise church pin.
 const POINT_HOVER = "#378ADD";  // hovered pin — IGY blue + enlarged
-const PANEL_A = "#EAF3FC", PANEL_B = "#F6FAFE"; // light container gradient (not dark like USN)
+const PANEL_A = "#EAF3FC", PANEL_B = "#F6FAFE"; // light container gradient framing the atlas globe
 
 // A church we couldn't geocode is plotted at its country's centroid (approx=true).
 // It must NOT look like a precisely-located pin: crisp + solid = exact; smaller +
@@ -31,12 +30,13 @@ const radiusFor = (d: object, hovered: GlobePoint | null) =>
 /**
  * 3D partner globe. Reuses USN's GlobeModal approach (globe.gl + three) but the
  * library is BUNDLED (dynamic import from node_modules) — NOT loaded from a CDN.
- * Country outlines use globe.gl's polygon layer fed by a vendored Natural Earth
- * 110m countries GeoJSON served from our own /public (no external CDN, no raster
- * earth texture): white countries with IGY-blue borders on a light-blue ocean.
- * On point hover the auto-rotation pauses so the tooltip attaches to a stationary
- * point. The flat list below is the fallback when WebGL/the globe isn't available.
- * Point data carries only the same safe fields shown in the list.
+ * The globe surface is a vendored "school atlas" raster (Natural Earth cross-blended
+ * hypsometric tints + shaded relief + water + drainages) served from our own /public
+ * as globeImageUrl — same-origin, no CDN. IGY-blue country-border outlines (from the
+ * vendored 110m GeoJSON) layer crisply ON TOP of the atlas, alongside the atmosphere
+ * glow and partner pins. On point hover the auto-rotation pauses so the tooltip
+ * attaches to a stationary point. The flat list below is the fallback when WebGL/the
+ * globe isn't available. Point data carries only the same safe fields shown in the list.
  */
 export default function PartnerGlobe({ points }: { points: GlobePoint[] }) {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -59,6 +59,7 @@ export default function PartnerGlobe({ points }: { points: GlobePoint[] }) {
 
         const world = new Globe(el)
           .backgroundColor("rgba(0,0,0,0)")
+          .globeImageUrl(ATLAS_TEXTURE) // vendored school-atlas raster (same-origin)
           .showAtmosphere(true)
           .atmosphereColor(IGY_BLUE)
           .atmosphereAltitude(0.18)
@@ -70,8 +71,9 @@ export default function PartnerGlobe({ points }: { points: GlobePoint[] }) {
           .pointsMerge(false)
           .pointColor((d: object) => colorFor(d, hovered));
 
-        // Light IGY ocean — solid color, no raster earth texture download.
-        try { (world.globeMaterial() as { color?: { set: (c: string) => void } }).color?.set(OCEAN); } catch { /* noop */ }
+        // Keep the material untinted (white) so the atlas texture shows its true natural
+        // colors, and as a light placeholder before the texture finishes loading.
+        try { (world.globeMaterial() as { color?: { set: (c: string) => void } }).color?.set("#ffffff"); } catch { /* noop */ }
 
         const controls = world.controls() as { autoRotate: boolean; autoRotateSpeed: number; enableZoom: boolean };
         controls.autoRotate = true;
@@ -111,19 +113,20 @@ export default function PartnerGlobe({ points }: { points: GlobePoint[] }) {
           void coords;
         });
 
-        // Country outlines — vendored Natural Earth 110m polygons from our own /public
-        // (same-origin, no CDN). Best-effort: if it fails the globe still works, just
-        // without borders.
+        // IGY-blue country-border outlines layered ON TOP of the atlas texture —
+        // vendored Natural Earth 110m polygons from our own /public (same-origin, no CDN).
+        // Transparent fill so the atlas colors show through; only the stroke renders.
+        // Best-effort: if it fails the globe still works, just without borders.
         fetch("/cornerstone/countries-110m.geojson")
           .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`geojson ${r.status}`))))
           .then((geo: { features: object[] }) => {
             if (cancelled) return;
             world
               .polygonsData(geo.features)
-              .polygonCapColor(() => LAND)
-              .polygonSideColor(() => "rgba(55,138,221,0.12)")
-              .polygonStrokeColor(() => BORDER)
-              .polygonAltitude(0.006)
+              .polygonCapColor(() => "rgba(0,0,0,0)")   // transparent — let the atlas show through
+              .polygonSideColor(() => "rgba(0,0,0,0)")
+              .polygonStrokeColor(() => BORDER)          // crisp IGY-blue borders on top of the atlas
+              .polygonAltitude(0.004)
               .polygonsTransitionDuration(0);
           })
           .catch((e) => console.error("[partner-globe] country outlines failed (globe still works):", e instanceof Error ? e.message : e));
