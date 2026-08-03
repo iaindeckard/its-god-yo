@@ -70,12 +70,16 @@ export async function runClimaxSend(args: {
   async function contentFor(key: string, year: number): Promise<string | null> {
     const ck = `${key}|${year}`;
     if (!contentCache.has(ck)) {
+      // Climax messages are timeless: liturgical_year=0 is the every-year default.
+      // A specific-year row (>0) acts as a one-off override and wins when present.
       const { data } = await db
         .from("climax_content")
-        .select("verse_text, translated_text")
+        .select("verse_text, translated_text, liturgical_year")
         .eq("climax_key", key)
-        .eq("liturgical_year", year)
+        .in("liturgical_year", [year, 0])
         .eq("status", "approved")
+        .order("liturgical_year", { ascending: false })
+        .limit(1)
         .maybeSingle();
       contentCache.set(ck, data ? (data.translated_text ?? data.verse_text ?? null) : null);
     }
