@@ -7,7 +7,11 @@ import type { GlobePoint } from "@/lib/cornerstone";
 // tints + shaded relief + water + drainages), vendored to /public. IGY-brand accents
 // layer ON TOP: primary blue #378ADD for country-border outlines, the atmosphere glow
 // and the tooltip accent. Brass-gold stays reserved for the "God," wordmark shadow.
-const ATLAS_TEXTURE = "/cornerstone/earth-hypso.webp"; // vendored, same-origin (no CDN)
+// 4096x2048 (~538KB webp). Deliberately NOT the 8192-wide original: that exceeded
+// common WebGL max-texture / memory limits and failed to upload, leaving the globe
+// the flat white placeholder. 4096 is universally supported and keeps lake/bay/
+// river-mouth detail while staying page-weight-friendly.
+const ATLAS_TEXTURE = "/cornerstone/earth-hypso-4096.webp"; // vendored, same-origin (no CDN)
 const BORDER = "#378ADD";       // country-border outlines over the atlas — locked primary blue
 const IGY_BLUE = "#378ADD";     // atmosphere glow, pins + tooltip accent
 const PANEL_A = "#EAF3FC", PANEL_B = "#F6FAFE"; // light container gradient framing the atlas globe
