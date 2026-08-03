@@ -7,7 +7,7 @@ import s from "./legal.module.css";
 import f from "./faq.module.css";
 
 /**
- * FAQ page body — tabbed accordion. Content is Iain-approved, locked copy
+ * FAQ page body - tabbed accordion. Content is Iain-approved, locked copy
  * (verbatim; do not reword). Structure follows USN's FAQ (tabbed accordion of
  * {q,a} items) adapted to IGY's own header/footer chrome (shared with the legal
  * pages via legal.module.css). Plans & pricing mirror lib/plans.ts; the DM from
@@ -30,7 +30,7 @@ const FAQS: Record<TabKey, Item[]> = {
       q: "What is It's God, Yo!?",
       a: (
         <p>
-          It&rsquo;s God, Yo! (IGY) sends teens a Bible verse every day, translated into today&rsquo;s slang so it&rsquo;s easy for them to actually read and understand &mdash; the original verse is always included too, so nothing&rsquo;s hidden or replaced. It&rsquo;s built for parents, grandparents, and caregivers who want the peace of mind that comes from knowing they&rsquo;re putting God&rsquo;s Word in front of their teen, every single day.
+          It&rsquo;s God, Yo! (IGY) sends teens a Bible verse every day, translated into today&rsquo;s slang so it&rsquo;s easy for them to actually read and understand - the original verse is always included too, so nothing&rsquo;s hidden or replaced. It&rsquo;s built for parents, grandparents, and caregivers who want the peace of mind that comes from knowing they&rsquo;re putting God&rsquo;s Word in front of their teen, every single day.
         </p>
       ),
     },
@@ -38,7 +38,7 @@ const FAQS: Record<TabKey, Item[]> = {
       q: "How does the daily text work?",
       a: (
         <p>
-          Once a subscription is active, the teen gets one short message a day by SMS &mdash; a Bible verse put into clear, real language &mdash; sent at a time you choose. One text a day, not a stream of notifications.
+          Once a subscription is active, the teen gets one short message a day by SMS - a Bible verse put into clear, real language - sent at a time you choose. One text a day, not a stream of notifications.
         </p>
       ),
     },
@@ -72,7 +72,7 @@ const FAQS: Record<TabKey, Item[]> = {
       q: "What plans are there, and what do they cost?",
       a: (
         <p>
-          Individual &mdash; $6.99/month or $59/year, for one teen. Family &mdash; $99/year, covering up to 2 teens; each additional teen is $28/year. Gift &mdash; $59/year for one teen, bought for someone else. Group/church &mdash; per teen, per year: $28 each for 1&ndash;50 teens, $32 each for 51&ndash;150, $36 each for 151&ndash;300. For 301+ teens, contact us.
+          Individual - $6.99/month or $59/year, for one teen. Family - $99/year, covering up to 2 teens; each additional teen is $28/year. Gift - $59/year for one teen, bought for someone else. Group/church - per teen, per year: $28 each for 1-50 teens, $32 each for 51-150, $36 each for 151-300. For 301+ teens, contact us.
         </p>
       ),
     },
@@ -80,7 +80,7 @@ const FAQS: Record<TabKey, Item[]> = {
       q: "Is there a free trial?",
       a: (
         <p>
-          Yes &mdash; a 7-day free trial, starting when the teen confirms. You&rsquo;re not charged until it ends.
+          Yes - a 7-day free trial, starting when the teen confirms. You&rsquo;re not charged until it ends.
         </p>
       ),
     },
@@ -88,7 +88,7 @@ const FAQS: Record<TabKey, Item[]> = {
       q: "Are there discount codes?",
       a: (
         <p>
-          Yes &mdash; but because this is already priced as low as we can make it per day, discount codes are offered at specific times to specific people rather than published publicly. If one applies to you, you&rsquo;ll know.
+          Yes - but because this is already priced as low as we can make it per day, discount codes are offered at specific times to specific people rather than published publicly. If one applies to you, you&rsquo;ll know.
         </p>
       ),
     },
@@ -106,7 +106,7 @@ const FAQS: Record<TabKey, Item[]> = {
       q: "What is DM from Him?",
       a: (
         <p>
-          Teens hear a lot of noise every day &mdash; a lot of it negative, a lot of it confusing &mdash; and they internalize more of it than we realize. DM from Him takes that same daily verse and reframes it as a personal, first-person message, so instead of just reading Scripture, your teen hears it directly: that they&rsquo;re seen, they matter, and they&rsquo;re worth real time, effort, and love. Maybe your teen doesn&rsquo;t need that reminder. But maybe they do, and you don&rsquo;t know it yet.
+          Teens hear a lot of noise every day - a lot of it negative, a lot of it confusing - and they internalize more of it than we realize. DM from Him takes that same daily verse and reframes it as a personal, first-person message, so instead of just reading Scripture, your teen hears it directly: that they&rsquo;re seen, they matter, and they&rsquo;re worth real time, effort, and love. Maybe your teen doesn&rsquo;t need that reminder. But maybe they do, and you don&rsquo;t know it yet.
         </p>
       ),
     },
@@ -132,7 +132,7 @@ const FAQS: Record<TabKey, Item[]> = {
       q: "How do I cancel?",
       a: (
         <p>
-          Reply <strong>STOP</strong> to the daily-message number. STOP cancels the entire subscription &mdash; base plan and any add-on together. (To remove only DM from Him but keep the daily verse, reply DM OFF instead.)
+          Reply <strong>STOP</strong> to the daily-message number. STOP cancels the entire subscription - base plan and any add-on together. (To remove only DM from Him but keep the daily verse, reply DM OFF instead.)
         </p>
       ),
     },
@@ -140,7 +140,7 @@ const FAQS: Record<TabKey, Item[]> = {
       q: "Is there an account or app to log into?",
       a: (
         <p>
-          No. IGY is managed entirely by text &mdash; confirm with YES, toggle the add-on with DM ON / DM OFF, cancel with STOP.
+          No. IGY is managed entirely by text - confirm with YES, toggle the add-on with DM ON / DM OFF, cancel with STOP.
         </p>
       ),
     },
@@ -148,7 +148,7 @@ const FAQS: Record<TabKey, Item[]> = {
       q: "What if my teen is going through something hard?",
       a: (
         <p>
-          We keep a standing resources page at <Link href="/its-okay-to-not-be-okay">itsgodyo.com/its-okay-to-not-be-okay</Link> with crisis and mental-health support. The daily verse is encouragement, not a substitute for real help &mdash; if a message ever suggests someone may be at risk, please reach out.
+          We keep a standing resources page at <Link href="/its-okay-to-not-be-okay">itsgodyo.com/its-okay-to-not-be-okay</Link> with crisis and mental-health support. The daily verse is encouragement, not a substitute for real help - if a message ever suggests someone may be at risk, please reach out.
         </p>
       ),
     },
@@ -190,7 +190,7 @@ export default function FaqContent() {
         <div className={s.head}>
           <h1>Frequently Asked Questions</h1>
           <div className={s.operator}>
-            Everything about It&rsquo;s God, Yo!&trade; &mdash; the daily verse, plans, the DM from Him add-on, and managing your subscription.
+            Everything about It&rsquo;s God, Yo!&trade; - the daily verse, plans, the DM from Him add-on, and managing your subscription.
           </div>
         </div>
 
