@@ -1,0 +1,64 @@
+/* FAQ page styling — tabbed accordion. Reuses the legal pages' dark theme /
+   palette (see legal.module.css) so the FAQ reads as part of the same site.
+   Chrome (header/nav/footer/wrap) is shared with legal.module.css; this file
+   only adds the tab bar, accordion, and disclaimer/section treatments. */
+
+.intro { color: #a9bad6; line-height: 1.7; font-size: 15px; margin: 0 0 18px; }
+
+/* Tab bar */
+.tabs {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  margin: 8px 0 22px;
+}
+.tab {
+  flex: 1 1 auto; min-width: 140px;
+  padding: 11px 14px; border-radius: 12px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.10);
+  color: #a9bad6; font-size: 14px; font-weight: 600;
+  font-family: inherit; cursor: pointer; text-align: center;
+  transition: background .18s, border-color .18s, color .18s;
+}
+.tab:hover { color: #eaf1fb; border-color: rgba(255,255,255,0.20); }
+.tabActive {
+  background: rgba(255,211,122,0.10);
+  border-color: rgba(255,211,122,0.45);
+  color: #FFD37A;
+}
+
+/* Accordion */
+.accordion {
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 16px; overflow: hidden;
+  background: rgba(255,255,255,0.02);
+}
+.item { border-bottom: 1px solid rgba(255,255,255,0.07); }
+.item:last-child { border-bottom: 0; }
+.q {
+  width: 100%; display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; padding: 18px 20px; background: none; border: 0; cursor: pointer;
+  text-align: left; font-family: inherit; color: #eaf1fb;
+  font-size: 15.5px; font-weight: 600; line-height: 1.45;
+  transition: color .18s;
+}
+.q:hover { color: #fff; }
+.icon {
+  flex: 0 0 auto; width: 22px; height: 22px; border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.18); display: flex; align-items: center;
+  justify-content: center; color: #7ea8e0; transition: transform .2s, border-color .18s, color .18s;
+}
+.iconOpen { transform: rotate(45deg); border-color: rgba(255,211,122,0.5); color: #FFD37A; }
+.a { padding: 0 20px 20px; color: #a9bad6; line-height: 1.7; font-size: 15px; }
+.a p { margin: 0 0 10px; }
+.a p:last-child { margin-bottom: 0; }
+.a strong { color: #eaf1fb; }
+.a a { color: #7ea8e0; }
+
+/* Disclaimer / standalone labeled section */
+.disclaimer { margin: 34px 0 8px; }
+.disclaimer h2 { font-size: 18px; font-weight: 700; color: #fff; margin: 0 0 10px; }
+.disclaimer p { color: #a9bad6; line-height: 1.7; font-size: 15px; margin: 0; }
+
+@media (max-width: 560px) {
+  .tab { min-width: 0; flex-basis: calc(50% - 4px); font-size: 13.5px; }
+}

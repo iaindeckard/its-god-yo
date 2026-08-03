@@ -108,7 +108,7 @@ export default function ProgramTermsPage() {
 
       <h3>2.2 Pricing and billing</h3>
       <p>
-        The DM from Him add-on is billed at <strong>$2.99 per month</strong>. It is always billed as its own separate monthly line item, independent of the base subscription plan it is added to. As with all IGY subscriptions, no charge occurs until the recipient personally confirms by text; the add-on is then billed as part of the resulting subscription. Current pricing is shown at signup and may change on a going-forward basis; a change will not retroactively affect an active subscription&rsquo;s current billing period.
+        The DM from Him add-on is priced per recipient, and its billing cadence follows the base subscription it is added to. Added to a <strong>monthly</strong> base plan, it is billed at <strong>$2.99 per month</strong>; added to an <strong>annual</strong> base plan, it is billed at <strong>$35.88 per year</strong> (twelve months at $2.99). In either case it is billed as its own separate line item alongside the base plan, and the add-on&rsquo;s billing interval always matches the base plan&rsquo;s interval. As with all IGY subscriptions, no charge occurs until the recipient personally confirms by text; the add-on is then billed as part of the resulting subscription. Current pricing is shown at signup and may change on a going-forward basis; a change will not retroactively affect an active subscription&rsquo;s current billing period.
       </p>
 
       <h3>2.3 Trial, adding, removing, and cancelling</h3>
@@ -117,7 +117,7 @@ export default function ProgramTermsPage() {
       </p>
       <ul>
         <li>The add-on can be turned on at signup, or added or removed later at any time by texting <strong>DM ON</strong> or <strong>DM OFF</strong> to the daily-message number. This changes only the add-on and does not affect the base subscription.</li>
-        <li>Turning the add-on on or off mid-cycle may be reflected as a proration on the next invoice for the affected monthly period.</li>
+        <li>Turning the add-on on or off mid-cycle may be reflected as a proration on the next invoice for the affected billing period.</li>
         <li>Replying <strong>STOP</strong> cancels the <strong>entire</strong> subscription &mdash; the base plan and the DM from Him add-on together. There is no way to cancel only the base plan while keeping the add-on; use DM OFF to remove just the add-on.</li>
       </ul>
 
