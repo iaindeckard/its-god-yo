@@ -95,6 +95,17 @@ already prefers them with `general` fallback; (b) add the AI appropriate-to-the-
 selection step §9 describes; (c) fix dedup to normalized text regardless. Do NOT treat the
 current generic output as production-ready seasonal content.
 
+## Go-live gates (flagged by Iain 2026-08-03 — do NOT assume at go-live)
+
+1. **Phase F final simulation must use REAL Twilio, not mocked.** Iain wants this fully
+   closed out in production, confirmed working — not left dormant. The parked real-delivery
+   test (Iain's phone number + a path to the live creds) must happen BEFORE Phase F's final
+   simulation, which then uses the real send.
+2. **PURCHASES_ENABLED is a SEPARATE go-live gate from SEASONS_ENABLED.** Season enrollment
+   requires an actual active subscriber to enroll; there's no real paying base yet (one
+   test-ish row). At the actual go-live step, REMIND Iain if PURCHASES_ENABLED is still
+   false — flipping it is its own explicit decision, never an assumption.
+
 ## Recurring operational item (for Phase F integration-gate checklist)
 
 **Annual liturgical-boundary spot-check (T-45 before Advent start).** Once a year,
