@@ -10,6 +10,7 @@ import {
   type SeasonKey,
   type CalDate,
 } from "./liturgical";
+import { SEASON_KEYS } from "./catalog";
 
 /**
  * Phase C — seasonal content pipeline + review queue.
@@ -50,7 +51,7 @@ export function seasonSendDates(season: SeasonKey, year: number): CalDate[] {
 export interface VerseSelection {
   verse_ref: string;
   verse_text: string;
-  translated_text: string;
+  translated_text: string | null; // slang translate is a separate downstream AI step
 }
 export type VerseSelector = (ctx: {
   season: SeasonKey;
@@ -200,4 +201,108 @@ export async function runSeasonReviewAlarm(args: {
     tripped.push(alert);
   }
   return { tripped };
+}
+
+// ---------------------------------------------------------------------------
+// Real verse selection (reuses get_theme_track_pool) + the T-30 generation trigger
+// ---------------------------------------------------------------------------
+
+/** Intended per-season theme track. NONE of these are populated yet — only
+ *  `general` and `comfort_hard_times` tracks exist — so the selector falls back to
+ *  `general` (tonally generic) until season-toned tracks are curated. */
+export const SEASON_TRACK: Record<SeasonKey, string> = {
+  advent: "season_advent",
+  christmastide: "season_christmastide",
+  lent: "season_lent",
+  eastertide: "season_eastertide",
+};
+
+export interface PoolVerseSelector {
+  (ctx: { season: SeasonKey; year: number; date: CalDate; dayIndex: number }): Promise<VerseSelection>;
+  /** Which track a season actually drew from (the intended one, or `general` fallback). */
+  trackUsedFor(season: SeasonKey): string;
+}
+
+/**
+ * Real verse selector: draws from get_theme_track_pool — the SAME approved-verse
+ * source the daily generate-monthly-batch pipeline uses. Tries the season track,
+ * falls back to `general` when empty, dedups within a run, and spreads picks across
+ * the pool. Fills verse_ref + KJV verse_text; the teen-slang translation is the same
+ * separate downstream AI step as the daily pipeline (left null here).
+ */
+export async function makePoolVerseSelector(db: SupabaseClient): Promise<PoolVerseSelector> {
+  const cache = new Map<string, { ref: string; text: string }[]>();
+  const trackUsed = new Map<SeasonKey, string>();
+  const usedRefs = new Set<string>();
+
+  async function poolFor(track: string) {
+    if (cache.has(track)) return cache.get(track)!;
+    const { data, error } = await db.rpc("get_theme_track_pool", { p_track: track });
+    if (error) throw new Error(`get_theme_track_pool(${track}) failed: ${error.message}`);
+    const rows = ((data ?? []) as { book: string; chapter: number; verse: number; text: string }[])
+      .map((r) => ({ ref: `${r.book} ${r.chapter}:${r.verse}`, text: r.text }))
+      .sort((a, b) => (a.ref < b.ref ? -1 : a.ref > b.ref ? 1 : 0)); // deterministic order
+    cache.set(track, rows);
+    return rows;
+  }
+
+  const selector = (async (ctx) => {
+    let track = SEASON_TRACK[ctx.season];
+    let pool = await poolFor(track);
+    if (pool.length === 0) {
+      track = "general";
+      pool = await poolFor("general");
+    }
+    trackUsed.set(ctx.season, track);
+    if (pool.length === 0) throw new Error(`no eligible verses for ${ctx.season} (pool empty)`);
+    const stride = Math.max(1, Math.floor(pool.length / 60));
+    let idx = (ctx.dayIndex * stride) % pool.length;
+    for (let tries = 0; tries < pool.length; tries++) {
+      const cand = pool[idx];
+      if (!usedRefs.has(cand.ref)) {
+        usedRefs.add(cand.ref);
+        return { verse_ref: cand.ref, verse_text: cand.text, translated_text: null };
+      }
+      idx = (idx + 1) % pool.length;
+    }
+    const cand = pool[ctx.dayIndex % pool.length]; // pool exhausted → reuse is acceptable
+    return { verse_ref: cand.ref, verse_text: cand.text, translated_text: null };
+  }) as PoolVerseSelector;
+  selector.trackUsedFor = (s: SeasonKey) => trackUsed.get(s) ?? SEASON_TRACK[s];
+  return selector;
+}
+
+/**
+ * T-30 generation trigger. For each season whose review window is open
+ * (today in [seasonStart − 30, seasonStart]) and that has no batch yet, generates
+ * the batch. Idempotent — an existing batch is skipped. This is what the daily
+ * season-content-generate cron runs.
+ */
+export async function runSeasonGeneration(args: {
+  db: SupabaseClient;
+  today: CalDate;
+  selectVerse: VerseSelector;
+  reviewWindowDays?: number;
+}): Promise<{ generated: { season: SeasonKey; year: number; itemCount: number }[] }> {
+  const { db, today, selectVerse } = args;
+  const reviewWindowDays = args.reviewWindowDays ?? REVIEW_WINDOW_DAYS;
+  const generated: { season: SeasonKey; year: number; itemCount: number }[] = [];
+  for (const season of SEASON_KEYS) {
+    for (const y of [today.year - 1, today.year, today.year + 1]) {
+      const start = seasonWindows(y)[season].start;
+      const reviewOpens = addDays(start, -reviewWindowDays);
+      if (iso(reviewOpens) <= iso(today) && iso(today) <= iso(start)) {
+        const { data: existing } = await db
+          .from("season_content_batches")
+          .select("id")
+          .eq("season_key", season)
+          .eq("liturgical_year", y)
+          .maybeSingle();
+        if (existing) continue;
+        const { itemCount } = await generateSeasonBatch({ db, season, year: y, selectVerse, reviewWindowDays });
+        generated.push({ season, year: y, itemCount });
+      }
+    }
+  }
+  return { generated };
 }

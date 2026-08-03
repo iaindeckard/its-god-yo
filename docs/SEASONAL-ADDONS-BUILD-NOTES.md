@@ -70,6 +70,31 @@ pattern in **both** directions, not just additions: adding a teen bills for them
 cycle, AND removing a teen mid-season stops billing for them next cycle (symmetric with
 the DM-from-Him removal-credit/proration fix). Do not implement add-only.
 
+## ⚠ Phase C real-selector finding (2026-08-03) — pool reuse ≠ seasonal tone
+
+The real selector (`makePoolVerseSelector`) genuinely reuses `get_theme_track_pool`
+(verified: all 4 seasons drew from it). BUT only `general` (2,080 verses) and
+`comfort_hard_times` (3) tracks exist — there are **no season-toned tracks** — so every
+season falls back to `general`. Result: selections are **tonally generic and
+interchangeable** across Advent/Lent/Eastertide; none distinctly evokes anticipation /
+repentance / celebration. Spec §9 ("AI selects a verse APPROPRIATE to that specific day")
+is NOT met by pool-reuse alone. Concrete issues seen in the 4 real batches:
+- Eastertide day 48 picked a lament ("hide not thyself from my supplication") — tonally
+  opposite of Eastertide celebration.
+- Christmastide had an identical-TEXT duplicate from two different refs (1 Chron 16:10 vs
+  Ps 105:3) — **dedup is by verse_ref, not normalized text** (real defect: a subscriber
+  could get the same message twice in a season).
+- Selection "spread" clusters (consecutive verses, e.g. 1 Chron 16:10/11/12 as day 1 of
+  three seasons).
+
+The pipeline correctly lands everything `in_review`, so the human review queue is the
+backstop — but with generic pre-selection the reviewer is doing 100% of the tonal
+curation by hand (124 items/yr), which defeats AI pre-selection. **Options (Iain's call):**
+(a) curate season-toned tracks (`season_advent`, …) in `verse_theme_tags` — the selector
+already prefers them with `general` fallback; (b) add the AI appropriate-to-the-day
+selection step §9 describes; (c) fix dedup to normalized text regardless. Do NOT treat the
+current generic output as production-ready seasonal content.
+
 ## Recurring operational item (for Phase F integration-gate checklist)
 
 **Annual liturgical-boundary spot-check (T-45 before Advent start).** Once a year,
