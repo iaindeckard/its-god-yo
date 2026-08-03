@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import s from "./iotnbo.module.css";
 
 export const metadata: Metadata = {
@@ -31,7 +32,19 @@ export default function ItsOkayPage() {
       </section>
 
       <section className={s.wrap}>
-        <div className={s.card}>
+        <div className={`${s.card} ${s.founderCard}`}>
+          <div className={s.founderMedia}>
+            <Image
+              src="/founder/iain-lisette-wedding.jpeg"
+              alt="Iain and Lisette Deckard on their wedding day"
+              fill
+              className={s.founderImg}
+              sizes="(min-width: 700px) 300px, 100vw"
+              priority
+            />
+            <div className={s.founderCaption}>Iain &amp; Lisette &mdash; February 2005</div>
+          </div>
+          <div className={s.founderBody}>
           <div className={s.founderTag}>A Message From Our Founder</div>
           <p className={s.strong}>
             In February of 2025, Lisette and I celebrated our 20-year wedding anniversary. On July 11, 2025, I lost her
@@ -51,6 +64,7 @@ export default function ItsOkayPage() {
             day, and I want this to be a place where struggling is never something to hide. Whether you&rsquo;re the
             parent setting this up or the teen receiving it, that&rsquo;s true for you too.
           </p>
+          </div>
         </div>
       </section>
 

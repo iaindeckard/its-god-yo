@@ -36,8 +36,23 @@
 .foot { text-align: center; padding: 16px 0 56px; }
 .foot a { color: #7ea8e0; font-size: 14px; text-decoration: none; }
 
+/* Founder message with the wedding photo (mirrors USN's IOTNBO treatment:
+   photo beside the message, object-cover/center crop, portrait, with caption). */
+.founderCard { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+.founderMedia { position: relative; width: 100%; min-height: 320px; background: #0b1830; }
+.founderImg { object-fit: cover; object-position: center; }
+.founderCaption { position: absolute; bottom: 12px; left: 14px; color: rgba(255,255,255,0.6); font-size: 11px; font-weight: 600; letter-spacing: 0.02em; }
+.founderBody { padding: 32px; }
+@media (min-width: 700px) {
+  .founderCard { flex-direction: row; }
+  .founderMedia { width: 300px; flex-shrink: 0; min-height: 500px; }
+  .founderBody { flex: 1; }
+}
+
 @media (max-width: 640px) {
   .hero h1 { font-size: 32px; }
   .resourceGrid { grid-template-columns: 1fr; }
   .card, .closing { padding: 24px; }
+  .founderCard { padding: 0; }
+  .founderBody { padding: 24px; }
 }
