@@ -2,6 +2,7 @@ import "server-only";
 import crypto from "crypto";
 import { getSupabaseAdmin } from "./supabaseAdmin";
 import { geocodeAddress, countryCentroid } from "./geocode";
+import { normalizeSalutation } from "./salutations";
 import {
   sendCornerstoneEmail,
   applicationReceivedEmail, applicationApprovedEmail, applicationDeclinedEmail,
@@ -70,6 +71,7 @@ export interface CornerstoneApplication {
   applicant_user_id: string | null;
   contact_name: string | null;
   contact_title: string | null;
+  contact_salutation: string[] | null;
   contact_email: string | null;
   contact_phone: string | null;
   existing_account_email: string | null;
@@ -192,6 +194,7 @@ export interface ApplicationInput {
   };
   contact_name?: string | null;
   contact_title?: string | null;
+  contact_salutation?: string[] | null;
   contact_email?: string | null;
   contact_phone?: string | null;
   existing_account_email?: string | null;
@@ -239,6 +242,7 @@ export async function submitApplication(input: ApplicationInput): Promise<{ appl
       applicant_user_id: input.applicant_user_id ?? null,
       contact_name: input.contact_name?.trim() || null,
       contact_title: input.contact_title?.trim() || null,
+      contact_salutation: normalizeSalutation(input.contact_salutation),
       contact_email: input.contact_email?.trim() || null,
       contact_phone: input.contact_phone?.trim() || null,
       existing_account_email: input.existing_account_email?.trim() || null,

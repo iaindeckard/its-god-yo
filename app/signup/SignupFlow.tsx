@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import SalutationSelect from "@/components/SalutationSelect";
 import Link from "next/link";
 import { loadStripe, type Stripe as StripeJs } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
@@ -96,6 +97,9 @@ export default function SignupFlow({
   // recipient / purchaser
   const [teenFirstName, setTeenFirstName] = useState("");
   const [purchaserEmail, setPurchaserEmail] = useState("");
+  const [purchaserFirstName, setPurchaserFirstName] = useState("");
+  const [purchaserLastName, setPurchaserLastName] = useState("");
+  const [purchaserSalutation, setPurchaserSalutation] = useState<string[]>([]);
   const [teenBirthYear, setTeenBirthYear] = useState("");
   const [teenGate, setTeenGate] = useState<Gate | null>(null);
   const [teenEnhancedAck, setTeenEnhancedAck] = useState(false);
@@ -185,6 +189,7 @@ export default function SignupFlow({
     setResult(null);
     setError(null);
     setTeenFirstName(""); setPurchaserEmail(""); setTeenPhone(""); setPrimaryAttest(false);
+    setPurchaserFirstName(""); setPurchaserLastName(""); setPurchaserSalutation([]);
     setDmEnabled(false); setStripeIds(null); setReferralApplied(false); setReferralInput(""); setReferralError(null);
     setPromo(null); setPromoInput(""); setPromoError(null); setPromoAttest(false);
     setTeenBirthYear(""); setTeenGate(null); setTeenEnhancedAck(false);
@@ -287,6 +292,9 @@ export default function SignupFlow({
         promo_attestation_text: promoNeedsAttest ? promo?.attestation_text ?? null : null,
         purchaser_email: purchaserEmail.trim() || null,
         purchaser_timezone: detectTimezone(),
+        purchaser_first_name: purchaserFirstName.trim() || null,
+        purchaser_last_name: purchaserLastName.trim() || null,
+        purchaser_salutation: purchaserSalutation,
         teen: {
           first_name: teenFirstName.trim(),
           phone: normalizePhone(teenPhone),
@@ -325,6 +333,9 @@ export default function SignupFlow({
         promo_attestation_text: promoNeedsAttest ? promo?.attestation_text ?? null : null,
         purchaser_email: purchaserEmail.trim() || null,
         purchaser_timezone: detectTimezone(),
+        purchaser_first_name: purchaserFirstName.trim() || null,
+        purchaser_last_name: purchaserLastName.trim() || null,
+        purchaser_salutation: purchaserSalutation,
         family_teens: familyTeens.map((tn) => ({ first_name: tn.name.trim(), phone: normalizePhone(tn.phone), birth_year: Number(tn.year) })),
         stripe: ids,
       });
@@ -339,6 +350,30 @@ export default function SignupFlow({
   }
 
   const dotIndex = Math.min(step, TOTAL_DOTS - 1);
+
+  // Purchaser / account-holder identity: name + structured salutation. Shared by
+  // both RECIPIENT steps (family + individual/gift/group). Salutation options are
+  // ordered by the chosen signup language; the full combined list is always shown.
+  const purchaserIdentityFields = (
+    <>
+      <div className="field">
+        <label>{lang === "es" ? "Tu nombre" : "Your first name"}</label>
+        <input value={purchaserFirstName} onChange={(e) => setPurchaserFirstName(e.target.value)} />
+      </div>
+      <div className="field">
+        <label>{lang === "es" ? "Tu apellido" : "Your last name"}</label>
+        <input value={purchaserLastName} onChange={(e) => setPurchaserLastName(e.target.value)} />
+      </div>
+      <SalutationSelect
+        lang={lang}
+        value={purchaserSalutation}
+        onChange={setPurchaserSalutation}
+        label={lang === "es" ? "Título(s)" : "Title(s)"}
+        otherLabel={lang === "es" ? "Otro" : "Other"}
+        hint={lang === "es" ? "Opcional. Elige los que apliquen — puedes combinar títulos (p. ej. Rev. Dr.)." : "Optional. Pick any that apply — combine titles if you like (e.g. Rev. Dr.)."}
+      />
+    </>
+  );
 
   return (
     <main>
@@ -551,6 +586,7 @@ export default function SignupFlow({
                 <label>{s.purchaserEmailLabel}</label>
                 <input type="email" value={purchaserEmail} onChange={(e) => setPurchaserEmail(e.target.value)} />
               </div>
+              {purchaserIdentityFields}
               <div className="summary-line total" style={{ marginTop: 8 }}>
                 <span>{lang === "es" ? "Total anual" : "Annual total"}</span>
                 <span>{money(PLANS.family_annual.amount! + familyExtra * FAMILY_EXTRA_TEEN.amount)}{s.perYear}</span>
@@ -587,6 +623,7 @@ export default function SignupFlow({
                 <label>{s.purchaserEmailLabel}</label>
                 <input type="email" value={purchaserEmail} onChange={(e) => setPurchaserEmail(e.target.value)} />
               </div>
+              {purchaserIdentityFields}
               <div className="wizard-nav">
                 <button className="btn btn-ghost" onClick={() => setStep(STEP.PLAN)}>{s.back}</button>
                 <button className="btn btn-primary" disabled={!teenFirstName.trim() || !validYear(teenBirthYear)} onClick={() => setStep(STEP.PLUSONE)}>

@@ -36,6 +36,12 @@ export interface ConsentPayload {
   // Stage 2 send-time fallback chain (used when a teen never sets their own tz on
   // the welcome page). Best-effort; null if the browser can't resolve it.
   purchaser_timezone?: string | null;
+  // Purchaser / account-holder identity. Name is net new (only email/timezone
+  // existed before). Salutation is a structured multi-select stored as an array;
+  // an "Other" free-text entry is just another element.
+  purchaser_first_name?: string | null;
+  purchaser_last_name?: string | null;
+  purchaser_salutation?: string[];
   teen?: { first_name: string; phone: string; birth_year?: number; enhanced_consent_ack?: boolean };
   family_teens?: Array<{ first_name: string; phone: string; birth_year?: number; enhanced_consent_ack?: boolean }>;
   // NOTE: the former `plus_one` (second-recipient) input was removed 2026-08-01 when

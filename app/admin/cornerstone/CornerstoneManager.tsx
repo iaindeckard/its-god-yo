@@ -4,6 +4,7 @@ import { Fragment, useState } from "react";
 import type {
   ApplicationWithChurch, PartnerWithChurch, CornerstoneConfig,
 } from "@/lib/cornerstone";
+import { formatPersonName } from "@/lib/salutations";
 
 // Local number formatter — can't import the server-only lib helper into a client bundle.
 const fmt = (n: number) => `CP-${String(n).padStart(6, "0")}`;
@@ -132,7 +133,7 @@ export default function CornerstoneManager({
                       </div>
                     </td>
                     <td className="muted" style={{ fontSize: 13 }}>
-                      {a.contact_name ?? "—"}{a.contact_email ? <><br />{a.contact_email}</> : null}
+                      {formatPersonName({ salutation: a.contact_salutation, name: a.contact_name }) || "—"}{a.contact_email ? <><br />{a.contact_email}</> : null}
                       {a.existing_account_email ? <><br /><span style={{ fontSize: 11 }}>acct: {a.existing_account_email}</span></> : null}
                     </td>
                     <td className="muted">{a.preferred_plan ?? "—"}</td>

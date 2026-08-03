@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import SalutationSelect from "@/components/SalutationSelect";
 
 /**
  * Public Cornerstone Partner application/enrollment form. Reuses the app's shared
@@ -29,6 +30,10 @@ const empty = {
 
 export default function ApplicationForm() {
   const [f, setF] = useState({ ...empty });
+  // Structured multi-select honorific(s) for the contact — array, kept separate
+  // from the flat string form object. The church application has no language
+  // field, so options default to English-first (full combined list still shown).
+  const [contactSalutation, setContactSalutation] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
@@ -48,7 +53,7 @@ export default function ApplicationForm() {
       const res = await fetch("/api/cornerstone/apply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(f),
+        body: JSON.stringify({ ...f, contact_salutation: contactSalutation }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || "Something went wrong. Please try again.");
@@ -126,7 +131,14 @@ export default function ApplicationForm() {
         <h2 style={{ fontSize: 16, margin: "20px 0 12px" }}>Primary contact</h2>
         <div className="row">
           <div className="field"><label>Contact name *</label><input value={f.contact_name} onChange={(e) => set("contact_name", e.target.value)} /></div>
-          <div className="field"><label>Title</label><input value={f.contact_title} onChange={(e) => set("contact_title", e.target.value)} placeholder="Youth Pastor" /></div>
+          <div className="field"><label>Role / title</label><input value={f.contact_title} onChange={(e) => set("contact_title", e.target.value)} placeholder="Youth Pastor" /></div>
+          <SalutationSelect
+            lang="en"
+            value={contactSalutation}
+            onChange={setContactSalutation}
+            label="Salutation / honorific(s)"
+            hint="Optional. How this contact should be addressed — combine if needed (e.g. Rev. Dr.). Separate from their role above."
+          />
         </div>
         <div className="row">
           <div className="field"><label>Email *</label><input type="email" value={f.contact_email} onChange={(e) => set("contact_email", e.target.value)} placeholder="you@church.org" /></div>

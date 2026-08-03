@@ -98,6 +98,23 @@ function confirmationSms(lang: "en" | "es", recipientName: string, kind: "primar
   return body;
 }
 
+// Normalize a purchaser salutation multi-select for storage: trim, drop empties,
+// de-dupe preserving selection order; null when empty. Mirrors lib/salutations.ts
+// normalizeSalutation (this Deno edge fn cannot import lib/).
+function normSalutation(raw: unknown): string[] | null {
+  if (!Array.isArray(raw)) return null;
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const item of raw) {
+    if (typeof item !== "string") continue;
+    const v = item.trim();
+    if (!v || seen.has(v)) continue;
+    seen.add(v);
+    out.push(v);
+  }
+  return out.length ? out : null;
+}
+
 interface PlusOne {
   gifter_first_name?: string;
   gifter_last_name?: string;
@@ -125,6 +142,9 @@ interface Payload {
   promo_attestation_text?: string;
   purchaser_email?: string;
   purchaser_timezone?: string;
+  purchaser_first_name?: string;
+  purchaser_last_name?: string;
+  purchaser_salutation?: string[]; // structured multi-select; "Other" is just another element
   teen?: { first_name?: string; phone?: string; birth_year?: number; enhanced_consent_ack?: boolean };
   plus_one?: PlusOne | null;
   family_teens?: Array<{ first_name?: string; phone?: string; birth_year?: number; enhanced_consent_ack?: boolean }>;
@@ -269,7 +289,9 @@ Deno.serve(async (req: Request) => {
       language: lang, theme_track: p.theme_track?.trim() || "general", plan_key: "family", base_price_id: p.base_price_id, dm_addon: false,
       referral_code: p.referral_code?.trim() || null, referral_discount_applied: !!p.referral_discount_applied,
       promo_code: p.promo_code?.trim() || null, promo_promotion_code_id: p.promo_promotion_code_id?.trim() || null,
-      purchaser_email: p.purchaser_email?.trim() || null, purchaser_timezone: p.purchaser_timezone?.trim() || null, teen_consent_id: consentIds[0], plus_one_consent_id: null,
+      purchaser_email: p.purchaser_email?.trim() || null, purchaser_timezone: p.purchaser_timezone?.trim() || null,
+      purchaser_first_name: p.purchaser_first_name?.trim() || null, purchaser_last_name: p.purchaser_last_name?.trim() || null, purchaser_salutation: normSalutation(p.purchaser_salutation),
+      teen_consent_id: consentIds[0], plus_one_consent_id: null,
       stripe_customer_id: p.stripe?.customer_id ?? null, stripe_setup_intent_id: p.stripe?.setup_intent_id ?? null,
       stripe_payment_method_id: p.stripe?.payment_method_id ?? null,
       status: PREORDER_MODE ? "preorder_pending" : "awaiting_confirmation", is_preorder: PREORDER_MODE,
@@ -419,6 +441,9 @@ Deno.serve(async (req: Request) => {
     promo_promotion_code_id: p.promo_promotion_code_id?.trim() || null,
     purchaser_email: p.purchaser_email?.trim() || null,
     purchaser_timezone: p.purchaser_timezone?.trim() || null,
+    purchaser_first_name: p.purchaser_first_name?.trim() || null,
+    purchaser_last_name: p.purchaser_last_name?.trim() || null,
+    purchaser_salutation: normSalutation(p.purchaser_salutation),
     teen_consent_id: teenRow.id,
     plus_one_consent_id: plusOneId,
     stripe_customer_id: p.stripe?.customer_id ?? null,

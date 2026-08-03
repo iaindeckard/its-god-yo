@@ -64,6 +64,7 @@ export async function POST(req: Request) {
       },
       contact_name: body.contact_name ?? null,
       contact_title: body.contact_title ?? null,
+      contact_salutation: Array.isArray(body.contact_salutation) ? body.contact_salutation : null,
       contact_email: body.contact_email ?? null,
       contact_phone: body.contact_phone ?? null,
       existing_account_email: body.existing_account_email ?? null,
