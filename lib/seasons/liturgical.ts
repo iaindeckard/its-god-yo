@@ -107,6 +107,10 @@ export function christmasCycle(yearOfChristmas: number): ChristmasCycle {
     firstSundayOfAdvent: firstSundayOfAdvent(yearOfChristmas),
     christmasDay: { year: yearOfChristmas, month: 12, day: 25 },
     christmastideEnd: { year: yearOfChristmas + 1, month: 1, day: 5 },
+    // Epiphany is FIXED on 6 Jan, never transferred to the nearest Sunday. This is
+    // the Episcopal Church / BCP rule (IGY's named affinity partner). Only the US
+    // Roman Catholic Church transfers it to the Sunday of Jan 2–8; IGY is not
+    // RC-specific, so do NOT switch this to a transferred date.
     epiphany: { year: yearOfChristmas + 1, month: 1, day: 6 },
   };
 }

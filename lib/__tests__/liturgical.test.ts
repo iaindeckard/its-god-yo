@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   gregorianEaster,
   easterCycle,
+  christmasCycle,
   firstSundayOfAdvent,
   seasonWindows,
   freeClimaxDays,
@@ -133,6 +134,22 @@ describe("season windows — boundaries + spec-divergence flags", () => {
   it("Eastertide 2026: Easter → day before Pentecost = 49 days (spec headline 50 includes Pentecost)", () => {
     expect(w.eastertide.calendarDays).toBe(49);
     expect(w.eastertide.specHeadlineDays).toBe(50);
+  });
+});
+
+describe("Epiphany is FIXED on Jan 6 — never transferred (Episcopal/BCP rule)", () => {
+  it("is Jan 6 every year, on whatever weekday it falls", () => {
+    for (let y = 2024; y <= 2035; y++) {
+      const ep = christmasCycle(y).epiphany;
+      expect(ep.month).toBe(1);
+      expect(ep.day).toBe(6); // fixed — NOT moved to the Sunday of Jan 2–8
+      expect(ep.year).toBe(y + 1);
+    }
+    // In 2026 Epiphany (Jan 6 2026) is a Tuesday; a transferred date would be Jan 4
+    // (Sun). Confirm we keep the fixed Tuesday, proving no Sunday-transfer logic.
+    const ep2026 = freeClimaxDays(2026).find((d) => d.label === "Epiphany")!;
+    expect(iso(ep2026.date)).toBe("2026-01-06");
+    expect(weekday(ep2026.date)).toBe(2); // Tuesday
   });
 });
 
