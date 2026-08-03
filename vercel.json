@@ -11,6 +11,7 @@
     { "path": "/api/cron/preorder-timeouts", "schedule": "0 17 * * *" },
     { "path": "/api/cron/season-billing", "schedule": "0 8 * * *" },
     { "path": "/api/cron/season-content-generate", "schedule": "0 6 * * *" },
-    { "path": "/api/cron/season-content-alarm", "schedule": "0 7 * * *" }
+    { "path": "/api/cron/season-content-alarm", "schedule": "0 7 * * *" },
+    { "path": "/api/cron/climax-send", "schedule": "0,30 * * * *" }
   ]
 }
