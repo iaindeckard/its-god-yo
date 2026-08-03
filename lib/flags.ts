@@ -72,7 +72,7 @@ export const PREORDER_MODE = false;
  * verification clears (locked sequencing: content+send verified → Twilio → then
  * this, then PURCHASES_ENABLED). Never enable this in isolation.
  */
-export const DAILY_SEND_ENABLED = false;
+export const DAILY_SEND_ENABLED = true;
 
 /**
  * Holy Season add-on products (Christmastide / Advent / Eastertide / Lent). While
