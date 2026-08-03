@@ -6,6 +6,9 @@ import { classifyReply } from "./twilio";
 import { toE164, phoneKey } from "./phone";
 import { cancelSubscriptionForSignup, cancelFamilyBaseIfNoActiveTeens } from "./cancelSubscription";
 import { setDmAddon } from "./dmAddon";
+import { retryUrl } from "./preorder/token";
+import { paymentDeclined } from "./preorder/messages";
+import { sendPreorderEmail } from "./preorder/notify";
 
 /**
  * Core inbound-reply logic for the Twilio "YES" handler.
@@ -32,6 +35,7 @@ const REPLY = {
     unknown: "Reply YES to confirm your daily texts from It's God, Yo!, or STOP to opt out.",
     dmOn: "DM from Him is on 💛 Your daily verse will come as a personal note. Reply DM OFF anytime to turn it off.",
     dmOff: "DM from Him is off — you'll get your daily verse as usual. Reply DM ON anytime to turn it back on.",
+    paymentIssue: "You're confirmed! 🙏 There was a hiccup charging the card, so we've emailed the person who set this up with a link to fix it — you'll start once that's sorted.",
   },
   es: {
     allSet: "¡Todo listo! Empezarás a recibir Buenas Nuevas diarias de It's God, Yo! 🙏",
@@ -42,6 +46,7 @@ const REPLY = {
     unknown: "Responde SÍ para confirmar tus textos diarios de It's God, Yo!, o STOP para cancelar.",
     dmOn: "DM de Él está activado 💛 Tu versículo diario llegará como una nota personal. Responde DM OFF para desactivarlo.",
     dmOff: "DM de Él está desactivado — recibirás tu versículo diario como siempre. Responde DM ON para reactivarlo.",
+    paymentIssue: "¡Quedaste confirmado! 🙏 Hubo un problema al procesar la tarjeta, así que le enviamos un correo a la persona que lo configuró con un enlace para arreglarlo — empezarás en cuanto se resuelva.",
   },
 } as const;
 
@@ -72,6 +77,7 @@ export interface InboundResult {
     | "unknown"
     | "dm_on"
     | "dm_off"
+    | "payment_failed"
     | "blocked";
   reply: string;
   pending_signup_id?: string;
@@ -325,10 +331,31 @@ export async function processInboundReply(from: string, body: string): Promise<I
 
   if (!allConfirmed) return { action: "confirmed_waiting", reply: REPLY[lang].waiting, pending_signup_id: signup!.id };
 
-  const result = await createSubscriptionForPendingSignup(signup!.id);
+  // Preorder rows charge immediately (no trial) on YES; normal rows start a
+  // 7-day trial. is_preorder is the discriminator set at signup.
+  const { data: full } = await admin
+    .from("pending_signups")
+    .select("is_preorder, purchaser_email")
+    .eq("id", signup!.id)
+    .maybeSingle();
+  const chargeNow = full?.is_preorder === true;
+
+  const result = await createSubscriptionForPendingSignup(signup!.id, chargeNow ? { chargeImmediately: true } : {});
   if (result.status === "created")
     return { action: "confirmed_created", reply: allSetReply(lang, matched.welcome_token), pending_signup_id: signup!.id, subscription_id: result.subscription_id };
   if (result.status === "already_created")
     return { action: "already_created", reply: allSetReply(lang, matched.welcome_token), pending_signup_id: signup!.id, subscription_id: result.subscription_id };
+  if (result.status === "payment_failed") {
+    // Preorder activation charge declined: enter payment_failed (its own clock) and
+    // email the purchaser a tokenized retry link immediately (step 5). The teen who
+    // texted YES gets the informational reply — they aren't the cardholder.
+    await admin
+      .from("pending_signups")
+      .update({ status: "payment_failed", payment_failed_at: new Date().toISOString() })
+      .eq("id", signup!.id);
+    const msg = paymentDeclined(null, lang, retryUrl(signup!.id));
+    await sendPreorderEmail(full?.purchaser_email ?? null, msg.email);
+    return { action: "payment_failed", reply: REPLY[lang].paymentIssue, pending_signup_id: signup!.id, detail: result.detail };
+  }
   return { action: "blocked", reply: REPLY[lang].waiting, pending_signup_id: signup!.id, detail: result.detail || result.status };
 }

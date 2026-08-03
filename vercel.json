@@ -7,6 +7,7 @@
     { "path": "/api/cron/reconcile-payments", "schedule": "30 8 * * *" },
     { "path": "/api/cron/reconcile-payments?days=40", "schedule": "0 9 1 * *" },
     { "path": "/api/cron/daily-send", "schedule": "0,30 * * * *" },
-    { "path": "/api/cron/cornerstone-enrollment-reminder", "schedule": "0 16 * * *" }
+    { "path": "/api/cron/cornerstone-enrollment-reminder", "schedule": "0 16 * * *" },
+    { "path": "/api/cron/preorder-timeouts", "schedule": "0 17 * * *" }
   ]
 }
