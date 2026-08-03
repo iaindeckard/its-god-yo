@@ -13,7 +13,7 @@ import {
   PLANS, GROUP_BANDS, DM_ADDON, FAMILY_EXTRA_TEEN, FAMILY_BASE_TEENS, bandForCount, GROUP_CONTACT_THRESHOLD,
 } from "@/lib/plans";
 import { submitConsent, normalizePhone, type ConsentResult } from "@/lib/consent";
-import { SPANISH_ENABLED } from "@/lib/flags";
+import { SPANISH_ENABLED, PREORDER_MODE } from "@/lib/flags";
 
 // Best-effort browser timezone (IANA) captured at signup — the purchaser-level
 // fallback for the Stage 2 send-time chain. Null if the browser can't resolve it.
@@ -780,10 +780,14 @@ export default function SignupFlow({
                     }
                     onClick={handleSubmit}
                   >
-                    {submitting ? s.submitting : s.submitSignup}
+                    {submitting ? s.submitting : PREORDER_MODE ? s.reserveCta : s.submitSignup}
                   </button>
                 )}
               </div>
+              {/* Preorder fineprint — same copy across every plan (reservation state). */}
+              {PREORDER_MODE && teenGate?.decision !== "block" && (
+                <p className="hint" style={{ marginTop: 8, textAlign: "center" }}>{s.reserveFineprint}</p>
+              )}
             </section>
           )}
 
@@ -793,7 +797,7 @@ export default function SignupFlow({
               <div className="success-check">✓</div>
               <h2>{s.doneTitle}</h2>
               <p className="muted" style={{ maxWidth: 460, margin: "0 auto 8px" }}>{result.message}</p>
-              <p className="hint">{s.noChargeYet}</p>
+              <p className="hint">{PREORDER_MODE ? s.reserveDoneHint : s.noChargeYet}</p>
               <div style={{ marginTop: 24 }}>
                 <Link className="btn btn-primary" href="/">{lang === "es" ? "Volver al inicio" : "Back home"}</Link>
                 <button className="btn btn-ghost" style={{ marginLeft: 10 }} onClick={reset}>{s.startOver}</button>

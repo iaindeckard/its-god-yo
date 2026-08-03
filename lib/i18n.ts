@@ -147,6 +147,10 @@ export const t = {
     iConfirm: "I confirm the above",
     submitSignup: "Text them to confirm",
     submitting: "Sending…",
+    // Preorder mode (PREORDER_MODE): same commit button, reservation copy.
+    reserveCta: "Reserve Your Spot",
+    reserveFineprint: "No charge today — we'll text you to confirm right before we launch.",
+    reserveDoneHint: "You've reserved your spot — no charge today. We'll text you to confirm right before we launch.",
 
     doneTitle: "You're all set!",
     startOver: "Start another",
@@ -277,6 +281,10 @@ export const t = {
     iConfirm: "Confirmo lo anterior",
     submitSignup: "Enviarle el texto de confirmación",
     submitting: "Enviando…",
+    // Modo preventa (PREORDER_MODE): mismo botón, texto de reserva.
+    reserveCta: "Aparta tu lugar",
+    reserveFineprint: "Sin cargo hoy — te enviaremos un mensaje para confirmar justo antes de lanzar.",
+    reserveDoneHint: "Apartaste tu lugar — sin cargo hoy. Te enviaremos un mensaje para confirmar justo antes de lanzar.",
 
     doneTitle: "¡Todo listo!",
     startOver: "Empezar otro",

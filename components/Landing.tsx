@@ -4,10 +4,17 @@ import { useState } from "react";
 import Wordmark from "./Wordmark";
 import BubbleMark from "./BubbleMark";
 import SponsorRotator from "./SponsorRotator";
-import { PURCHASES_ENABLED, SPANISH_ENABLED, SPONSORS_ENABLED, CORNERSTONE_ENABLED } from "@/lib/flags";
+import { PURCHASES_ENABLED, PREORDER_MODE, SPANISH_ENABLED, SPONSORS_ENABLED, CORNERSTONE_ENABLED } from "@/lib/flags";
 import s from "./landing.module.css";
 
 type Audience = "parent" | "teen";
+
+// The parent commit CTA is reachable when purchases are live OR we're taking
+// preorders. Preorder swaps the label + fineprint to reservation copy (kept
+// identical to lib/i18n.ts reserveCta / reserveFineprint).
+const SIGNUP_OPEN = PURCHASES_ENABLED || PREORDER_MODE;
+const RESERVE_CTA = "Reserve Your Spot";
+const RESERVE_FINEPRINT = "No charge today — we'll text you to confirm right before we launch.";
 
 const CONTENT: Record<Audience, {
   headline: string; // may contain <br>
@@ -67,7 +74,7 @@ export default function Landing() {
 
   function handleCta() {
     if (audience === "parent") {
-      if (!PURCHASES_ENABLED) return; // signups temporarily closed — no checkout
+      if (!SIGNUP_OPEN) return; // signups temporarily closed — no checkout / no reserve
       window.location.href = "/signup";
       return;
     }
@@ -135,8 +142,8 @@ export default function Landing() {
             {SPANISH_ENABLED && <a href="/?lang=es" className={s.lang}>Espa&ntilde;ol</a>}
             <button className={s.switch} onClick={() => setAudience(audience === "parent" ? "teen" : "parent")}>{c!.switchLabel}</button>
             {audience === "parent"
-              ? (PURCHASES_ENABLED
-                  ? <a href="/signup" className={s.btnWhite}>{c!.navCta}</a>
+              ? (SIGNUP_OPEN
+                  ? <a href="/signup" className={s.btnWhite}>{PREORDER_MODE ? RESERVE_CTA : c!.navCta}</a>
                   : <span className={s.btnWhite} style={{ opacity: 0.55, cursor: "not-allowed" }} aria-disabled="true">Coming soon</span>)
               : <button className={s.btnWhite} onClick={handleCta}>{c!.navCta}</button>}
           </nav>
@@ -154,14 +161,16 @@ export default function Landing() {
           <h1 dangerouslySetInnerHTML={{ __html: c!.headline }} />
           <p className={s.subhead}>{c!.subhead}</p>
           <div className={s.ctaRow}>
-            {audience === "parent" && !PURCHASES_ENABLED
+            {audience === "parent" && !SIGNUP_OPEN
               ? <button className={s.btnBlue} disabled style={{ opacity: 0.55, cursor: "not-allowed" }}>Coming soon</button>
-              : <button className={s.btnBlue} onClick={handleCta}>{c!.cta}</button>}
+              : <button className={s.btnBlue} onClick={handleCta}>{audience === "parent" && PREORDER_MODE ? RESERVE_CTA : c!.cta}</button>}
             <a href="#pricing" className={s.btnOutline}>See pricing</a>
           </div>
           <div className={s.fineprint}>
-            {audience === "parent" && !PURCHASES_ENABLED
+            {audience === "parent" && !SIGNUP_OPEN
               ? "Signups aren't open just yet, so you can look around but you can't be charged. Check back soon."
+              : audience === "parent" && PREORDER_MODE
+              ? RESERVE_FINEPRINT
               : c!.fineprint}
           </div>
 
@@ -349,7 +358,7 @@ export default function Landing() {
             <a href="/terms">Terms</a>
             <a href="/cookies">Cookies</a>
             <a href="/its-okay-to-not-be-okay" className={s.gold}>It&rsquo;s okay to not be okay</a>
-            {(CORNERSTONE_ENABLED || PURCHASES_ENABLED) && <a href="/program-terms">Program Terms</a>}
+            {(CORNERSTONE_ENABLED || SIGNUP_OPEN) && <a href="/program-terms">Program Terms</a>}
             {SPONSORS_ENABLED && (
               <>
                 <a href="/sponsors">Sponsors</a>

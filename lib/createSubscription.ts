@@ -22,7 +22,8 @@ export type CreateStatus =
   | "already_created"
   | "blocked_enhanced"
   | "not_found"
-  | "not_ready";
+  | "not_ready"
+  | "payment_failed";
 
 export interface CreateResult {
   status: CreateStatus;
@@ -30,7 +31,19 @@ export interface CreateResult {
   detail?: string;
 }
 
-export async function createSubscriptionForPendingSignup(pendingSignupId: string): Promise<CreateResult> {
+export interface CreateOptions {
+  /**
+   * Preorder / activation path: charge the saved card NOW instead of starting a
+   * 7-day trial. Creates the subscription with no trial + payment_behavior
+   * 'error_if_incomplete', so Stripe attempts the first invoice synchronously and
+   * a decline surfaces immediately as { status: "payment_failed" } (rather than a
+   * webhook-only past_due days later). On success the row is marked 'active'.
+   */
+  chargeImmediately?: boolean;
+}
+
+export async function createSubscriptionForPendingSignup(pendingSignupId: string, opts: CreateOptions = {}): Promise<CreateResult> {
+  const chargeNow = opts.chargeImmediately === true;
   const admin = getSupabaseAdmin();
   const stripe = getStripe();
 
@@ -81,20 +94,54 @@ export async function createSubscriptionForPendingSignup(pendingSignupId: string
     }
   }
 
-  const sub = await stripe.subscriptions.create(
-    {
-      customer: ps.stripe_customer_id,
-      items,
-      default_payment_method: ps.stripe_payment_method_id,
-      trial_period_days: 7,
-      off_session: true,
-      ...(discounts.length ? { discounts } : {}),
-      metadata: {
-        pending_signup_id: ps.id,
-        teen_consent_id: ps.teen_consent_id ?? "",
-        plan_key: ps.plan_key ?? "",
-      },
+  const baseParams: Stripe.SubscriptionCreateParams = {
+    customer: ps.stripe_customer_id,
+    items,
+    default_payment_method: ps.stripe_payment_method_id,
+    off_session: true,
+    ...(discounts.length ? { discounts } : {}),
+    metadata: {
+      pending_signup_id: ps.id,
+      teen_consent_id: ps.teen_consent_id ?? "",
+      plan_key: ps.plan_key ?? "",
     },
+  };
+
+  if (chargeNow) {
+    // Preorder activation: no trial, charge immediately, fail synchronously on a
+    // decline. The idempotency key is scoped to the payment method so a retry with
+    // a NEW card (see the tokenized retry page) starts a fresh attempt rather than
+    // replaying the declined one; a duplicate YES on the SAME card is still deduped.
+    let sub: Stripe.Subscription;
+    try {
+      sub = await stripe.subscriptions.create(
+        { ...baseParams, payment_behavior: "error_if_incomplete" },
+        { idempotencyKey: `igy_sub_${ps.id}_${ps.stripe_payment_method_id}` },
+      );
+    } catch (e) {
+      const err = e as Stripe.errors.StripeError;
+      if (err?.type === "StripeCardError" || err?.code === "card_declined" || err?.code === "expired_card" || err?.code === "incorrect_cvc" || err?.code === "processing_error" || err?.code === "insufficient_funds") {
+        // Card declined — leave stripe_subscription_id null so a retry can start fresh.
+        return { status: "payment_failed", detail: err.message || err.code || "card_declined" };
+      }
+      throw e; // unexpected (config/programming) error — surface it
+    }
+    if (sub.status !== "active") {
+      return { status: "payment_failed", detail: `subscription_status_${sub.status}` };
+    }
+    await admin
+      .from("pending_signups")
+      .update({ stripe_subscription_id: sub.id, subscription_created_at: new Date().toISOString(), status: "active" })
+      .eq("id", ps.id);
+    if (consentIds.length) {
+      await admin.from("consent_log").update({ consent_status: "confirmed" }).in("id", consentIds);
+    }
+    return { status: "created", subscription_id: sub.id };
+  }
+
+  // Normal path: off_session subscription with a 7-day trial (nothing charged now).
+  const sub = await stripe.subscriptions.create(
+    { ...baseParams, trial_period_days: 7 },
     { idempotencyKey: `igy_sub_${ps.id}` }, // retries never double-create
   );
 
