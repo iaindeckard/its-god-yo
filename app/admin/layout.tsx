@@ -33,10 +33,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         </Link>
         <div style={{ fontSize: 12, color: "var(--igy-on-dark-meta)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Admin</div>
         <nav className="admin-nav">
-          {nav.length === 0 && <span style={{ fontSize: 13, color: "var(--igy-on-dark-meta)", padding: "8px 12px" }}>No sections available for this role.</span>}
+          {nav.length === 0 && !staff && <span style={{ fontSize: 13, color: "var(--igy-on-dark-meta)", padding: "8px 12px" }}>No sections available for this role.</span>}
           {nav.map((n) => (
             <Link key={n.href} href={n.href}>{n.label}</Link>
           ))}
+          {/* Employee Manual is open to every staff member; its sections are individually role-gated on the page itself. */}
+          {staff && <Link href="/admin/handbook">Employee Manual</Link>}
         </nav>
         <div style={{ marginTop: "auto", paddingTop: 24, fontSize: 12, color: "var(--igy-on-dark-meta)" }}>
           <div>Acting role</div>
