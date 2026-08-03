@@ -106,7 +106,7 @@ const FAQS: Record<TabKey, Item[]> = {
       q: "What is DM from Him?",
       a: (
         <p>
-          Teens hear a lot of noise every day - a lot of it negative, a lot of it confusing - and they internalize more of it than we realize. DM from Him takes that same daily verse and reframes it as a personal, first-person message, so instead of just reading Scripture, your teen hears it directly: that they&rsquo;re seen, they matter, and they&rsquo;re worth real time, effort, and love. Maybe your teen doesn&rsquo;t need that reminder. But maybe they do, and you don&rsquo;t know it yet.
+          Teens hear a lot of noise every day - a lot of it negative, a lot of it confusing - and they internalize more of it than we realize. DM from Him takes that same daily verse and reframes it as a personal, first-person message, so instead of just reading Scripture, your teen hears it directly. That they&rsquo;re seen. That they matter. That someone thinks they&rsquo;re worth real time and love. Maybe your teen doesn&rsquo;t need that reminder. But maybe they do, and you don&rsquo;t know it yet.
         </p>
       ),
     },
