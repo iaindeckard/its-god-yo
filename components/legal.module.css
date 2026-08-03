@@ -15,10 +15,6 @@
 .updated { color: #7686a0; font-size: 13px; }
 .operator { color: #a9bad6; font-size: 13px; margin-top: 4px; line-height: 1.5; }
 
-.draft { display: flex; gap: 10px; align-items: flex-start; background: rgba(255,211,122,0.08); border: 1px solid rgba(255,211,122,0.3); border-radius: 12px; padding: 14px 16px; margin: 20px 0 8px; }
-.draft .dot { color: #FFD37A; font-size: 15px; line-height: 1.4; }
-.draft p { color: #f4dfb0; font-size: 13.5px; line-height: 1.55; margin: 0; }
-
 .prose { padding: 8px 0 64px; }
 .prose h2 { font-size: 18px; font-weight: 700; margin: 30px 0 10px; color: #fff; }
 .prose h3 { font-size: 15px; font-weight: 600; margin: 20px 0 8px; color: #cfe0f6; }

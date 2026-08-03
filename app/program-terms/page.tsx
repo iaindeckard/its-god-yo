@@ -2,12 +2,11 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import LegalPage from "@/components/LegalPage";
 import { CORNERSTONE_ENABLED, PURCHASES_ENABLED } from "@/lib/flags";
-import s from "@/components/legal.module.css";
 
 export const metadata: Metadata = {
   title: "Program Terms — It's God, Yo!™",
-  description: "The terms for It's God, Yo!™ programs — the Cornerstone Partner Program and the DM from Him add-on — in one place. Draft for review.",
-  robots: { index: false, follow: false }, // draft, pre-launch — don't index yet
+  description: "The terms for It's God, Yo!™ programs — the Cornerstone Partner Program and the DM from Him add-on — in one place.",
+  robots: { index: false, follow: false }, // pre-launch: not indexed until a program is live
 };
 
 export const dynamic = "force-dynamic";
@@ -31,11 +30,6 @@ export default function ProgramTermsPage() {
 
   return (
     <LegalPage title="Program Terms" updated="August 1, 2026">
-      <div className={s.draft}>
-        <span className={s.dot}>&#9670;</span>
-        <p><strong>DRAFT &mdash; for attorney review.</strong> This is draft language prepared for legal review, not final terms. It has not been reviewed or approved by counsel and should not be relied upon as final. Sections or clauses may change.</p>
-      </div>
-
       <p>
         This page brings together the terms for It&rsquo;s God, Yo!&trade; (&ldquo;IGY,&rdquo; operated by Deckard Enterprise International, LLC) programs in one place. These program terms are in addition to our general <a href="/terms">Terms of Service</a> and <a href="/privacy">Privacy Policy</a>. Where a program term conflicts with the general Terms of Service, the program term controls for that program.
       </p>

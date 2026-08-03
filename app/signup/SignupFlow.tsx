@@ -838,15 +838,11 @@ function AgeGateNotice({
 
   if (gate.decision === "enhanced") {
     // Enhanced-consent SHELL only. It collects intent, NOT verified consent —
-    // the real mechanism is pending counsel and deliberately not built.
+    // the full verification mechanism is not built yet.
     return (
       <div className="consent-box" style={{ borderColor: "var(--igy-caution-border)", background: "var(--igy-caution-bg)" }}>
         <strong>{s.enhancedTitle}</strong>
         <p style={{ margin: "6px 0" }}>{fillTpl(s.enhancedMsgTpl, { age: gate.min_age, country: gate.country ?? "" })}</p>
-        <p className="hint" style={{ color: "var(--igy-caution-text)" }}>
-          ⚠ TODO (pending counsel): {s.enhancedTodo}
-          {gate.mechanism ? ` [required_consent_mechanism: ${gate.mechanism}]` : ""}
-        </p>
         <label className="check">
           <input type="checkbox" checked={ackChecked} onChange={(e) => onAck(e.target.checked)} />
           <span>{s.enhancedAck}</span>
