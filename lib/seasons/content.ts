@@ -230,43 +230,67 @@ export interface PoolVerseSelector {
  * the pool. Fills verse_ref + KJV verse_text; the teen-slang translation is the same
  * separate downstream AI step as the daily pipeline (left null here).
  */
-export async function makePoolVerseSelector(db: SupabaseClient): Promise<PoolVerseSelector> {
-  const cache = new Map<string, { ref: string; text: string }[]>();
-  const trackUsed = new Map<SeasonKey, string>();
-  const usedRefs = new Set<string>();
+const normalizeVerseText = (t: string): string => t.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+const hash32 = (s: string): number => {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h >>> 0;
+};
 
-  async function poolFor(track: string) {
-    if (cache.has(track)) return cache.get(track)!;
-    const { data, error } = await db.rpc("get_theme_track_pool", { p_track: track });
-    if (error) throw new Error(`get_theme_track_pool(${track}) failed: ${error.message}`);
-    const rows = ((data ?? []) as { book: string; chapter: number; verse: number; text: string }[])
-      .map((r) => ({ ref: `${r.book} ${r.chapter}:${r.verse}`, text: r.text }))
-      .sort((a, b) => (a.ref < b.ref ? -1 : a.ref > b.ref ? 1 : 0)); // deterministic order
-    cache.set(track, rows);
-    return rows;
+/**
+ * (c) fix + spread fix. Dedupe a pool by NORMALIZED verse text — different refs with
+ * identical wording (e.g. 1 Chron 16:10 vs Ps 105:3) collapse to one, so no season can
+ * ship the same message twice — then order by a stable hash of the ref so day-to-day
+ * picks are scattered across the whole pool regardless of size (kills the ref-adjacent
+ * clustering that put consecutive verses on day 1 of three seasons). Pure + deterministic.
+ */
+export function orderedDistinctPool(rows: { ref: string; text: string }[]): { ref: string; text: string }[] {
+  const seen = new Set<string>();
+  const distinct: { ref: string; text: string }[] = [];
+  for (const r of rows) {
+    const k = normalizeVerseText(r.text);
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    distinct.push(r);
+  }
+  return distinct.sort((a, b) => hash32(a.ref) - hash32(b.ref) || (a.ref < b.ref ? -1 : 1));
+}
+
+export async function makePoolVerseSelector(db: SupabaseClient): Promise<PoolVerseSelector> {
+  const lists = new Map<string, { ref: string; text: string }[]>();
+  const cursor = new Map<string, number>();
+  const trackUsed = new Map<SeasonKey, string>();
+
+  async function listFor(track: string) {
+    if (!lists.has(track)) {
+      const { data, error } = await db.rpc("get_theme_track_pool", { p_track: track });
+      if (error) throw new Error(`get_theme_track_pool(${track}) failed: ${error.message}`);
+      const rows = ((data ?? []) as { book: string; chapter: number; verse: number; text: string }[]).map((r) => ({
+        ref: `${r.book} ${r.chapter}:${r.verse}`,
+        text: r.text,
+      }));
+      lists.set(track, orderedDistinctPool(rows));
+      cursor.set(track, 0);
+    }
+    return lists.get(track)!;
   }
 
   const selector = (async (ctx) => {
     let track = SEASON_TRACK[ctx.season];
-    let pool = await poolFor(track);
-    if (pool.length === 0) {
+    let list = await listFor(track);
+    if (list.length === 0) {
       track = "general";
-      pool = await poolFor("general");
+      list = await listFor("general");
     }
     trackUsed.set(ctx.season, track);
-    if (pool.length === 0) throw new Error(`no eligible verses for ${ctx.season} (pool empty)`);
-    const stride = Math.max(1, Math.floor(pool.length / 60));
-    let idx = (ctx.dayIndex * stride) % pool.length;
-    for (let tries = 0; tries < pool.length; tries++) {
-      const cand = pool[idx];
-      if (!usedRefs.has(cand.ref)) {
-        usedRefs.add(cand.ref);
-        return { verse_ref: cand.ref, verse_text: cand.text, translated_text: null };
-      }
-      idx = (idx + 1) % pool.length;
-    }
-    const cand = pool[ctx.dayIndex % pool.length]; // pool exhausted → reuse is acceptable
-    return { verse_ref: cand.ref, verse_text: cand.text, translated_text: null };
+    if (list.length === 0) throw new Error(`no eligible verses for ${ctx.season} (pool empty)`);
+    const i = cursor.get(track)!;
+    cursor.set(track, i + 1);
+    const v = list[i % list.length]; // wraps only if the pool is smaller than the batch
+    return { verse_ref: v.ref, verse_text: v.text, translated_text: null };
   }) as PoolVerseSelector;
   selector.trackUsedFor = (s: SeasonKey) => trackUsed.get(s) ?? SEASON_TRACK[s];
   return selector;

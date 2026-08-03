@@ -1,6 +1,35 @@
 import { describe, it, expect } from "vitest";
-import { seasonSendDates } from "../seasons/content";
+import { seasonSendDates, orderedDistinctPool } from "../seasons/content";
 import { freeClimaxDays, iso, weekday } from "../seasons/liturgical";
+
+describe("orderedDistinctPool — (c) text dedup + spread", () => {
+  it("collapses different refs with identical normalized text to one", () => {
+    const pool = [
+      { ref: "1 Chronicles 16:10", text: "Glory ye in his holy name: let the heart..." },
+      { ref: "Psalms 105:3", text: "Glory ye in his holy name: let the heart..." }, // dup text
+      { ref: "John 3:16", text: "For God so loved the world" },
+    ];
+    const out = orderedDistinctPool(pool);
+    expect(out.length).toBe(2);
+    const texts = out.map((v) => v.text);
+    expect(new Set(texts).size).toBe(2);
+  });
+  it("normalizes punctuation/case when comparing text", () => {
+    const out = orderedDistinctPool([
+      { ref: "A 1:1", text: "He is Risen!" },
+      { ref: "B 2:2", text: "he is risen" },
+    ]);
+    expect(out.length).toBe(1);
+  });
+  it("is deterministic and not in ref order (spread, not adjacency)", () => {
+    const rows = Array.from({ length: 30 }, (_, i) => ({ ref: `Book ${i}:1`, text: `verse number ${i}` }));
+    const a = orderedDistinctPool(rows).map((v) => v.ref);
+    const b = orderedDistinctPool(rows).map((v) => v.ref);
+    expect(a).toEqual(b); // deterministic
+    const refOrder = [...rows].map((v) => v.ref);
+    expect(a).not.toEqual(refOrder); // shuffled away from ref-adjacent order
+  });
+});
 
 describe("seasonSendDates — paid-exclusive counts match the build notes", () => {
   it("Christmastide 2026 = 11 (Dec 25 free Christmas excluded)", () => {
