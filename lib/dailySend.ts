@@ -37,7 +37,7 @@ interface AudienceRow {
   confirmed_at: string | null;
 }
 
-async function sendSms(to: string, body: string): Promise<{ sid: string; segments: number | null }> {
+export async function sendSms(to: string, body: string): Promise<{ sid: string; segments: number | null }> {
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
   const token = process.env.TWILIO_AUTH_TOKEN;
   const from = process.env.TWILIO_FROM_NUMBER;
