@@ -62,6 +62,14 @@ counts are all *lower* than the spec's, so margins only improve. (Eastertide's t
 paid count is 48, one below Iain's 49 estimate, because Easter Sunday is also free.)
 Prices remain Twilio-safe but NOT content-labor-validated — do not change without asking.
 
+## Phase E — quantity reconciliation must be SYMMETRIC (Iain, 2026-08-03)
+
+`season_enrollments.quantity` is a teen-count snapshot at enroll; Phase E reconciles
+it to the live teen count at charge time. It must mirror the existing family-teen
+pattern in **both** directions, not just additions: adding a teen bills for them next
+cycle, AND removing a teen mid-season stops billing for them next cycle (symmetric with
+the DM-from-Him removal-credit/proration fix). Do not implement add-only.
+
 ## Recurring operational item (for Phase F integration-gate checklist)
 
 **Annual liturgical-boundary spot-check (T-45 before Advent start).** Once a year,

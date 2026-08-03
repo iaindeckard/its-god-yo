@@ -34,6 +34,13 @@ export const daysInclusive = (a: CalDate, b: CalDate): number =>
   Math.round((toEpoch(b) - toEpoch(a)) / MS_PER_DAY) + 1;
 export const iso = (d: CalDate): string =>
   `${d.year}-${String(d.month).padStart(2, "0")}-${String(d.day).padStart(2, "0")}`;
+export const parseIso = (s: string): CalDate => {
+  const [y, m, d] = s.split("-").map(Number);
+  return { year: y, month: m, day: d };
+};
+/** Signed day count b − a (positive if b is after a). */
+export const daysBetween = (a: CalDate, b: CalDate): number =>
+  Math.round((toEpoch(b) - toEpoch(a)) / MS_PER_DAY);
 
 /**
  * Gregorian (Western) Easter Sunday via the "Anonymous Gregorian algorithm"
