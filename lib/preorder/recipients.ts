@@ -25,7 +25,7 @@ export async function getSignupRecipients(
     .select("recipient_phone, recipient_first_name, language")
     .in("id", ids)
     .neq("consent_status", "opted_out")
-    .neq("consent_status", "removed");
+    .neq("consent_status", "expired");
   return (rows ?? [])
     .filter((r) => r.recipient_phone)
     .map((r) => ({ phone: r.recipient_phone as string, name: (r.recipient_first_name as string | null) ?? null, lang: r.language === "es" ? "es" : "en" }));
