@@ -73,3 +73,12 @@ export const PREORDER_MODE = false;
  * this, then PURCHASES_ENABLED). Never enable this in isolation.
  */
 export const DAILY_SEND_ENABLED = false;
+
+/**
+ * Holy Season add-on products (Christmastide / Advent / Eastertide / Lent). While
+ * false: the season purchase/toggle UI is hidden, and the moving-date billing cron
+ * and the seasonal/climax send paths no-op. Kept off until go-live inherits the same
+ * hard sequencing as the base product (Twilio toll-free delivery live → daily-send
+ * verified → PURCHASES_ENABLED → then this). Dormant-but-built by design.
+ */
+export const SEASONS_ENABLED = false;
