@@ -19,7 +19,7 @@ export default function PrivacyPage() {
         <strong>From the purchaser (the adult signing up):</strong> name, email address, payment card details (collected and stored directly by our payment processor, Stripe; we do not store your full card number ourselves), language preference.
       </p>
       <p>
-        <strong>About the recipient:</strong> first name, phone number, and for gift signups, the gifter&rsquo;s relationship to the recipient.
+        <strong>About the recipient:</strong> first name, phone number, and birth year (the year only, used for the age-consent check).
       </p>
       <p>
         <strong>Consent and delivery records:</strong> the disclosure text shown at signup and its version, timestamp of consent, the recipient&rsquo;s own confirmation reply, and opt-out requests and their timestamps.
