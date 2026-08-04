@@ -11,7 +11,7 @@ import { join } from "node:path";
 // twitter-image re-exports this).
 
 export const runtime = "nodejs";
-export const alt = "It's God, Yo! — Faith that fits in a text";
+export const alt = "It's God, Yo!™ — Faith that fits in a text";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 

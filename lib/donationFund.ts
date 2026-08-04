@@ -1,6 +1,5 @@
 import "server-only";
 import { getSupabaseAdmin } from "./supabaseAdmin";
-import { getStripe } from "./stripe";
 
 /**
  * Tithe / Donation Fund engine (spec: IGY-Tithe-Donation-Fund-Ledger-SPEC-v2).
@@ -75,25 +74,37 @@ export interface StripeDay {
   error: string | null;
 }
 
-/** Exact Stripe revenue + fees for the local day, from balance transactions. */
+/**
+ * Real IGY subscription revenue + fees for the local day. CHANGED 2026-08-04:
+ * sourced from subscription_payments (THIS business unit, settled 'paid') — NOT
+ * account-wide Stripe balance transactions, which counted test-clock and non-IGY
+ * activity and inflated the fund with phantom revenue. Refunds are not netted here
+ * (rare; a later refinement). NOTE: subscription_payments is rebuilt from Stripe by
+ * the reconcile cron, so historical test-clock rows can still linger — but the daily
+ * close only reads its own day, so once real charges begin this reflects real income.
+ */
 export async function stripeDay(dateStr: string): Promise<StripeDay> {
   const { startUnix, endUnix } = localDayBoundsUnix(dateStr);
   try {
-    const stripe = getStripe();
-    let gross = 0; // charges/payments, net of refunds
-    let fees = 0;
-    let count = 0;
-    const CHARGE_TYPES = new Set(["charge", "payment"]);
-    const REFUND_TYPES = new Set(["refund", "payment_refund"]);
-    for await (const bt of stripe.balanceTransactions.list({ created: { gte: startUnix, lt: endUnix }, limit: 100 })) {
-      count++;
-      fees += bt.fee ?? 0;
-      if (CHARGE_TYPES.has(bt.type)) gross += bt.amount ?? 0;
-      else if (REFUND_TYPES.has(bt.type)) gross += bt.amount ?? 0; // refund amount is negative
+    const admin = getSupabaseAdmin();
+    const startIso = new Date(startUnix * 1000).toISOString();
+    const endIso = new Date(endUnix * 1000).toISOString();
+    const { data, error } = await admin
+      .from("subscription_payments")
+      .select("settled_amount_cents, settled_fee_cents")
+      .eq("business_unit", BUSINESS_UNIT_SLUG)
+      .eq("status", "paid")
+      .gte("stripe_created_at", startIso)
+      .lt("stripe_created_at", endIso);
+    if (error) return { grossRevenueCents: 0, feesCents: 0, txnCount: 0, error: error.message };
+    let gross = 0, fees = 0;
+    for (const r of (data ?? []) as Array<{ settled_amount_cents: number | null; settled_fee_cents: number | null }>) {
+      gross += Number(r.settled_amount_cents ?? 0);
+      fees += Number(r.settled_fee_cents ?? 0);
     }
-    return { grossRevenueCents: gross, feesCents: fees, txnCount: count, error: null };
+    return { grossRevenueCents: gross, feesCents: fees, txnCount: (data ?? []).length, error: null };
   } catch (e) {
-    return { grossRevenueCents: 0, feesCents: 0, txnCount: 0, error: e instanceof Error ? e.message : "stripe_error" };
+    return { grossRevenueCents: 0, feesCents: 0, txnCount: 0, error: e instanceof Error ? e.message : "query_error" };
   }
 }
 
