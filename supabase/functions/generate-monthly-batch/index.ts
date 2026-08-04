@@ -173,12 +173,17 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS_HEADERS });
   if (req.method !== "POST") return json(405, { error: "method_not_allowed" });
 
-  let body: { target_month?: string; dry_run?: boolean; theme_track?: string };
+  let body: { target_month?: string; dry_run?: boolean; theme_track?: string; start_day?: number; end_day?: number };
   try { body = await req.json(); } catch { return json(400, { error: "invalid_json_body" }); }
 
   const targetMonth = body.target_month;
   const dryRun = body.dry_run === true;
   const themeTrack = body.theme_track || "general";
+  // Optional day window so a big month can be run in timeout-safe chunks
+  // (the added fidelity judge ~doubles the AI calls). Chunks + re-runs stay
+  // dedup-safe: verses already placed in this (month, track) are excluded below.
+  const startDay = Number.isInteger(body.start_day) ? (body.start_day as number) : 1;
+  const endDay = Number.isInteger(body.end_day) ? (body.end_day as number) : 31;
   if (!targetMonth || !/^\d{4}-\d{2}$/.test(targetMonth)) {
     return json(400, { error: "target_month is required, format YYYY-MM" });
   }
@@ -208,7 +213,10 @@ Deno.serve(async (req: Request) => {
   if (permErr) return json(500, { error: "permission_check_failed", detail: permErr.message });
   if (allowed !== true) return json(403, { error: "forbidden", detail: "missing permission 'content.generate'" });
 
-  const dates = daysInMonth(targetMonth);
+  const dates = daysInMonth(targetMonth).filter((d) => {
+    const day = parseInt(d.slice(-2), 10);
+    return day >= startDay && day <= endDay;
+  });
 
   const cutoff = new Date();
   cutoff.setFullYear(cutoff.getFullYear() - 1);
@@ -216,6 +224,16 @@ Deno.serve(async (req: Request) => {
     .from("used_verses").select("verse_ref").eq("theme_track", themeTrack).gte("used_for_date", cutoff.toISOString().slice(0, 10));
   if (usedErr) return json(500, { error: "failed_to_read_used_verses", detail: usedErr.message });
   const usedRefs = new Set((usedRows || []).map((r: { verse_ref: string }) => r.verse_ref));
+
+  // Also exclude verses already placed on OTHER days of this (month, track) — so
+  // chunked runs and re-runs never assign the same verse twice within a month.
+  const allDates = daysInMonth(targetMonth);
+  const { data: monthRows } = await supa
+    .from("daily_slots").select("verse_ref").eq("theme_track", themeTrack)
+    .gte("scheduled_date", allDates[0]).lte("scheduled_date", allDates[allDates.length - 1]);
+  for (const r of (monthRows || []) as Array<{ verse_ref: string | null }>) {
+    if (r.verse_ref) usedRefs.add(r.verse_ref);
+  }
 
   let candidates: Array<{ book: string; chapter: number; verse: number; text: string }>;
   {
