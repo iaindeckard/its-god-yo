@@ -108,7 +108,7 @@ export default function SignupFlow({
   async function submitSpanishWaitlist() {
     const email = spanishEmail.trim();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setSpanishErr(lang === "es" ? "Ingresa un correo válido." : "Enter a valid email.");
+      setSpanishErr("Ingresa un correo válido.");
       return;
     }
     setSpanishBusy(true);
@@ -119,10 +119,10 @@ export default function SignupFlow({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, source: "signup_language_step" }),
       });
-      if (!res.ok) { setSpanishErr(lang === "es" ? "No se pudo guardar — inténtalo de nuevo." : "Couldn't save — try again."); return; }
+      if (!res.ok) { setSpanishErr("No se pudo guardar — inténtalo de nuevo."); return; }
       setSpanishDone(true);
     } catch {
-      setSpanishErr(lang === "es" ? "No se pudo guardar — inténtalo de nuevo." : "Couldn't save — try again.");
+      setSpanishErr("No se pudo guardar — inténtalo de nuevo.");
     } finally {
       setSpanishBusy(false);
     }
@@ -487,7 +487,7 @@ export default function SignupFlow({
                     <span style={{ fontSize: 22 }}>🇲🇽</span>
                     <span className="c-title">Español</span>
                     <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 600, color: "#7686a0", background: "rgba(0,0,0,0.05)", padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap" }}>
-                      {lang === "es" ? "Muy pronto" : "Coming soon"}
+                      Muy pronto
                     </span>
                   </div>
                 )}
@@ -496,21 +496,20 @@ export default function SignupFlow({
               {!SPANISH_ENABLED && spanishOpen && !spanishDone && (
                 <div className="field" style={{ marginTop: 12 }}>
                   <p className="muted" style={{ fontSize: 14, marginBottom: 8 }}>
-                    {lang === "es"
-                      ? "El español aún no está listo. Déjanos tu correo y te avisamos en cuanto esté disponible."
-                      : "Spanish isn’t ready yet. Leave your email and we’ll let you know the moment it launches."}
+                    El español aún no está listo. Déjanos tu correo y te avisamos en cuanto esté disponible.
                   </p>
                   <div style={{ display: "flex", gap: 8 }}>
                     <input
                       type="email"
                       value={spanishEmail}
-                      placeholder={lang === "es" ? "tú@correo.com" : "you@email.com"}
+                      placeholder="tú@correo.com"
+                      aria-label="Correo electrónico"
                       onChange={(e) => { setSpanishEmail(e.target.value); setSpanishErr(null); }}
                       onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void submitSpanishWaitlist(); } }}
                       style={{ flex: 1 }}
                     />
                     <button className="btn btn-primary" style={{ whiteSpace: "nowrap" }} disabled={spanishBusy || !spanishEmail.trim()} onClick={() => void submitSpanishWaitlist()}>
-                      {spanishBusy ? (lang === "es" ? "Enviando…" : "Sending…") : (lang === "es" ? "Avísame" : "Notify me")}
+                      {spanishBusy ? "Enviando…" : "Avísame"}
                     </button>
                   </div>
                   {spanishErr && <p style={{ color: "#c0392b", fontSize: 13, marginTop: 6 }}>{spanishErr}</p>}
@@ -518,9 +517,7 @@ export default function SignupFlow({
               )}
               {!SPANISH_ENABLED && spanishDone && (
                 <p style={{ marginTop: 12, color: "#2e7d32", fontSize: 14, fontWeight: 500 }}>
-                  {lang === "es"
-                    ? "¡Listo! Te avisaremos cuando el español esté disponible. 🙏"
-                    : "You’re on the list — we’ll email you when Spanish is ready. 🙏"}
+                  ¡Listo! Te avisaremos cuando el español esté disponible. 🙏
                 </p>
               )}
 
