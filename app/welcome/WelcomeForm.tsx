@@ -41,6 +41,8 @@ const COPY = {
         { emoji: "🎛️", title: "Always your call", body: "Reply STOP anytime to pause, or come right back. Change your time whenever. No guilt, no hoops." },
       ],
       closer: "Keep your phone close. Something good is coming. 🙏",
+      closeNote: "You're all set — you can close this page anytime.",
+      homeCta: "Explore It's God, Yo →",
       changeTime: "Want a different time? Change it",
     },
   },
@@ -67,6 +69,8 @@ const COPY = {
         { emoji: "🎛️", title: "Siempre tú decides", body: "Responde STOP cuando quieras para pausar, o vuelve enseguida. Cambia tu hora cuando quieras. Sin culpas, sin trabas." },
       ],
       closer: "Ten tu teléfono cerca. Algo bueno viene. 🙏",
+      closeNote: "Todo listo — puedes cerrar esta página cuando quieras.",
+      homeCta: "Explora It's God, Yo →",
       changeTime: "¿Quieres otra hora? Cámbiala",
     },
   },
@@ -171,7 +175,30 @@ export default function WelcomeForm({ token, firstName, lang, initialTime, initi
           {t.hype.closer}
         </p>
 
-        <div style={{ textAlign: "center", marginTop: 20 }}>
+        <p style={{ textAlign: "center", color: "#8fb4e6", fontSize: 14, lineHeight: 1.6, marginTop: 18 }}>
+          {t.hype.closeNote}
+        </p>
+
+        <a
+          href="/"
+          style={{
+            display: "block",
+            textAlign: "center",
+            marginTop: 16,
+            padding: "12px 16px",
+            fontSize: 15,
+            fontWeight: 700,
+            borderRadius: 10,
+            border: "1px solid #24406b",
+            background: "#0c1c33",
+            color: "#d7e4f6",
+            textDecoration: "none",
+          }}
+        >
+          {t.hype.homeCta}
+        </a>
+
+        <div style={{ textAlign: "center", marginTop: 18 }}>
           <button
             onClick={() => setSaved(false)}
             style={{ background: "none", border: "none", color: "#8fb4e6", fontSize: 14, cursor: "pointer", fontFamily: "inherit", textDecoration: "underline" }}
