@@ -48,6 +48,23 @@ export function toE164(raw: string | null | undefined, country?: Country): strin
 }
 
 /**
+ * Build canonical E.164 from a country dial code + a nationally-formatted number,
+ * as produced by the signup country picker (user selects country, types only the
+ * local number). Idempotent-ish escape hatch: if the user pasted a full `+…`
+ * number anyway, we respect it and ignore the picker. A single leading domestic
+ * trunk `0` (common in the UK/EU) is dropped; US/CA/MX national numbers have no
+ * leading 0 so they are unaffected.
+ */
+export function toE164FromParts(dial: string | null | undefined, national: string | null | undefined): string {
+  const raw = (national ?? "").trim();
+  if (raw.startsWith("+")) return toE164(raw); // user typed a full international number — respect it
+  const dd = (dial ?? "").replace(/\D/g, "");
+  const d = raw.replace(/\D/g, "").replace(/^0+/, ""); // drop domestic trunk zero(s)
+  if (!d) return "";
+  return `+${dd}${d}`;
+}
+
+/**
  * Tolerant matching key: digits-only, last-10. Robust to `+1` vs `+52` prefix
  * differences (they get dropped) and to non-canonical legacy formats. Use this —
  * never a raw string equality — to match an inbound Twilio `From` against stored

@@ -13,8 +13,11 @@ import {
 import {
   PLANS, GROUP_BANDS, DM_ADDON, FAMILY_EXTRA_TEEN, FAMILY_BASE_TEENS, bandForCount, GROUP_CONTACT_THRESHOLD,
 } from "@/lib/plans";
-import { submitConsent, normalizePhone, type ConsentResult } from "@/lib/consent";
+import { submitConsent, type ConsentResult } from "@/lib/consent";
 import { SPANISH_ENABLED, PREORDER_MODE } from "@/lib/flags";
+import CountrySelect from "@/components/CountrySelect";
+import { countryByIso2, DEFAULT_COUNTRY } from "@/lib/countries";
+import { toE164FromParts } from "@/lib/phone";
 
 // Best-effort browser timezone (IANA) captured at signup — the purchaser-level
 // fallback for the Stage 2 send-time chain. Null if the browser can't resolve it.
@@ -88,9 +91,9 @@ export default function SignupFlow({
   const [individualInterval, setIndividualInterval] = useState<"month" | "year">("month");
   const [teenCount, setTeenCount] = useState<number>(25);
   // Family plan: 2+ teens, each their own phone (min 2). Extra teens are $28/yr.
-  const [familyTeens, setFamilyTeens] = useState<Array<{ name: string; phone: string; year: string }>>([
-    { name: "", phone: "", year: "" },
-    { name: "", phone: "", year: "" },
+  const [familyTeens, setFamilyTeens] = useState<Array<{ name: string; phone: string; year: string; country: string }>>([
+    { name: "", phone: "", year: "", country: DEFAULT_COUNTRY },
+    { name: "", phone: "", year: "", country: DEFAULT_COUNTRY },
   ]);
   const [familyAttest, setFamilyAttest] = useState(false);
 
@@ -130,6 +133,10 @@ export default function SignupFlow({
 
   // phone / submit
   const [teenPhone, setTeenPhone] = useState("");
+  const [teenCountry, setTeenCountry] = useState(DEFAULT_COUNTRY);
+  // Canonical E.164 built from the selected country's dial code + the national
+  // number the user types (see lib/phone.toE164FromParts).
+  const teenPhoneE164 = toE164FromParts(countryByIso2(teenCountry).dial, teenPhone);
   const [primaryAttest, setPrimaryAttest] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -139,16 +146,16 @@ export default function SignupFlow({
   // submit-consent; this only drives which UI branch shows).
   useEffect(() => {
     let cancelled = false;
-    if (step === STEP.PHONE && teenPhone.trim() && validYear(teenBirthYear)) {
+    if (step === STEP.PHONE && teenPhoneE164 && validYear(teenBirthYear)) {
       fetch("/api/age-gate/check", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: normalizePhone(teenPhone), birth_year: Number(teenBirthYear) }),
+        body: JSON.stringify({ phone: teenPhoneE164, birth_year: Number(teenBirthYear) }),
       }).then((r) => (r.ok ? r.json() : null)).then((g) => { if (!cancelled) setTeenGate(g); }).catch(() => {});
     } else {
       setTeenGate(null);
     }
     return () => { cancelled = true; };
-  }, [step, teenPhone, teenBirthYear]);
+  }, [step, teenPhoneE164, teenBirthYear]);
 
   // ---- derived plan ----
   const band = planChoice === "group" ? bandForCount(teenCount) : null;
@@ -297,7 +304,7 @@ export default function SignupFlow({
         purchaser_salutation: purchaserSalutation,
         teen: {
           first_name: teenFirstName.trim(),
-          phone: normalizePhone(teenPhone),
+          phone: teenPhoneE164,
           birth_year: Number(teenBirthYear),
           enhanced_consent_ack: teenGate?.decision === "enhanced" ? teenEnhancedAck : undefined,
         },
@@ -314,7 +321,7 @@ export default function SignupFlow({
   }
 
   const familyExtra = Math.max(0, familyTeens.length - FAMILY_BASE_TEENS);
-  const familyValid = familyTeens.every((tn) => tn.name.trim() && tn.phone.trim() && validYear(tn.year)) && familyAttest;
+  const familyValid = familyTeens.every((tn) => tn.name.trim() && toE164FromParts(countryByIso2(tn.country).dial, tn.phone) && validYear(tn.year)) && familyAttest;
 
   async function handleSubmitFamily(ids: { customer_id: string; setup_intent_id: string; payment_method_id: string }) {
     setError(null);
@@ -336,7 +343,7 @@ export default function SignupFlow({
         purchaser_first_name: purchaserFirstName.trim() || null,
         purchaser_last_name: purchaserLastName.trim() || null,
         purchaser_salutation: purchaserSalutation,
-        family_teens: familyTeens.map((tn) => ({ first_name: tn.name.trim(), phone: normalizePhone(tn.phone), birth_year: Number(tn.year) })),
+        family_teens: familyTeens.map((tn) => ({ first_name: tn.name.trim(), phone: toE164FromParts(countryByIso2(tn.country).dial, tn.phone), birth_year: Number(tn.year) })),
         stripe: ids,
       });
       await attachReferral((res as { pending_signup_id?: string }).pending_signup_id);
@@ -574,12 +581,19 @@ export default function SignupFlow({
                     </div>
                   </div>
                   <div className="field" style={{ marginBottom: 0, marginTop: 10 }}>
+                    <label>{lang === "es" ? "País" : "Country"}</label>
+                    <CountrySelect value={tn.country} lang={lang} onChange={(iso2) => setFamilyTeens(familyTeens.map((x, j) => (j === i ? { ...x, country: iso2 } : x)))} />
+                  </div>
+                  <div className="field" style={{ marginBottom: 0, marginTop: 10 }}>
                     <label>{s.recipientPhone}</label>
-                    <input value={tn.phone} placeholder="+1 555 123 4567" onChange={(e) => setFamilyTeens(familyTeens.map((x, j) => (j === i ? { ...x, phone: e.target.value } : x)))} />
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span className="muted" style={{ fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>+{countryByIso2(tn.country).dial}</span>
+                      <input value={tn.phone} placeholder={lang === "es" ? "Número local" : "Local number"} inputMode="tel" style={{ flex: 1 }} onChange={(e) => setFamilyTeens(familyTeens.map((x, j) => (j === i ? { ...x, phone: e.target.value } : x)))} />
+                    </div>
                   </div>
                 </div>
               ))}
-              <button className="btn btn-ghost" style={{ marginTop: 12 }} onClick={() => setFamilyTeens([...familyTeens, { name: "", phone: "", year: "" }])}>
+              <button className="btn btn-ghost" style={{ marginTop: 12 }} onClick={() => setFamilyTeens([...familyTeens, { name: "", phone: "", year: "", country: DEFAULT_COUNTRY }])}>
                 + {lang === "es" ? "Agregar otro joven" : "Add another teen"} (+{money(FAMILY_EXTRA_TEEN.amount)}{s.perYear})
               </button>
               <div className="field" style={{ marginTop: 16 }}>
@@ -790,8 +804,15 @@ export default function SignupFlow({
               <h2>{s.wPhoneTitle}</h2>
               <p className="muted">{s.wPhoneSub}</p>
               <div className="field" style={{ marginTop: 16 }}>
+                <label>{lang === "es" ? "País" : "Country"}</label>
+                <CountrySelect value={teenCountry} onChange={setTeenCountry} lang={lang} />
+              </div>
+              <div className="field">
                 <label>{s.recipientPhone} — {teenFirstName}</label>
-                <input value={teenPhone} onChange={(e) => setTeenPhone(e.target.value)} placeholder="+1 555 123 4567" autoFocus />
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span className="muted" style={{ fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>+{countryByIso2(teenCountry).dial}</span>
+                  <input value={teenPhone} onChange={(e) => setTeenPhone(e.target.value)} placeholder={lang === "es" ? "Número local" : "Local number"} inputMode="tel" autoComplete="tel-national" style={{ flex: 1 }} autoFocus />
+                </div>
               </div>
               <AgeGateNotice gate={teenGate} lang={lang} ackChecked={teenEnhancedAck} onAck={setTeenEnhancedAck} />
               {teenGate?.decision !== "block" && (
@@ -812,7 +833,7 @@ export default function SignupFlow({
                   <button
                     className="btn btn-primary"
                     disabled={
-                      !teenPhone.trim() || !primaryAttest || submitting || !validYear(teenBirthYear) ||
+                      !teenPhoneE164 || !primaryAttest || submitting || !validYear(teenBirthYear) ||
                       teenGate === null || (teenGate.decision === "enhanced" && !teenEnhancedAck)
                     }
                     onClick={handleSubmit}
