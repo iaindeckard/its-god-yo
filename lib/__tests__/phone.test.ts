@@ -3,8 +3,9 @@
 import { vi, describe, it, expect } from "vitest";
 vi.mock("server-only", () => ({}));
 
-import { toE164, phoneKey } from "../phone";
+import { toE164, toE164FromParts, phoneKey } from "../phone";
 import { classifyReply } from "../twilio";
+import { countryByIso2, searchCountries, flagEmoji } from "../countries";
 
 describe("toE164 (canonical E.164 for storage/sending)", () => {
   it("US 10-digit -> +1", () => {
@@ -37,6 +38,46 @@ describe("toE164 (canonical E.164 for storage/sending)", () => {
     expect(toE164("")).toBe("");
     expect(toE164("   ")).toBe("");
     expect(toE164(null)).toBe("");
+  });
+});
+
+describe("toE164FromParts (country picker: dial code + national number)", () => {
+  it("US +1 national -> +1E.164", () => {
+    expect(toE164FromParts("1", "3163048915")).toBe("+13163048915");
+  });
+  it("strips human formatting from the national part", () => {
+    expect(toE164FromParts("1", "(316) 304-8915")).toBe("+13163048915");
+  });
+  it("MX +52 national -> +52 (not +1)", () => {
+    expect(toE164FromParts("52", "5512345678")).toBe("+525512345678");
+  });
+  it("drops a domestic trunk leading zero (UK etc.)", () => {
+    expect(toE164FromParts("44", "07911123456")).toBe("+447911123456");
+  });
+  it("respects a full +international number the user pasted, ignoring the picker", () => {
+    expect(toE164FromParts("52", "+13163048915")).toBe("+13163048915");
+  });
+  it("empty national -> empty (so the submit button stays disabled)", () => {
+    expect(toE164FromParts("1", "")).toBe("");
+    expect(toE164FromParts("1", "   ")).toBe("");
+  });
+});
+
+describe("countries catalog", () => {
+  it("resolves ISO2 to the right dial code and falls back to US", () => {
+    expect(countryByIso2("MX").dial).toBe("52");
+    expect(countryByIso2("GB").dial).toBe("44");
+    expect(countryByIso2("ZZ").iso2).toBe("US"); // unknown -> default
+    expect(countryByIso2(null).iso2).toBe("US");
+  });
+  it("search is diacritic-insensitive and matches name, dial, and iso2", () => {
+    expect(searchCountries("mexico").some((c) => c.iso2 === "MX")).toBe(true);
+    expect(searchCountries("cote").some((c) => c.iso2 === "CI")).toBe(true); // Côte d'Ivoire
+    expect(searchCountries("+44").some((c) => c.iso2 === "GB")).toBe(true);
+    expect(searchCountries("mx").some((c) => c.iso2 === "MX")).toBe(true);
+  });
+  it("emits a regional-indicator flag emoji", () => {
+    expect(flagEmoji("US")).toBe("🇺🇸");
   });
 });
 
