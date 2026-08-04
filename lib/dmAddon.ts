@@ -36,10 +36,14 @@ export function composeDailyMessage(
 ): string {
   if (!opts.dm) return verseText;
   const name = opts.firstName?.trim();
+  // GSM-7-safe wrap (no emoji, straight apostrophe) so the DM-wrapped message can
+  // stay within the 2-segment budget — see docs/VERSE-LENGTH-AND-FIDELITY-SPEC.md
+  // (§1.3/§1.4). The generation-side segment check (generate-daily-verse /
+  // generate-monthly-batch) replicates THIS exact wrap — keep them in sync.
   if (opts.lang === "es") {
-    return `${name ? name + ", " : ""}algo de Mi parte hoy 💛\n\n${verseText}\n\nEstoy contigo.`;
+    return `${name ? name + ", " : ""}algo de Mi parte hoy.\n\n${verseText}\n\nEstoy contigo.`;
   }
-  return `${name ? name + ", " : ""}a little note from Me today 💛\n\n${verseText}\n\nI've got you.`;
+  return `${name ? name + ", " : ""}a little note from Me today.\n\n${verseText}\n\nI've got you.`;
 }
 
 interface DmSignup {
