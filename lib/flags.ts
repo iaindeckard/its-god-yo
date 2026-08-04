@@ -5,7 +5,7 @@
  * /api/setup-intent refuses to create a SetupIntent. Flip to true to re-open
  * signups (there is no way to be charged while this is false).
  */
-export const PURCHASES_ENABLED = true;
+export const PURCHASES_ENABLED = false;
 
 /**
  * Gates Spanish as a selectable / advertised language until a real reviewed
