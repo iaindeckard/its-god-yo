@@ -41,6 +41,12 @@ const SENTENCE_MAX = 5;
 const SEGMENT_MAX = 2;
 const NAME_ALLOWANCE = "XXXXXXXXXXXXXXX"; // 15-char stand-in; real firstName unknown at generation
 
+// "Written by AI" typographic tells that instantly cost credibility with a teen:
+// em dash, en dash, curly/smart single & double quotes, and the … ellipsis char.
+// Renderings must use plain hyphens, straight quotes, and "..." instead (this also
+// keeps them GSM-7). Any output containing one is flagged (never auto-approved).
+const AI_TELLS = /[—–‘’“”…]/;
+
 // ---- GSM-7 vs UCS-2 SMS segment math (mirrors Twilio's encoding rules) ----
 const GSM7_BASIC = "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ\x1bÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà";
 const GSM7_EXT = "^{}\\[~]|€";
@@ -77,7 +83,7 @@ function parseVerseRef(ref: string): { book: string; chapter: number; verse: num
 function buildPromptEn(verseRef: string, verseText: string): string {
   return `Rewrite this Bible verse (KJV) the way a teenager would actually text a friend -- current, authentic slang, but true to the meaning.
 
-Length: 2 to 3 short sentences. Plain text only -- NO emoji and no fancy punctuation (use straight quotes ' and a hyphen -, not curly quotes or em dashes), so it stays a short SMS.
+Length: 2 to 3 short sentences. Write like a real teen texting: plain text only, NO emoji. Do NOT use em dashes, en dashes, curly or smart quotes, or a single-character ellipsis -- those read as "written by a bot" and instantly cost a teen's trust. Use plain hyphens (-), straight apostrophes ('), and three separate dots (...) if you need a pause. This also keeps it a short SMS.
 Fidelity: say only what the verse says. Do NOT add promises, claims, or ideas that aren't in the source, and don't drop its main point. Restating the same idea in casual words is good; inventing new content is not.
 Do not add commentary.
 
@@ -89,7 +95,7 @@ Respond with ONLY the rewritten verse text, nothing else.`;
 function buildPromptEs(verseRef: string, verseText: string): string {
   return `Reescribe este versículo bíblico (Reina-Valera 1909) como un adolescente mexicano realmente se lo enviaría a un amigo por mensaje -- jerga actual y auténtica, pero fiel al significado.
 
-Largo: 2 a 3 oraciones cortas. Solo texto -- SIN emojis, para que quepa en un SMS corto.
+Largo: 2 a 3 oraciones cortas. Escribe como un adolescente de verdad: solo texto, SIN emojis. NO uses raya ni guion largo, ni comillas tipograficas o "inteligentes", ni el caracter de puntos suspensivos -- eso se ve "escrito por un bot" y pierde credibilidad al instante. Usa guiones normales (-), comillas rectas (') y tres puntos por separado (...) si necesitas una pausa. Esto tambien lo mantiene como un SMS corto.
 Fidelidad: di solo lo que dice el versículo. NO agregues promesas, afirmaciones ni ideas que no estén en la fuente, y no omitas su punto principal. Reformular la misma idea en palabras casuales está bien; inventar contenido nuevo no.
 No agregues comentarios.
 
@@ -167,6 +173,7 @@ function evalOne(label: "A" | "B", text: string, lang: "en" | "es", judge: Judge
   if (sentences < SENTENCE_MIN) flags.push(`${label}:too_short`);
   if (sentences > SENTENCE_MAX) flags.push(`${label}:too_long`);
   if (segments > SEGMENT_MAX) flags.push(`${label}:exceeds_sms_budget(${segments}seg)`);
+  if (AI_TELLS.test(text)) flags.push(`${label}:ai_tells`);
   const fidelityBad = !judge.faithful || judge.added_claims.length > 0 || judge.omitted_core.length > 0 || judge.drift;
   if (fidelityBad) {
     const detail = [...judge.added_claims.map((c) => `added:${c}`), ...judge.omitted_core.map((c) => `omitted:${c}`), judge.drift ? "drift" : ""].filter(Boolean).join("; ");

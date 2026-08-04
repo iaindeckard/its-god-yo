@@ -33,6 +33,10 @@ function similarity(a: string, b: string): number {
 const AGREEMENT_THRESHOLD = 0.35;
 const SENTENCE_MIN = 2, SENTENCE_MAX = 5, SEGMENT_MAX = 2;
 const NAME_ALLOWANCE = "XXXXXXXXXXXXXXX";
+// "Written by AI" typographic tells (em/en dash, curly quotes, … ellipsis) that
+// lose a teen's trust. Flagged so they never auto-approve. KEEP IN SYNC with
+// generate-daily-verse.
+const AI_TELLS = /[—–‘’“”…]/;
 
 const GSM7_BASIC = "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ\x1bÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà";
 const GSM7_EXT = "^{}\\[~]|€";
@@ -52,7 +56,7 @@ function countSentences(s: string): number { return s.trim().split(/[.!?]+(?:\s|
 function buildPrompt(verseRef: string, verseText: string): string {
   return `Rewrite this Bible verse (KJV) the way a teenager would actually text a friend -- current, authentic slang, but true to the meaning.
 
-Length: 2 to 3 short sentences. Plain text only -- NO emoji and no fancy punctuation (use straight quotes ' and a hyphen -, not curly quotes or em dashes), so it stays a short SMS.
+Length: 2 to 3 short sentences. Write like a real teen texting: plain text only, NO emoji. Do NOT use em dashes, en dashes, curly or smart quotes, or a single-character ellipsis -- those read as "written by a bot" and instantly cost a teen's trust. Use plain hyphens (-), straight apostrophes ('), and three separate dots (...) if you need a pause. This also keeps it a short SMS.
 Fidelity: say only what the verse says. Do NOT add promises, claims, or ideas that aren't in the source, and don't drop its main point. Restating the same idea in casual words is good; inventing new content is not.
 Do not add commentary.
 
@@ -119,6 +123,7 @@ function evalFlags(label: "A" | "B", text: string, judge: Judgement): string[] {
   if (sentences < SENTENCE_MIN) flags.push(`${label}:too_short`);
   if (sentences > SENTENCE_MAX) flags.push(`${label}:too_long`);
   if (segments > SEGMENT_MAX) flags.push(`${label}:exceeds_sms_budget(${segments}seg)`);
+  if (AI_TELLS.test(text)) flags.push(`${label}:ai_tells`);
   const bad = !judge.faithful || judge.added_claims.length > 0 || judge.omitted_core.length > 0 || judge.drift;
   if (bad) {
     const detail = [...judge.added_claims.map((c) => `added:${c}`), ...judge.omitted_core.map((c) => `omitted:${c}`), judge.drift ? "drift" : ""].filter(Boolean).join("; ");

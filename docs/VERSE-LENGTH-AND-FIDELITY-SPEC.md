@@ -42,7 +42,7 @@ gets longer, so lengthening **requires** a real source-fidelity gate.
 Replace *"Keep it short, like a real text message"* with: *"Write 2–3 short sentences —
 enough to unpack the verse's meaning naturally, still texting a friend. Don't pad, and don't
 add ideas that aren't in the verse. Keep it plain-text (no emoji) so it stays a short SMS."*
-(The "no emoji" clause is contingent on §1.4.)
+(The "no emoji" clause is contingent on §1.4.) Also forbids the "written by AI" typographic tells — em dash, en dash, curly/smart quotes, and the single-character ellipsis — which cost credibility with a teen; a deterministic `AI_TELLS` regex check flags any output that contains one (never auto-approved). Added 2026-08-04.
 
 ### 1.2 Deterministic sentence check (secondary guide, on the rendering)
 Sentence count `< 2` → reason `too_short`; `> 5` → `too_long`. Replaces the misdirected
@@ -103,7 +103,7 @@ Add a **faithfulness judge (output-vs-source)**:
 - **No schema migration:** `needs_review_reasons` is `text[]`; new reason strings slot in.
 
 ## Reason strings (final set)
-`ai_disagreement`, `too_short`, `too_long`, `exceeds_sms_budget`, `fidelity_risk` (+ the
+`ai_disagreement`, `too_short`, `too_long`, `exceeds_sms_budget`, `ai_tells`, `fidelity_risk` (+ the
 offending `added_claims`/`omitted_core` surfaced to the reviewer).
 
 ## Rollout
