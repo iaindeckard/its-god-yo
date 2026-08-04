@@ -52,6 +52,11 @@ const THEME_TRACKS: Array<{ key: string; en: string; es: string }> = [
   { key: "courage_confidence", en: "Courage & confidence", es: "Valor y confianza" },
   { key: "comfort_hard_times", en: "Comfort in hard times", es: "Consuelo en tiempos difíciles" },
 ];
+// Launch gate: only offer focus tracks that actually have reviewed content.
+// General-only at launch (the other tracks have empty verse pools + no approved
+// slots — a subscriber picking one would get skipped_no_content). Add a key here
+// as each track earns a real pool + approved runway. See the content re-launch plan.
+const ENABLED_TRACK_KEYS = new Set(["general"]);
 const TOTAL_DOTS = 7;
 
 const money = (n: number) => `$${n % 1 === 0 ? n.toFixed(0) : n.toFixed(2)}`;
@@ -443,7 +448,7 @@ export default function SignupFlow({
                   : "Choose the kind of verses they’ll get. You can keep it general."}
               </p>
               <div style={{ display: "grid", gap: 10, marginTop: 20 }}>
-                {THEME_TRACKS.map((tk) => (
+                {THEME_TRACKS.filter((tk) => ENABLED_TRACK_KEYS.has(tk.key)).map((tk) => (
                   <div
                     key={tk.key}
                     className={`choice ${themeTrack === tk.key ? "selected" : ""}`}
