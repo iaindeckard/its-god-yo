@@ -16,9 +16,13 @@ import { composeDailyMessage } from "./dmAddon";
  *  - Exactly-once per (recipient, local date): claim-first INSERT into
  *    daily_send_log with UNIQUE(consent_id, send_local_date) + ON CONFLICT DO
  *    NOTHING. A second concurrent/replayed tick claims nothing and skips.
- *  - No fallback: if no APPROVED slot (or no translation for the language)
- *    exists for that local date, we record skipped_no_content + alert — never a
- *    random/unreviewed verse (decision C).
+ *  - No-silence / General fallback: if the recipient's CHOSEN track has no
+ *    approved slot (or no translation for the language) for that local date, we
+ *    fall back to that date's approved GENERAL slot rather than skipping. Only if
+ *    General is also unavailable do we record skipped_no_content + alert. Still
+ *    never a random/unreviewed verse (decision C) — the fallback is an approved,
+ *    human-reviewed General verse; a themed subscriber may occasionally receive a
+ *    General message on days their track has no content (disclosed to them).
  *  - Day-0 suppression: no same-day send on the local date the teen confirmed;
  *    first verse lands the NEXT local day (decision B).
  *  - While DAILY_SEND_ENABLED is false, runs DRY: computes everything, makes no
@@ -128,17 +132,37 @@ export async function runDailySend(opts: { dryRun?: boolean } = {}): Promise<Dai
     summary.due++;
 
     const lang = r.language === "es" ? "es" : "en";
-    const slot = await loadSlot(dateStr, r.theme_track);
-    let text: string | null = null;
-    let noContent: string | null = null;
-    if (!slot) noContent = "no_approved_slot";
-    else if (lang === "es") {
-      if (!SPANISH_ENABLED) noContent = "spanish_disabled";
-      else if (!slot.es) noContent = "no_es_translation";
-      else text = slot.es;
-    } else {
-      if (!slot.en) noContent = "no_en_translation";
-      else text = slot.en;
+    // Resolve this track's approved verse for the date. Pull the usable text for
+    // the recipient's language, or a reason it isn't available.
+    const pick = (s: { id: string; en: string | null; es: string | null } | null): { text: string | null; reason: string | null } => {
+      if (!s) return { text: null, reason: "no_approved_slot" };
+      if (lang === "es") {
+        if (!SPANISH_ENABLED) return { text: null, reason: "spanish_disabled" };
+        if (!s.es) return { text: null, reason: "no_es_translation" };
+        return { text: s.es, reason: null };
+      }
+      if (!s.en) return { text: null, reason: "no_en_translation" };
+      return { text: s.en, reason: null };
+    };
+
+    // No-silence rule: if the subscriber's chosen track has no approved content
+    // for this date, fall back to that day's approved GENERAL slot rather than
+    // skipping. Worst case they get a General verse instead of their track's — a
+    // themed subscriber may occasionally receive a General message (disclosed).
+    let effectiveSlot = await loadSlot(dateStr, r.theme_track);
+    let picked = pick(effectiveSlot);
+    let text = picked.text;
+    let noContent = picked.reason;
+    let usedGeneralFallback = false;
+    if (text == null && r.theme_track !== "general") {
+      const gen = await loadSlot(dateStr, "general");
+      const alt = pick(gen);
+      if (alt.text != null) {
+        effectiveSlot = gen;
+        text = alt.text;
+        noContent = null;
+        usedGeneralFallback = true;
+      }
     }
 
     // DM from Him: opted-in recipients get the SAME verse wrapped in first-person
@@ -146,7 +170,7 @@ export async function runDailySend(opts: { dryRun?: boolean } = {}): Promise<Dai
     const dmOn = dmBySignup.get(r.pending_signup_id) === true;
     const body = text != null ? composeDailyMessage(text, { dm: dmOn, firstName: r.recipient_first_name, lang }) : null;
 
-    const base = { consent_id: r.consent_id, local_date: dateStr, track: r.theme_track, lang, tz, dm: dmOn };
+    const base = { consent_id: r.consent_id, local_date: dateStr, track: r.theme_track, lang, tz, dm: dmOn, general_fallback: usedGeneralFallback };
 
     if (dryRun) {
       summary.details.push({ ...base, would: noContent ? `skip:${noContent}` : "send", preview: body ? body.slice(0, 80) : null });
@@ -158,7 +182,7 @@ export async function runDailySend(opts: { dryRun?: boolean } = {}): Promise<Dai
     const { data: claim, error: claimErr } = await admin
       .from("daily_send_log")
       .upsert(
-        { consent_id: r.consent_id, send_local_date: dateStr, daily_slot_id: slot?.id ?? null, language: lang, status: "claimed" },
+        { consent_id: r.consent_id, send_local_date: dateStr, daily_slot_id: effectiveSlot?.id ?? null, language: lang, status: "claimed" },
         { onConflict: "consent_id,send_local_date", ignoreDuplicates: true },
       )
       .select("id");
