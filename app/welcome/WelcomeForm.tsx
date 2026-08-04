@@ -29,6 +29,20 @@ const COPY = {
     savedTz: "in",
     err: "Couldn't save that. Please try again.",
     floorNote: "Earliest is 7:00 AM.",
+    hype: {
+      heading: (name: string | null) => (name ? `You're in, ${name}! 🎉` : "You're in! 🎉"),
+      confirmPre: "Your first verse is already on its way — look for a text around",
+      confirmMid: "·",
+      expectTitle: "Here's what you signed up for:",
+      items: [
+        { emoji: "📖", title: "One verse a day", body: "Real Scripture, picked to actually land. No spam, no noise, no 40-text threads — just one good word." },
+        { emoji: "💬", title: "In words that sound like you", body: "Good News that meets you where you are — not stiff, not preachy. Straight to your phone like a text from a friend." },
+        { emoji: "⏰", title: "Right on time, every day", body: "Show up whenever you want it to. Same time, every single day, wherever the day takes you." },
+        { emoji: "🎛️", title: "Always your call", body: "Reply STOP anytime to pause, or come right back. Change your time whenever. No guilt, no hoops." },
+      ],
+      closer: "Keep your phone close. Something good is coming. 🙏",
+      changeTime: "Want a different time? Change it",
+    },
   },
   es: {
     heading: (name: string | null) => (name ? `¡Hola ${name}! 👋` : "¡Todo listo! 👋"),
@@ -41,6 +55,20 @@ const COPY = {
     savedTz: "en",
     err: "No se pudo guardar — inténtalo de nuevo.",
     floorNote: "Lo más temprano es 7:00 AM.",
+    hype: {
+      heading: (name: string | null) => (name ? `¡Ya estás dentro, ${name}! 🎉` : "¡Ya estás dentro! 🎉"),
+      confirmPre: "Tu primer versículo ya viene en camino — espera un mensaje alrededor de las",
+      confirmMid: "·",
+      expectTitle: "Esto es lo que te espera:",
+      items: [
+        { emoji: "📖", title: "Un versículo al día", body: "Escritura real, elegida para que de verdad te llegue. Sin spam, sin ruido, sin cadenas de 40 mensajes — solo una buena palabra." },
+        { emoji: "💬", title: "En palabras que suenan como tú", body: "Buenas Nuevas que te encuentran donde estás — nada tieso, nada predicador. Directo a tu teléfono, como un mensaje de un amigo." },
+        { emoji: "⏰", title: "Puntual, todos los días", body: "A la hora que tú elijas, cada día, donde sea que te lleve el día." },
+        { emoji: "🎛️", title: "Siempre tú decides", body: "Responde STOP cuando quieras para pausar, o vuelve enseguida. Cambia tu hora cuando quieras. Sin culpas, sin trabas." },
+      ],
+      closer: "Ten tu teléfono cerca. Algo bueno viene. 🙏",
+      changeTime: "¿Quieres otra hora? Cámbiala",
+    },
   },
 } as const;
 
@@ -110,6 +138,50 @@ export default function WelcomeForm({ token, firstName, lang, initialTime, initi
     fontFamily: "inherit",
   };
   const labelStyle: React.CSSProperties = { display: "block", fontSize: 13, color: "#8fb4e6", marginBottom: 6, marginTop: 18 };
+
+  // After the send time is saved, swap the form for a celebratory "you're in"
+  // hype screen that sells the daily-text experience from the subscriber's side.
+  if (saved) {
+    return (
+      <div>
+        <div style={{ textAlign: "center", marginBottom: 22 }}>
+          <div style={{ fontSize: 44, marginBottom: 8 }} aria-hidden="true">🎉</div>
+          <h1 style={{ fontSize: 26, fontWeight: 700, marginBottom: 10 }}>{t.hype.heading(firstName)}</h1>
+          <p style={{ color: "#8fe0a8", lineHeight: 1.6, fontSize: 15 }}>
+            {t.hype.confirmPre} <strong>{formatSlot(time)}</strong> {t.hype.confirmMid} {tz}. 🙏
+          </p>
+        </div>
+
+        <p style={{ color: "#8fb4e6", fontSize: 13, textTransform: "uppercase", letterSpacing: 0.6, fontWeight: 600, marginBottom: 12 }}>
+          {t.hype.expectTitle}
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {t.hype.items.map((it) => (
+            <div key={it.title} style={{ display: "flex", gap: 12, background: "#0c1c33", border: "1px solid #1c356b", borderRadius: 12, padding: "14px 16px" }}>
+              <div style={{ fontSize: 22, lineHeight: 1.2 }} aria-hidden="true">{it.emoji}</div>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 3 }}>{it.title}</div>
+                <div style={{ color: "#a9bad6", fontSize: 14, lineHeight: 1.55 }}>{it.body}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <p style={{ textAlign: "center", color: "#d7e4f6", fontSize: 16, fontWeight: 600, lineHeight: 1.6, marginTop: 24 }}>
+          {t.hype.closer}
+        </p>
+
+        <div style={{ textAlign: "center", marginTop: 20 }}>
+          <button
+            onClick={() => setSaved(false)}
+            style={{ background: "none", border: "none", color: "#8fb4e6", fontSize: 14, cursor: "pointer", fontFamily: "inherit", textDecoration: "underline" }}
+          >
+            {t.hype.changeTime}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
