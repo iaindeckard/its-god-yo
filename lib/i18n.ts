@@ -127,7 +127,7 @@ export const t = {
     apply: "Apply",
 
     promoFieldLabel: "Promo code",
-    promoFieldPlaceholder: "e.g. WSULAUNCH25",
+    promoFieldPlaceholder: "e.g. IGY082026",
     promoFieldHint: "A discount from us — separate from a referral code.",
     promoApplied: "Promo applied",
     promoInvalid: "That promo code isn't valid or has expired.",
@@ -260,7 +260,7 @@ export const t = {
     apply: "Aplicar",
 
     promoFieldLabel: "Código promocional",
-    promoFieldPlaceholder: "ej. WSULAUNCH25",
+    promoFieldPlaceholder: "ej. IGY082026",
     promoFieldHint: "Un descuento de nuestra parte — distinto de un código de referido.",
     promoApplied: "Promo aplicado",
     promoInvalid: "Ese código promocional no es válido o expiró.",
