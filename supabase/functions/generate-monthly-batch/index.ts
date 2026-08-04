@@ -2,18 +2,19 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 // Monthly batch generation (the month-M+2 process). Random eligible verse per
-// day, dual-AI slang translation, agreement/needs_review, one daily_slots row
-// per (date, theme_track).
+// day, dual-AI slang translation, then the length + fidelity gates, one
+// daily_slots row per (date, theme_track).
 //
 // ADDED 2026-07-22: theme/mood tracks via `theme_track` (default "general").
-// Run this ONCE PER TRACK per month — 7 tracks = 7 batches (7x review workload),
-// which is the whole shape of Option A.
-//   - EVERY track (incl. "general") draws ONLY from that track's APPROVED
-//     verse_theme_tags (via get_theme_track_pool). The random-full-KJV path is
-//     gone. If a track has fewer approved verses than days in the window, some
-//     days report no_eligible_verses_in_sample — approve more tags and re-run.
-// Dedup (used_verses) is per-track. This function is English-only; Spanish is a
-// separate per-slot generate-daily-verse(language="es") pass, unchanged.
+// Dedup (used_verses) is per-track. English-only; Spanish is a separate per-slot
+// generate-daily-verse(language="es") pass.
+//
+// ADDED 2026-08-04 (Phase A of docs/VERSE-LENGTH-AND-FIDELITY-SPEC.md): mirrors
+// generate-daily-verse — 2-3 sentence GSM-7 prompt, per-output sentence bounds +
+// <=2-segment (DM-wrapped, encoding-aware) hard gate, and a fidelity judge
+// (output-vs-SOURCE, temp 0) on both outputs. Fail-closed to needs_review. The
+// helper block below is kept IN SYNC with generate-daily-verse (same convention
+// as the existing duplicated similarity()/callClaude()).
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -34,21 +35,55 @@ function similarity(a: string, b: string): number {
 }
 
 const AGREEMENT_THRESHOLD = 0.35;
+const SENTENCE_MIN = 2;
+const SENTENCE_MAX = 5;
+const SEGMENT_MAX = 2;
+const NAME_ALLOWANCE = "XXXXXXXXXXXXXXX"; // 15-char stand-in; real firstName unknown at generation
+
+// ---- GSM-7 vs UCS-2 SMS segment math (mirrors Twilio's encoding rules) ----
+const GSM7_BASIC = "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ\x1bÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà";
+const GSM7_EXT = "^{}\\[~]|€";
+function gsm7Len(s: string): number | null {
+  let n = 0;
+  for (const ch of s) {
+    if (GSM7_BASIC.includes(ch)) n += 1;
+    else if (GSM7_EXT.includes(ch)) n += 2;
+    else return null;
+  }
+  return n;
+}
+function smsSegments(s: string): number {
+  const g = gsm7Len(s);
+  if (g !== null) return g <= 160 ? 1 : Math.ceil(g / 153);
+  const units = s.length;
+  return units <= 70 ? 1 : Math.ceil(units / 67);
+}
+// Replicates lib/dmAddon.composeDailyMessage({dm:true}) EN — KEEP IN SYNC.
+function dmWrapForBudget(verseText: string): string {
+  return `${NAME_ALLOWANCE}, a little note from Me today.\n\n${verseText}\n\nI've got you.`;
+}
+function countSentences(s: string): number {
+  return s.trim().split(/[.!?]+(?:\s|$)/).map((x) => x.trim()).filter(Boolean).length;
+}
 
 function buildPrompt(verseRef: string, verseText: string): string {
-  return `Translate this Bible verse (KJV) into language a teenager would actually text a friend -- current, authentic slang, but respectful of the meaning. Keep it short, like a real text message. Do not add commentary, just the translated verse.
+  return `Rewrite this Bible verse (KJV) the way a teenager would actually text a friend -- current, authentic slang, but true to the meaning.
+
+Length: 2 to 3 short sentences. Plain text only -- NO emoji and no fancy punctuation (use straight quotes ' and a hyphen -, not curly quotes or em dashes), so it stays a short SMS.
+Fidelity: say only what the verse says. Do NOT add promises, claims, or ideas that aren't in the source, and don't drop its main point. Restating the same idea in casual words is good; inventing new content is not.
+Do not add commentary.
 
 Reference: ${verseRef}
 KJV text: "${verseText}"
 
-Respond with ONLY the translated verse text, nothing else.`;
+Respond with ONLY the rewritten verse text, nothing else.`;
 }
 
-async function callClaude(apiKey: string, prompt: string): Promise<string> {
+async function callClaude(apiKey: string, prompt: string, temperature = 1): Promise<string> {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-    body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 200, messages: [{ role: "user", content: prompt }] }),
+    body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 300, temperature, messages: [{ role: "user", content: prompt }] }),
   });
   if (!res.ok) throw new Error(`Anthropic API error ${res.status}: ${await res.text()}`);
   const data = await res.json();
@@ -59,13 +94,69 @@ async function callOpenAI(apiKey: string, prompt: string): Promise<string> {
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: { "content-type": "application/json", "authorization": `Bearer ${apiKey}` },
-    body: JSON.stringify({ model: "gpt-4o", max_tokens: 200, messages: [{ role: "user", content: prompt }] }),
+    body: JSON.stringify({ model: "gpt-4o", max_tokens: 300, messages: [{ role: "user", content: prompt }] }),
   });
   if (!res.ok) throw new Error(`OpenAI API error ${res.status}: ${await res.text()}`);
   const data = await res.json();
   const text = data?.choices?.[0]?.message?.content;
   if (typeof text !== "string") throw new Error("OpenAI response missing choices[0].message.content");
   return text.trim();
+}
+
+interface Judgement { faithful: boolean; added_claims: string[]; omitted_core: string[]; drift: boolean; }
+async function judgeFidelity(apiKey: string, source: string, rendering: string): Promise<Judgement> {
+  const prompt = `You are a strict Scripture-fidelity checker. Compare a casual paraphrase to its source verse.
+
+Source (KJV): "${source}"
+Paraphrase: "${rendering}"
+
+A faithful paraphrase may restate or lightly expand the SAME idea in casual/slang language, but must NOT introduce claims, promises, or theology not present in the source, and must NOT drop the verse's core point.
+
+Respond with ONLY compact JSON, no prose, no code fences:
+{"faithful": true|false, "added_claims": ["..."], "omitted_core": ["..."], "drift": true|false}
+When genuinely unsure, set faithful=false.`;
+  try {
+    const raw = await callClaude(apiKey, prompt, 0);
+    const m = raw.match(/\{[\s\S]*\}/);
+    if (!m) return { faithful: false, added_claims: ["judge_unparseable"], omitted_core: [], drift: false };
+    const p = JSON.parse(m[0]);
+    return {
+      faithful: p.faithful === true,
+      added_claims: Array.isArray(p.added_claims) ? p.added_claims.map(String) : [],
+      omitted_core: Array.isArray(p.omitted_core) ? p.omitted_core.map(String) : [],
+      drift: p.drift === true,
+    };
+  } catch (_e) {
+    return { faithful: false, added_claims: ["judge_error"], omitted_core: [], drift: false };
+  }
+}
+
+function evalFlags(label: "A" | "B", text: string, judge: Judgement): string[] {
+  const sentences = countSentences(text);
+  const segments = smsSegments(dmWrapForBudget(text));
+  const flags: string[] = [];
+  if (sentences < SENTENCE_MIN) flags.push(`${label}:too_short`);
+  if (sentences > SENTENCE_MAX) flags.push(`${label}:too_long`);
+  if (segments > SEGMENT_MAX) flags.push(`${label}:exceeds_sms_budget(${segments}seg)`);
+  const fidelityBad = !judge.faithful || judge.added_claims.length > 0 || judge.omitted_core.length > 0 || judge.drift;
+  if (fidelityBad) {
+    const detail = [
+      ...judge.added_claims.map((c) => `added:${c}`),
+      ...judge.omitted_core.map((c) => `omitted:${c}`),
+      judge.drift ? "drift" : "",
+    ].filter(Boolean).join("; ");
+    flags.push(`${label}:fidelity_risk(${detail || "unfaithful"})`);
+  }
+  return flags;
+}
+
+async function evaluate(anthropicKey: string, source: string, outA: string, outB: string) {
+  const [jA, jB] = await Promise.all([judgeFidelity(anthropicKey, source, outA), judgeFidelity(anthropicKey, source, outB)]);
+  const reasons: string[] = [...evalFlags("A", outA, jA), ...evalFlags("B", outB, jB)];
+  const sim = similarity(outA, outB);
+  if (sim < AGREEMENT_THRESHOLD) reasons.push("ai_disagreement");
+  const status = reasons.length > 0 ? "needs_review" : "agreed";
+  return { reasons, status, sim };
 }
 
 function daysInMonth(targetMonth: string): string[] {
@@ -101,10 +192,7 @@ Deno.serve(async (req: Request) => {
 
   const supa = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 
-  // AUTH: require an authenticated staff member with content.generate. The
-  // gateway verify_jwt only proves *some* valid JWT (the public anon key
-  // satisfies it), and this triggers real dual-AI generation (cost) under the
-  // service role -- so confirm the caller is staff, not just anyone.
+  // AUTH: require an authenticated staff member with content.generate.
   const authHeader = req.headers.get("Authorization") ?? "";
   const userClient = createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -122,7 +210,6 @@ Deno.serve(async (req: Request) => {
 
   const dates = daysInMonth(targetMonth);
 
-  // Per-track 12-month dedup.
   const cutoff = new Date();
   cutoff.setFullYear(cutoff.getFullYear() - 1);
   const { data: usedRows, error: usedErr } = await supa
@@ -130,10 +217,6 @@ Deno.serve(async (req: Request) => {
   if (usedErr) return json(500, { error: "failed_to_read_used_verses", detail: usedErr.message });
   const usedRefs = new Set((usedRows || []).map((r: { verse_ref: string }) => r.verse_ref));
 
-  // Candidate pool: ALL tracks (incl. "general") draw ONLY from the curated,
-  // human-approved verse_theme_tags for that track (via get_theme_track_pool).
-  // The random-full-KJV path is gone -- no track can silently pull unreviewed
-  // scripture; an exhausted pool surfaces as no_eligible_verses_in_sample per day.
   let candidates: Array<{ book: string; chapter: number; verse: number; text: string }>;
   {
     const { data, error } = await supa.rpc("get_theme_track_pool", { p_track: themeTrack });
@@ -165,9 +248,7 @@ Deno.serve(async (req: Request) => {
     const prompt = buildPrompt(verseRef, verseRow.text);
     try {
       const [outputA, outputB] = await Promise.all([callClaude(anthropicKey!, prompt), callOpenAI(openaiKey!, prompt)]);
-      const simScore = similarity(outputA, outputB);
-      const agreementStatus = simScore >= AGREEMENT_THRESHOLD ? "agreed" : "disagreed";
-      const status = agreementStatus === "agreed" ? "agreed" : "needs_review";
+      const { reasons, status, sim } = await evaluate(anthropicKey!, verseRow.text, outputA, outputB);
 
       const { data: slot, error: slotErr } = await supa
         .from("daily_slots")
@@ -178,14 +259,15 @@ Deno.serve(async (req: Request) => {
           status,
           ai_output_a: outputA,
           ai_output_b: outputB,
-          agreement_status: agreementStatus,
+          agreement_status: sim >= AGREEMENT_THRESHOLD ? "agreed" : "disagreed",
+          needs_review_reasons: reasons,
           generated_for_batch_month: `${targetMonth}-01`,
           updated_at: new Date().toISOString(),
         }, { onConflict: "scheduled_date,theme_track" })
         .select().single();
 
       if (slotErr) results.push({ date: targetDate, verse_ref: verseRef, error: slotErr.message });
-      else results.push({ date: targetDate, verse_ref: verseRef, agreement_status: agreementStatus, slot_status: status, daily_slot_id: slot.id });
+      else results.push({ date: targetDate, verse_ref: verseRef, slot_status: status, needs_review_reasons: reasons, daily_slot_id: slot.id });
     } catch (e) {
       results.push({ date: targetDate, verse_ref: verseRef, error: String((e as Error)?.message ?? e) });
     }
