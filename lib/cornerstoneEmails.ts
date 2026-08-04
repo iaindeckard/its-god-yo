@@ -17,7 +17,7 @@ import "server-only";
 const FROM = process.env.TRANSACTIONAL_EMAIL_FROM || "It's God, Yo <hello@itsgodyo.com>";
 const REPLY_TO = process.env.TRANSACTIONAL_REPLY_TO || "iaindeckard@gmail.com";
 const COMPANY_ADDRESS =
-  "Deckard Enterprise International, LLC · 2221 N Amarado St, Wichita, KS 67205";
+  "Deckard Enterprise International, LLC · Wichita, KS 67205";
 
 function esc(s: string): string {
   return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] as string));

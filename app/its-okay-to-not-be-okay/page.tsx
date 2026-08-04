@@ -5,7 +5,7 @@ import s from "./iotnbo.module.css";
 export const metadata: Metadata = {
   title: "It's Okay to Not Be Okay — It's God, Yo!™",
   description:
-    "A message from the founder of It's God, Yo about mental health, the pressure teens and the adults who love them face, and why asking for help matters — with free, confidential crisis resources.",
+    "A message from the founder of It's God, Yo™ about mental health, the pressure teens and the adults who love them face, and why asking for help matters — with free, confidential crisis resources.",
 };
 
 /**
@@ -60,7 +60,7 @@ export default function ItsOkayPage() {
             it.
           </p>
           <p>
-            I built It&rsquo;s God, Yo because I believe every teen deserves to hear something true and steady in their
+            I built It&rsquo;s God, Yo&trade; because I believe every teen deserves to hear something true and steady in their
             day, and I want this to be a place where struggling is never something to hide. Whether you&rsquo;re the
             parent setting this up or the teen receiving it, that&rsquo;s true for you too.
           </p>

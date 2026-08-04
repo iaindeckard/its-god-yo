@@ -135,7 +135,7 @@ export default function ProgramTermsPage() {
       </p>
       <p>
         Deckard Enterprise International, LLC<br />
-        2221 N Amarado St, Wichita, KS 67205
+        Wichita, KS 67205
       </p>
     </LegalPage>
   );

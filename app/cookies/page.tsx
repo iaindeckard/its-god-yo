@@ -42,7 +42,7 @@ export default function CookiesPage() {
       <h2>6. Contact us</h2>
       <p>
         Deckard Enterprise International, LLC<br />
-        2221 N Amarado St, Wichita, KS 67205
+        Wichita, KS 67205
       </p>
     </LegalPage>
   );

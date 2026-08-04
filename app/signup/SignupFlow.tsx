@@ -97,6 +97,36 @@ export default function SignupFlow({
   initialPlan?: string;
 }) {
   const [lang, setLang] = useState<Lang>(initialLang);
+
+  // Spanish "notify me" waitlist — shown while Spanish isn't launched (SPANISH_ENABLED
+  // false). Lightweight email capture only; NOT a preorder/payment hold.
+  const [spanishOpen, setSpanishOpen] = useState(false);
+  const [spanishEmail, setSpanishEmail] = useState("");
+  const [spanishBusy, setSpanishBusy] = useState(false);
+  const [spanishDone, setSpanishDone] = useState(false);
+  const [spanishErr, setSpanishErr] = useState<string | null>(null);
+  async function submitSpanishWaitlist() {
+    const email = spanishEmail.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setSpanishErr(lang === "es" ? "Ingresa un correo válido." : "Enter a valid email.");
+      return;
+    }
+    setSpanishBusy(true);
+    setSpanishErr(null);
+    try {
+      const res = await fetch("/api/spanish-waitlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, source: "signup_language_step" }),
+      });
+      if (!res.ok) { setSpanishErr(lang === "es" ? "No se pudo guardar — inténtalo de nuevo." : "Couldn't save — try again."); return; }
+      setSpanishDone(true);
+    } catch {
+      setSpanishErr(lang === "es" ? "No se pudo guardar — inténtalo de nuevo." : "Couldn't save — try again.");
+    } finally {
+      setSpanishBusy(false);
+    }
+  }
   const [step, setStep] = useState<number>(STEP.LANG);
   const [themeTrack, setThemeTrack] = useState<string>("general");
   const s = t[lang];
@@ -442,7 +472,58 @@ export default function SignupFlow({
                     <span className="c-title">{L === "en" ? t.en.english : t.es.spanish}</span>
                   </div>
                 ))}
+
+                {/* Spanish is not launched yet — offer a "coming soon" notify-me capture
+                    instead of a selectable option (no preorder/payment). */}
+                {!SPANISH_ENABLED && (
+                  <div
+                    className="choice"
+                    onClick={() => !spanishDone && setSpanishOpen((o) => !o)}
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={spanishOpen}
+                    style={{ cursor: "pointer" }}
+                  >
+                    <span style={{ fontSize: 22 }}>🇲🇽</span>
+                    <span className="c-title">Español</span>
+                    <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 600, color: "#7686a0", background: "rgba(0,0,0,0.05)", padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap" }}>
+                      {lang === "es" ? "Muy pronto" : "Coming soon"}
+                    </span>
+                  </div>
+                )}
               </div>
+
+              {!SPANISH_ENABLED && spanishOpen && !spanishDone && (
+                <div className="field" style={{ marginTop: 12 }}>
+                  <p className="muted" style={{ fontSize: 14, marginBottom: 8 }}>
+                    {lang === "es"
+                      ? "El español aún no está listo. Déjanos tu correo y te avisamos en cuanto esté disponible."
+                      : "Spanish isn’t ready yet. Leave your email and we’ll let you know the moment it launches."}
+                  </p>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input
+                      type="email"
+                      value={spanishEmail}
+                      placeholder={lang === "es" ? "tú@correo.com" : "you@email.com"}
+                      onChange={(e) => { setSpanishEmail(e.target.value); setSpanishErr(null); }}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void submitSpanishWaitlist(); } }}
+                      style={{ flex: 1 }}
+                    />
+                    <button className="btn btn-primary" style={{ whiteSpace: "nowrap" }} disabled={spanishBusy || !spanishEmail.trim()} onClick={() => void submitSpanishWaitlist()}>
+                      {spanishBusy ? (lang === "es" ? "Enviando…" : "Sending…") : (lang === "es" ? "Avísame" : "Notify me")}
+                    </button>
+                  </div>
+                  {spanishErr && <p style={{ color: "#c0392b", fontSize: 13, marginTop: 6 }}>{spanishErr}</p>}
+                </div>
+              )}
+              {!SPANISH_ENABLED && spanishDone && (
+                <p style={{ marginTop: 12, color: "#2e7d32", fontSize: 14, fontWeight: 500 }}>
+                  {lang === "es"
+                    ? "¡Listo! Te avisaremos cuando el español esté disponible. 🙏"
+                    : "You’re on the list — we’ll email you when Spanish is ready. 🙏"}
+                </p>
+              )}
+
               <div className="wizard-nav">
                 <span />
                 <button className="btn btn-primary" onClick={() => setStep(STEP.FOCUS)}>{s.continue}</button>

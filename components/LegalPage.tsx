@@ -16,7 +16,7 @@ export default function LegalPage({ title, updated, children }: { title: string;
         <div className={s.head}>
           <h1>{title}</h1>
           <div className={s.updated}>Last updated: {updated}</div>
-          <div className={s.operator}>Operated by Deckard Enterprise International, LLC &middot; 2221 N Amarado St, Wichita, KS 67205</div>
+          <div className={s.operator}>Operated by Deckard Enterprise International, LLC &middot; Wichita, KS 67205</div>
         </div>
         <div className={s.prose}>{children}</div>
         <div className={s.foot}>

@@ -13,7 +13,7 @@ function ComingSoon() {
         <div style={{ fontSize: 34, marginBottom: 14 }} aria-hidden="true">🙏</div>
         <h1 style={{ fontSize: 26, fontWeight: 700, marginBottom: 12 }}>Signups are opening soon.</h1>
         <p style={{ color: "#a9bad6", lineHeight: 1.65, fontSize: 15 }}>
-          We&rsquo;re putting the finishing touches on It&rsquo;s God, Yo. Signups aren&rsquo;t open yet, so there&rsquo;s nothing to pay and no card to enter right now. Please check back soon.
+          We&rsquo;re putting the finishing touches on It&rsquo;s God, Yo&trade;. Signups aren&rsquo;t open yet, so there&rsquo;s nothing to pay and no card to enter right now. Please check back soon.
         </p>
         <p style={{ marginTop: 24 }}>
           <a href="/" style={{ color: "#7ea8e0", fontSize: 14 }}>&larr; Back home</a>
