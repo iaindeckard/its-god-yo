@@ -186,6 +186,19 @@
 .priceNote { font-size: 12.5px; color: #a9bad6; line-height: 1.5; }
 .priceExtra { font-size: 12px; color: #7ea8e0; margin-top: 8px; }
 
+/* Pricing extras — DM from Him add-on + Spanish "coming soon" bubbles.
+   auto-fit so a lone card (once Spanish launches) fills the row instead of
+   sitting half-width. */
+.pricingExtras { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 16px; }
+.extraCard { background: #111b30; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 22px 24px; }
+.extraSpanish { border-color: rgba(255,211,122,0.28); background: linear-gradient(180deg, rgba(255,211,122,0.06), transparent 60%), #111b30; }
+.extraTag { display: inline-block; background: rgba(55,138,221,0.15); color: #7ea8e0; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; padding: 3px 10px; border-radius: 12px; margin-bottom: 12px; }
+.comingSoonTag { display: inline-block; background: rgba(255,211,122,0.15); color: #FFD37A; border: 1px solid rgba(255,211,122,0.3); font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; padding: 3px 10px; border-radius: 12px; margin-bottom: 12px; }
+.extraTitle { font-size: 17px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.extraPrice { font-size: 13.5px; font-weight: 700; color: #7ea8e0; }
+.extraBody { font-size: 13.5px; color: #a9bad6; line-height: 1.6; }
+.extraBody strong { color: #c7d3e6; font-weight: 600; }
+
 /* ---------- It's okay to not be okay ---------- */
 .iotnboSection { padding: 36px 0; }
 .iotnboBanner { background: linear-gradient(90deg, rgba(255,211,122,0.12), rgba(255,211,122,0.03)); border: 1px solid rgba(255,211,122,0.25); border-radius: 14px; padding: 26px 32px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }

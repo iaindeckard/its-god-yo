@@ -309,6 +309,39 @@ export default function Landing() {
             <div className={s.priceNote}>Send it to someone else, one teen.</div>
           </div>
         </div>
+
+        <div className={s.pricingExtras}>
+          {/* DM from Him — optional add-on. Same daily verse, rewrapped as a
+              personal first-person note. Price mirrors lib/plans.ts DM_ADDON. */}
+          <div className={s.extraCard}>
+            <div className={s.extraTag}>Optional add-on</div>
+            <div className={s.extraTitle}>
+              DM from Him <span className={s.extraPrice}>+$2.99/mo per teen</span>
+            </div>
+            <div className={s.extraBody}>
+              Teens tune out anything that sounds aimed at everyone. DM from Him takes your teen&rsquo;s
+              same daily verse and rewraps it as a personal, first-person note &mdash; like a text written
+              straight from Him, just for them. Same message, no extra texts. Toggle it on or off anytime
+              by replying <strong>DM ON</strong> or <strong>DM OFF</strong>.
+            </div>
+          </div>
+
+          {/* Spanish — coming soon. Shown only while SPANISH_ENABLED is off; once
+              Spanish launches this tease drops and the "Which text we use" section
+              flips to include the Reina-Valera 1909 badge. */}
+          {!SPANISH_ENABLED && (
+          <div className={`${s.extraCard} ${s.extraSpanish}`}>
+            <div className={s.comingSoonTag}>Coming soon &middot; Muy pronto</div>
+            <div className={s.extraTitle}>Daily verses in Espa&ntilde;ol</div>
+            <div className={s.extraBody}>
+              We&rsquo;re finishing a full, native-fluent Spanish edition. Every Spanish message will be
+              grounded in the <strong>Reina-Valera 1909</strong> &mdash; a public-domain text, so nothing
+              copyrighted is ever licensed or infringed, exactly like our English King James Version. Same
+              daily verse, same real language, en espa&ntilde;ol.
+            </div>
+          </div>
+          )}
+        </div>
       </section>
 
       <section className={s.sectionPlain}>
