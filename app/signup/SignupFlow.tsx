@@ -57,6 +57,18 @@ const THEME_TRACKS: Array<{ key: string; en: string; es: string }> = [
 // slots — a subscriber picking one would get skipped_no_content). Add a key here
 // as each track earns a real pool + approved runway. See the content re-launch plan.
 const ENABLED_TRACK_KEYS = new Set(["general"]);
+
+// General-fallback disclosure, shown only when a THEMED (non-General) focus is
+// selected — discloses that on days the chosen focus has no content, the
+// subscriber receives that day's General verse instead of nothing (see the
+// General fallback in lib/dailySend). Dormant while only General is enabled
+// (never renders today).
+// ⚠️ DRAFT WORDING — ATTORNEY REVIEW REQUIRED before any themed track re-launches
+// with this copy visible. Do not treat as finalized legal/disclosure language.
+const THEMED_FALLBACK_DISCLOSURE = {
+  en: "Heads up: on the occasional day your focus doesn't have a message ready, you'll get that day's General verse instead — never nothing.",
+  es: "Nota: en los días en que tu enfoque no tenga un mensaje listo, recibirás el versículo General de ese día — nunca te quedarás sin nada.",
+} as const;
 const TOTAL_DOTS = 7;
 
 const money = (n: number) => `$${n % 1 === 0 ? n.toFixed(0) : n.toFixed(2)}`;
@@ -460,6 +472,13 @@ export default function SignupFlow({
                   </div>
                 ))}
               </div>
+              {/* Themed-track fallback disclosure — renders only for a non-General
+                  focus (dormant while General-only). ⚠️ wording pending attorney review. */}
+              {themeTrack !== "general" && (
+                <p className="muted" style={{ marginTop: 12, fontSize: 13 }}>
+                  {lang === "es" ? THEMED_FALLBACK_DISCLOSURE.es : THEMED_FALLBACK_DISCLOSURE.en}
+                </p>
+              )}
               <div className="wizard-nav">
                 <button className="btn btn-ghost" onClick={() => setStep(STEP.LANG)}>{s.back}</button>
                 <button className="btn btn-primary" onClick={() => setStep(STEP.PLAN)}>{s.continue}</button>
