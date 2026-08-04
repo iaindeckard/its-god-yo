@@ -33,7 +33,7 @@ function priceLabelMap(): Record<string, string> {
   if (PLANS.family_annual.price_id) m[PLANS.family_annual.price_id] = "Family";
   if (PLANS.gift_annual.price_id) m[PLANS.gift_annual.price_id] = "Gift";
   for (const b of GROUP_BANDS) m[b.price_id] = `Group ${b.min}–${b.max}`;
-  m[DM_ADDON.price_id] = "DM from Him add-on";
+  m[DM_ADDON.price_id] = "DM from Him™ add-on";
   return m;
 }
 

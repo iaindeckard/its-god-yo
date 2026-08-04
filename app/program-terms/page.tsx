@@ -5,7 +5,7 @@ import { CORNERSTONE_ENABLED, PURCHASES_ENABLED } from "@/lib/flags";
 
 export const metadata: Metadata = {
   title: "Program Terms — It's God, Yo!™",
-  description: "The terms for It's God, Yo!™ programs — the Cornerstone Partner Program and the DM from Him add-on — in one place.",
+  description: "The terms for It's God, Yo!™ programs — the Cornerstone Partner Program and the DM from Him™ add-on — in one place.",
   robots: { index: false, follow: false }, // pre-launch: not indexed until a program is live
 };
 
@@ -39,7 +39,7 @@ export default function ProgramTermsPage() {
         <div style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "#7686a0", fontWeight: 700, marginBottom: 8 }}>On this page</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <a href="#cornerstone-partner-program" style={{ color: "#7ea8e0", fontSize: 15 }}>1. Cornerstone Partner Program</a>
-          <a href="#dm-from-him" style={{ color: "#7ea8e0", fontSize: 15 }}>2. DM from Him add-on</a>
+          <a href="#dm-from-him" style={{ color: "#7ea8e0", fontSize: 15 }}>2. DM from Him&trade; add-on</a>
         </div>
       </nav>
 
@@ -99,16 +99,16 @@ export default function ProgramTermsPage() {
       </p>
 
       {/* ─────────────────────────── DM from Him ─────────────────────────── */}
-      <h2 id="dm-from-him">2. DM from Him add-on</h2>
+      <h2 id="dm-from-him">2. DM from Him&trade; add-on</h2>
 
       <h3>2.1 What it is</h3>
       <p>
-        &ldquo;DM from Him&rdquo; is an optional paid add-on that a purchaser may add to any It&rsquo;s God, Yo! subscription. It is <strong>not</strong> a second, separately-selected message and does not send different or additional content. It takes the <strong>same</strong> daily verse the recipient already receives and re-frames it as a personal, first-person note &mdash; the feel of a text written directly to the recipient rather than a citation. The underlying Scripture selected for that day is unchanged; only the wording and framing of the message differ.
+        &ldquo;DM from Him&rdquo;&trade; is an optional paid add-on that a purchaser may add to any It&rsquo;s God, Yo! subscription. It is <strong>not</strong> a second, separately-selected message and does not send different or additional content. It takes the <strong>same</strong> daily verse the recipient already receives and re-frames it as a personal, first-person note &mdash; the feel of a text written directly to the recipient rather than a citation. The underlying Scripture selected for that day is unchanged; only the wording and framing of the message differ.
       </p>
 
       <h3>2.2 Pricing and billing</h3>
       <p>
-        The DM from Him add-on is priced per recipient, and its billing cadence follows the base subscription it is added to. Added to a <strong>monthly</strong> base plan, it is billed at <strong>$2.99 per month</strong>; added to an <strong>annual</strong> base plan, it is billed at <strong>$35.88 per year</strong> (twelve months at $2.99). In either case it is billed as its own separate line item alongside the base plan, and the add-on&rsquo;s billing interval always matches the base plan&rsquo;s interval. As with all IGY subscriptions, no charge occurs until the recipient personally confirms by text; the add-on is then billed as part of the resulting subscription. Current pricing is shown at signup and may change on a going-forward basis; a change will not retroactively affect an active subscription&rsquo;s current billing period.
+        The DM from Him&trade; add-on is priced per recipient, and its billing cadence follows the base subscription it is added to. Added to a <strong>monthly</strong> base plan, it is billed at <strong>$2.99 per month</strong>; added to an <strong>annual</strong> base plan, it is billed at <strong>$35.88 per year</strong> (twelve months at $2.99). In either case it is billed as its own separate line item alongside the base plan, and the add-on&rsquo;s billing interval always matches the base plan&rsquo;s interval. As with all IGY subscriptions, no charge occurs until the recipient personally confirms by text; the add-on is then billed as part of the resulting subscription. Current pricing is shown at signup and may change on a going-forward basis; a change will not retroactively affect an active subscription&rsquo;s current billing period.
       </p>
 
       <h3>2.3 Trial, adding, removing, and cancelling</h3>
@@ -118,7 +118,7 @@ export default function ProgramTermsPage() {
       <ul>
         <li>The add-on can be turned on at signup, or added or removed later at any time by texting <strong>DM ON</strong> or <strong>DM OFF</strong> to the daily-message number. This changes only the add-on and does not affect the base subscription.</li>
         <li>Turning the add-on on or off mid-cycle may be reflected as a proration on the next invoice for the affected billing period.</li>
-        <li>Replying <strong>STOP</strong> cancels the <strong>entire</strong> subscription &mdash; the base plan and the DM from Him add-on together. There is no way to cancel only the base plan while keeping the add-on; use DM OFF to remove just the add-on.</li>
+        <li>Replying <strong>STOP</strong> cancels the <strong>entire</strong> subscription &mdash; the base plan and the DM from Him&trade; add-on together. There is no way to cancel only the base plan while keeping the add-on; use DM OFF to remove just the add-on.</li>
       </ul>
 
       {/*

@@ -273,12 +273,16 @@ export default function Landing() {
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" /></svg>
               <div><div className={s.label}>English</div><div className={s.value}>King James Version (public domain)</div></div>
             </div>
-            {SPANISH_ENABLED && (
+            {/* Spanish source, moved up here alongside English. Written in Spanish
+                only — it names where the Spanish content comes from. Carries a
+                "Muy pronto" accent while SPANISH_ENABLED is off. */}
             <div className={s.badge}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" /></svg>
-              <div><div className={s.label}>Espa&ntilde;ol</div><div className={s.value}>Reina-Valera 1909 (dominio p&uacute;blico)</div></div>
+              <div>
+                <div className={s.label}>Espa&ntilde;ol{!SPANISH_ENABLED && <span className={s.badgeSoon}> &middot; Muy pronto</span>}</div>
+                <div className={s.value}>Cada versículo en español viene de la Reina-Valera 1909 (dominio p&uacute;blico).</div>
+              </div>
             </div>
-            )}
           </div>
         </div>
       </section>
@@ -310,37 +314,23 @@ export default function Landing() {
           </div>
         </div>
 
-        <div className={s.pricingExtras}>
-          {/* DM from Him — optional add-on. Same daily verse, rewrapped as a
-              personal first-person note. Price mirrors lib/plans.ts DM_ADDON. */}
-          <div className={s.extraCard}>
+        {/* DM from Him — optional add-on, centered on its own below the pricing
+            grid. Gold/white "brass" treatment on the border + title mirrors the
+            wordmark's "God," styling. The Spanish source tease now lives up in the
+            "Which text we use" badges. Price mirrors lib/plans.ts DM_ADDON. */}
+        <div className={`${s.pricingExtras} ${s.pricingExtrasSingle}`}>
+          <div className={`${s.extraCard} ${s.extraDM}`}>
             <div className={s.extraTag}>Optional add-on</div>
             <div className={s.extraTitle}>
-              DM from Him <span className={s.extraPrice}>+$2.99/mo per teen</span>
+              DM from Him&trade; <span className={s.extraPrice}>+$2.99/mo per teen</span>
             </div>
             <div className={s.extraBody}>
-              Teens tune out anything that sounds aimed at everyone. DM from Him takes your teen&rsquo;s
+              Teens tune out anything that sounds aimed at everyone. DM from Him&trade; takes your teen&rsquo;s
               same daily verse and rewraps it as a personal, first-person note &mdash; like a text written
               straight from Him, just for them. Same message, no extra texts. Toggle it on or off anytime
               by replying <strong>DM ON</strong> or <strong>DM OFF</strong>.
             </div>
           </div>
-
-          {/* Spanish — coming soon. Shown only while SPANISH_ENABLED is off; once
-              Spanish launches this tease drops and the "Which text we use" section
-              flips to include the Reina-Valera 1909 badge. */}
-          {!SPANISH_ENABLED && (
-          <div className={`${s.extraCard} ${s.extraSpanish}`}>
-            <div className={s.comingSoonTag}>Coming soon &middot; Muy pronto</div>
-            <div className={s.extraTitle}>Daily verses in Espa&ntilde;ol</div>
-            <div className={s.extraBody}>
-              We&rsquo;re finishing a full, native-fluent Spanish edition. Every Spanish message will be
-              grounded in the <strong>Reina-Valera 1909</strong> &mdash; a public-domain text, so nothing
-              copyrighted is ever licensed or infringed, exactly like our English King James Version. Same
-              daily verse, same real language, en espa&ntilde;ol.
-            </div>
-          </div>
-          )}
         </div>
       </section>
 

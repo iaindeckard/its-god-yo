@@ -127,6 +127,7 @@
 .badge svg { width: 20px; height: 20px; flex-shrink: 0; opacity: 0.7; }
 .badge .label { font-weight: 500; margin-bottom: 2px; }
 .badge .value { color: #a9bad6; }
+.badge .badgeSoon { color: #FFD37A; font-weight: 600; }
 
 /* ---------- Why we do this ---------- */
 /* Mirrors the "Which text we use" section: same .sectionPlain wrapper + .eyebrow
@@ -190,8 +191,14 @@
    auto-fit so a lone card (once Spanish launches) fills the row instead of
    sitting half-width. */
 .pricingExtras { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 16px; }
+/* Single centered extra (DM from Him now stands alone under the pricing grid). */
+.pricingExtrasSingle { grid-template-columns: minmax(0, 620px); justify-content: center; }
 .extraCard { background: #111b30; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 22px 24px; }
 .extraSpanish { border-color: rgba(255,211,122,0.28); background: linear-gradient(180deg, rgba(255,211,122,0.06), transparent 60%), #111b30; }
+/* DM from Him — white + gold "brass" treatment, matching the wordmark's "God,". */
+.extraDM { border-color: rgba(255,211,122,0.5); background: linear-gradient(180deg, rgba(255,211,122,0.06), transparent 55%), #111b30; }
+.extraDM .extraTitle { color: #fff; text-shadow: 1px 1px 0 #D4B14E, 2px 2px 0 #C49F3C, 3px 3px 0 #B08D2E; }
+.extraDM .extraPrice { color: #FFD37A; text-shadow: none; }
 .extraTag { display: inline-block; background: rgba(55,138,221,0.15); color: #7ea8e0; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; padding: 3px 10px; border-radius: 12px; margin-bottom: 12px; }
 .comingSoonTag { display: inline-block; background: rgba(255,211,122,0.15); color: #FFD37A; border: 1px solid rgba(255,211,122,0.3); font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; padding: 3px 10px; border-radius: 12px; margin-bottom: 12px; }
 .extraTitle { font-size: 17px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }

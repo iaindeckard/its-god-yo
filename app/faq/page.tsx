@@ -13,7 +13,7 @@ import FaqContent from "@/components/FaqContent";
 export const metadata: Metadata = {
   title: "FAQ — It's God, Yo!™",
   description:
-    "Frequently asked questions about It's God, Yo! — the daily verse, plans and pricing, the DM from Him add-on, and managing your subscription.",
+    "Frequently asked questions about It's God, Yo! — the daily verse, plans and pricing, the DM from Him™ add-on, and managing your subscription.",
   robots: { index: false, follow: false }, // pre-launch / pending legal review: not indexed
 };
 

@@ -48,7 +48,7 @@ export const t = {
     // pricing
     pricingEyebrow: "Pricing",
     pricingTitle: "Simple plans, honest prices",
-    pricingSub: "Billing only starts after the recipient confirms by text. Add “DM from Him” to any plan for +$2.99/mo.",
+    pricingSub: "Billing only starts after the recipient confirms by text. Add “DM from Him™” to any plan for +$2.99/mo.",
     perMonth: "/mo",
     perYear: "/yr",
     perTeenYear: "/teen · yr",
@@ -64,7 +64,7 @@ export const t = {
     contactUs: "Contact us",
     from: "from",
     choosePlan: "Choose plan",
-    dmAddonName: "DM from Him add-on",
+    dmAddonName: "DM from Him™ add-on",
     dmAddonDesc: "Your teen’s same daily verse, wrapped in a personal, first-person note — like a text straight from Him. +$2.99/mo.",
     // footer
     footerTagline: "God's Word in your words.",
@@ -101,10 +101,10 @@ export const t = {
     enhancedMsgTpl: "Because this recipient is under {age} in {country}, standard consent isn't enough — additional verification is required.",
     enhancedAck: "I understand additional consent verification will be required before this can activate.",
 
-    wPlusOneTitle: "Add “DM from Him”?",
+    wPlusOneTitle: "Add “DM from Him™”?",
     wPlusOneSub:
       "Same daily verse — rewrapped as a personal, first-person note, like a text straight from Him. +$2.99/mo.",
-    addPlusOne: "Yes, add DM from Him",
+    addPlusOne: "Yes, add DM from Him™",
     noThanks: "No thanks",
     fromWho: "Who's it from?",
     honorificLabel: "Title (optional)",
@@ -156,7 +156,7 @@ export const t = {
     noChargeYet: "No charge has been made. Billing begins only after they reply YES.",
     reviewTitle: "Review",
     plan: "Plan",
-    addon: "DM from Him add-on",
+    addon: "DM from Him™ add-on",
     referral: "Referral",
     yes: "Yes",
     no: "No",

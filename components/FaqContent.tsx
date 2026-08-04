@@ -20,7 +20,7 @@ type TabKey = "basics" | "pricing" | "dm" | "managing";
 const TABS: { key: TabKey; label: string }[] = [
   { key: "basics", label: "The basics" },
   { key: "pricing", label: "Plans & pricing" },
-  { key: "dm", label: "DM from Him" },
+  { key: "dm", label: "DM from Him™" },
   { key: "managing", label: "Managing & opting out" },
 ];
 
@@ -103,10 +103,10 @@ const FAQS: Record<TabKey, Item[]> = {
   ],
   dm: [
     {
-      q: "What is DM from Him?",
+      q: "What is DM from Him™?",
       a: (
         <p>
-          Teens hear a lot of noise every day - a lot of it negative, a lot of it confusing - and they internalize more of it than we realize. DM from Him takes that same daily verse and reframes it as a personal, first-person message, so instead of just reading Scripture, your teen hears it directly. That they&rsquo;re seen. That they matter. That someone thinks they&rsquo;re worth real time and love. Maybe your teen doesn&rsquo;t need that reminder. But maybe they do, and you don&rsquo;t know it yet.
+          Teens hear a lot of noise every day - a lot of it negative, a lot of it confusing - and they internalize more of it than we realize. DM from Him&trade; takes that same daily verse and reframes it as a personal, first-person message, so instead of just reading Scripture, your teen hears it directly. That they&rsquo;re seen. That they matter. That someone thinks they&rsquo;re worth real time and love. Maybe your teen doesn&rsquo;t need that reminder. But maybe they do, and you don&rsquo;t know it yet.
         </p>
       ),
     },
@@ -132,7 +132,7 @@ const FAQS: Record<TabKey, Item[]> = {
       q: "How do I cancel?",
       a: (
         <p>
-          Reply <strong>STOP</strong> to the daily-message number. STOP cancels the entire subscription - base plan and any add-on together. (To remove only DM from Him but keep the daily verse, reply DM OFF instead.)
+          Reply <strong>STOP</strong> to the daily-message number. STOP cancels the entire subscription - base plan and any add-on together. (To remove only DM from Him&trade; but keep the daily verse, reply DM OFF instead.)
         </p>
       ),
     },
@@ -190,7 +190,7 @@ export default function FaqContent() {
         <div className={s.head}>
           <h1>Frequently Asked Questions</h1>
           <div className={s.operator}>
-            Everything about It&rsquo;s God, Yo!&trade; - the daily verse, plans, the DM from Him add-on, and managing your subscription.
+            Everything about It&rsquo;s God, Yo!&trade; - the daily verse, plans, the DM from Him&trade; add-on, and managing your subscription.
           </div>
         </div>
 
