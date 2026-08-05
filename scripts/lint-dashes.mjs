@@ -38,17 +38,28 @@ const SCAN_DIRS = ["app", "components", "lib"];
 const EXTS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]);
 
 // The enforced customer-facing scope: on-site copy (all of app/ except the
-// internal admin UI and API route handlers) + shared components + the SMS and
-// transactional/outreach email template libs. Admin is internal, and the
-// remaining lib/* + i18n copy are a separate cleanup pass, so both are excluded
-// from enforcement for now. Expand ENFORCED_LIB_FILES as Pass 2 lands.
+// internal admin UI) + shared components + SMS/email template libs + shared UI
+// copy (lib/i18n.ts). Admin is internal. app/api route handlers ARE in scope
+// (their error messages + rendered responses reach users), EXCEPT a small set of
+// internal-only routes (cron jobs + the Stripe webhook) whose only em dashes live
+// in server logs / ops-alert emails, never in customer output. Expand
+// ENFORCED_LIB_FILES / prune INTERNAL_ONLY as more copy is cleaned.
 const ENFORCED_LIB_FILES = new Set([
   "lib/preorder/messages.ts", "lib/preorder/notify.ts", "lib/preorder/launch.ts", "lib/preorder/removal.ts",
   "lib/twilio.ts", "lib/twilioInbound.ts", "lib/dailySend.ts", "lib/dmAddon.ts", "lib/bounty.ts",
   "lib/cornerstoneEmails.ts", "lib/bountyEmails.ts", "lib/outreach/email.ts", "lib/sponsorInquiry.ts",
+  "lib/i18n.ts",
+]);
+// Internal-only API routes: their strings are console logs and ops-alert emails
+// to staff, not customer-facing output, so they're exempt from the dash policy.
+const INTERNAL_ONLY = new Set([
+  "app/api/cron/reconcile-payments/route.ts",
+  "app/api/cron/season-content-alarm/route.ts",
+  "app/api/stripe/webhook/route.ts",
 ]);
 function customerFacing(rel) {
-  if (rel.startsWith("app/admin/") || rel.startsWith("app/api/")) return false;
+  if (rel.startsWith("app/admin/")) return false;
+  if (INTERNAL_ONLY.has(rel)) return false;
   if (rel.startsWith("app/") || rel.startsWith("components/")) return true;
   return ENFORCED_LIB_FILES.has(rel);
 }

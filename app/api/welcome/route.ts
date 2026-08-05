@@ -27,7 +27,7 @@ export async function POST(req: Request) {
 
   const sendTime = normalizeSlot(body.send_time_local);
   if (!sendTime) {
-    return NextResponse.json({ error: "invalid send time — must be a 30-minute slot at 7:00 AM or later" }, { status: 400 });
+    return NextResponse.json({ error: "invalid send time. Must be a 30-minute slot at 7:00 AM or later" }, { status: 400 });
   }
   if (!isValidTimezone(body.timezone)) {
     return NextResponse.json({ error: "invalid timezone" }, { status: 400 });

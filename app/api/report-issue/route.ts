@@ -24,7 +24,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       ok: true,
       report_id: report.id,
-      message: "Thanks — your report was received. If it's confirmed, the first person to report it earns a credit.",
+      message: "Thanks! Your report was received. If it's confirmed, the first person to report it earns a credit.",
     });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "report_failed" }, { status: 400 });
