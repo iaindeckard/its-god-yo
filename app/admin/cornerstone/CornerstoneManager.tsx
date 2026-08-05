@@ -127,16 +127,16 @@ export default function CornerstoneManager({
                 <Fragment key={a.id}>
                   <tr>
                     <td>
-                      <div style={{ fontWeight: 600 }}>{a.church?.name ?? "—"}</div>
+                      <div style={{ fontWeight: 600 }}>{a.church?.name ?? "N/A"}</div>
                       <div className="muted" style={{ fontSize: 12 }}>
-                        {[a.church?.city, a.church?.state_province, a.church?.country].filter(Boolean).join(", ") || "—"}
+                        {[a.church?.city, a.church?.state_province, a.church?.country].filter(Boolean).join(", ") || "N/A"}
                       </div>
                     </td>
                     <td className="muted" style={{ fontSize: 13 }}>
-                      {formatPersonName({ salutation: a.contact_salutation, name: a.contact_name }) || "—"}{a.contact_email ? <><br />{a.contact_email}</> : null}
+                      {formatPersonName({ salutation: a.contact_salutation, name: a.contact_name }) || "N/A"}{a.contact_email ? <><br />{a.contact_email}</> : null}
                       {a.existing_account_email ? <><br /><span style={{ fontSize: 11 }}>acct: {a.existing_account_email}</span></> : null}
                     </td>
-                    <td className="muted">{a.preferred_plan ?? "—"}</td>
+                    <td className="muted">{a.preferred_plan ?? "N/A"}</td>
                     <td className="muted" style={{ whiteSpace: "nowrap", fontSize: 12 }}>{(a.submitted_at ?? a.created_at)?.slice(0, 10)}</td>
                     <td><span className={appPill(a.status)}>{a.status.replace("_", " ")}</span></td>
                     {canReview && (
@@ -183,8 +183,8 @@ export default function CornerstoneManager({
                 <tr key={p.id}>
                   <td className="mono" style={{ whiteSpace: "nowrap" }}>{fmt(p.partner_number)}</td>
                   <td>
-                    <div style={{ fontWeight: 600 }}>{p.church?.name ?? "—"}</div>
-                    <div className="muted" style={{ fontSize: 12 }}>{[p.church?.city, p.church?.state_province].filter(Boolean).join(", ") || "—"}</div>
+                    <div style={{ fontWeight: 600 }}>{p.church?.name ?? "N/A"}</div>
+                    <div className="muted" style={{ fontSize: 12 }}>{[p.church?.city, p.church?.state_province].filter(Boolean).join(", ") || "N/A"}</div>
                   </td>
                   <td className="muted" style={{ fontSize: 12, whiteSpace: "nowrap" }}>{p.recognition_date}</td>
                   <td>

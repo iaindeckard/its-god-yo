@@ -110,7 +110,7 @@ export default function DonationFundManager({
             {summary.recurringCosts.map((c) => (
               <tr key={c.vendor + c.description}>
                 <td style={{ fontWeight: 600 }}>{c.vendor}</td>
-                <td className="muted">{c.description ?? "—"}</td>
+                <td className="muted">{c.description ?? "N/A"}</td>
                 <td>{usd(c.amount_cents)}</td>
                 <td>{c.cadence}</td>
                 <td>{usd(c.dailyShareCents)}</td>
@@ -237,8 +237,8 @@ export default function DonationFundManager({
                 <td className="mono">{d.disbursed_on}</td>
                 <td>{d.charity_name}</td>
                 <td>{usd(d.amount_cents)}</td>
-                <td className="muted">{d.reference ?? "—"}</td>
-                <td className="muted">{d.notes ?? "—"}</td>
+                <td className="muted">{d.reference ?? "N/A"}</td>
+                <td className="muted">{d.notes ?? "N/A"}</td>
               </tr>
             ))}
           </tbody>

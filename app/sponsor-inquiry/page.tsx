@@ -4,7 +4,7 @@ import InquiryForm from "./InquiryForm";
 import { SPONSORS_ENABLED } from "@/lib/flags";
 
 export const metadata: Metadata = {
-  title: "Interested in sponsoring? — It's God, Yo!™",
+  title: "Interested in sponsoring? | It's God, Yo!™",
   description: "Churches, schools, and organizations who share the mission help make It's God, Yo possible. Start a conversation.",
 };
 

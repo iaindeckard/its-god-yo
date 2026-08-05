@@ -14,7 +14,7 @@ import {
   PLANS, GROUP_BANDS, DM_ADDON, FAMILY_EXTRA_TEEN, FAMILY_BASE_TEENS, bandForCount, GROUP_CONTACT_THRESHOLD,
 } from "@/lib/plans";
 import { submitConsent, type ConsentResult } from "@/lib/consent";
-import { SPANISH_ENABLED, PREORDER_MODE } from "@/lib/flags";
+import { SPANISH_ENABLED } from "@/lib/flags";
 import CountrySelect from "@/components/CountrySelect";
 import { countryByIso2, DEFAULT_COUNTRY } from "@/lib/countries";
 import { toE164FromParts } from "@/lib/phone";
@@ -44,7 +44,7 @@ const STEP = { LANG: 0, FOCUS: 1, PLAN: 2, RECIPIENT: 3, PLUSONE: 4, REFERRAL: 5
 // record; 'general' is the default. Labels here are display-only; the keys must
 // match the theme_tracks table.
 const THEME_TRACKS: Array<{ key: string; en: string; es: string }> = [
-  { key: "general", en: "General — no preference", es: "General — sin preferencia" },
+  { key: "general", en: "General, no preference", es: "General, sin preferencia" },
   { key: "joy_gratitude", en: "Joy & gratitude", es: "Alegría y gratitud" },
   { key: "gods_love_grace", en: "God’s love & grace", es: "El amor y la gracia de Dios" },
   { key: "patience_peace", en: "Patience & peace", es: "Paciencia y paz" },
@@ -66,8 +66,8 @@ const ENABLED_TRACK_KEYS = new Set(["general"]);
 // ⚠️ DRAFT WORDING — ATTORNEY REVIEW REQUIRED before any themed track re-launches
 // with this copy visible. Do not treat as finalized legal/disclosure language.
 const THEMED_FALLBACK_DISCLOSURE = {
-  en: "Heads up: on the occasional day your focus doesn't have a message ready, you'll get that day's General verse instead — never nothing.",
-  es: "Nota: en los días en que tu enfoque no tenga un mensaje listo, recibirás el versículo General de ese día — nunca te quedarás sin nada.",
+  en: "Heads up: on the occasional day your focus doesn't have a message ready, you'll get that day's General verse instead, never nothing.",
+  es: "Nota: en los días en que tu enfoque no tenga un mensaje listo, recibirás el versículo General de ese día, nunca te quedarás sin nada.",
 } as const;
 const TOTAL_DOTS = 7;
 
@@ -119,10 +119,10 @@ export default function SignupFlow({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, source: "signup_language_step" }),
       });
-      if (!res.ok) { setSpanishErr("No se pudo guardar — inténtalo de nuevo."); return; }
+      if (!res.ok) { setSpanishErr("No se pudo guardar. Inténtalo de nuevo."); return; }
       setSpanishDone(true);
     } catch {
-      setSpanishErr("No se pudo guardar — inténtalo de nuevo.");
+      setSpanishErr("No se pudo guardar. Inténtalo de nuevo.");
     } finally {
       setSpanishBusy(false);
     }
@@ -424,25 +424,32 @@ export default function SignupFlow({
         onChange={setPurchaserSalutation}
         label={lang === "es" ? "Título(s)" : "Title(s)"}
         otherLabel={lang === "es" ? "Otro" : "Other"}
-        hint={lang === "es" ? "Opcional. Elige los que apliquen — puedes combinar títulos (p. ej. Rev. Dr.)." : "Optional. Pick any that apply — combine titles if you like (e.g. Rev. Dr.)."}
+        hint={lang === "es" ? "Opcional. Elige los que apliquen. Puedes combinar títulos (p. ej. Rev. Dr.)." : "Optional. Pick any that apply. Combine titles if you like (e.g. Rev. Dr.)."}
       />
     </>
   );
 
   return (
     <main>
-      {/* top bar */}
+      {/* top bar: text-only wordmark, enlarged, top-left. The single speech-bubble
+          mark is NOT in this lockup; it lives in the left gutter beside the form
+          (see .signup-aside below). */}
       <div style={{ borderBottom: "1px solid var(--igy-line)" }}>
         <div className="container" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px" }}>
           <Link href="/" className="nav-brand" style={{ textDecoration: "none" }}>
-            <BubbleMark variant="primary" size={32} />
-            <Wordmark tone="flat" />
+            <Wordmark tone="flat" showIcon={false} className="signup-wordmark" />
           </Link>
           <Link href="/" className="muted" style={{ fontSize: 14 }}>✕</Link>
         </div>
       </div>
 
-      <div className="container">
+      <div className="container signup-body">
+        {/* Single brand mark, parked in the dead space to the LEFT of the form.
+            Purely decorative; hidden below the breakpoint where the gutter is too
+            narrow to hold it without crowding the wizard (see globals.css). */}
+        <div className="signup-aside" aria-hidden="true">
+          <BubbleMark variant="primary" className="signup-aside-mark" />
+        </div>
         <div className="wizard">
           {step < STEP.DONE && (
             <div className="steps" aria-hidden="true">
@@ -910,7 +917,7 @@ export default function SignupFlow({
                 <CountrySelect value={teenCountry} onChange={setTeenCountry} lang={lang} />
               </div>
               <div className="field">
-                <label>{s.recipientPhone} — {teenFirstName}</label>
+                <label>{s.recipientPhone} ({teenFirstName})</label>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span className="muted" style={{ fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>+{countryByIso2(teenCountry).dial}</span>
                   <input value={teenPhone} onChange={(e) => setTeenPhone(e.target.value)} placeholder={lang === "es" ? "Número local" : "Local number"} inputMode="tel" autoComplete="tel-national" style={{ flex: 1 }} autoFocus />
@@ -940,14 +947,10 @@ export default function SignupFlow({
                     }
                     onClick={handleSubmit}
                   >
-                    {submitting ? s.submitting : PREORDER_MODE ? s.reserveCta : s.submitSignup}
+                    {submitting ? s.submitting : s.submitSignup}
                   </button>
                 )}
               </div>
-              {/* Preorder fineprint — same copy across every plan (reservation state). */}
-              {PREORDER_MODE && teenGate?.decision !== "block" && (
-                <p className="hint" style={{ marginTop: 8, textAlign: "center" }}>{s.reserveFineprint}</p>
-              )}
             </section>
           )}
 
@@ -957,7 +960,7 @@ export default function SignupFlow({
               <div className="success-check">✓</div>
               <h2>{s.doneTitle}</h2>
               <p className="muted" style={{ maxWidth: 460, margin: "0 auto 8px" }}>{result.message}</p>
-              <p className="hint">{PREORDER_MODE ? s.reserveDoneHint : s.noChargeYet}</p>
+              <p className="hint">{s.noChargeYet}</p>
               <div style={{ marginTop: 24 }}>
                 <Link className="btn btn-primary" href="/">{lang === "es" ? "Volver al inicio" : "Back home"}</Link>
                 <button className="btn btn-ghost" style={{ marginLeft: 10 }} onClick={reset}>{s.startOver}</button>

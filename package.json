@@ -8,7 +8,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "vitest run"
+    "lint:dashes": "node scripts/lint-dashes.mjs",
+    "lint:dashes:all": "node scripts/lint-dashes.mjs --all",
+    "test": "vitest run",
+    "prepare": "git config core.hooksPath .githooks || true"
   },
   "dependencies": {
     "@fontsource/poppins": "^5.3.0",

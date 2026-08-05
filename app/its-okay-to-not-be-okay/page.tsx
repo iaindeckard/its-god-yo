@@ -3,9 +3,9 @@ import Image from "next/image";
 import s from "./iotnbo.module.css";
 
 export const metadata: Metadata = {
-  title: "It's Okay to Not Be Okay — It's God, Yo!™",
+  title: "It's Okay to Not Be Okay | It's God, Yo!™",
   description:
-    "A message from the founder of It's God, Yo™ about mental health, the pressure teens and the adults who love them face, and why asking for help matters — with free, confidential crisis resources.",
+    "A message from the founder of It's God, Yo™ about mental health, the pressure teens and the adults who love them face, and why asking for help matters, with free, confidential crisis resources.",
 };
 
 /**
@@ -42,7 +42,7 @@ export default function ItsOkayPage() {
               sizes="(min-width: 700px) 300px, 100vw"
               priority
             />
-            <div className={s.founderCaption}>Iain &amp; Lisette &mdash; February 2005</div>
+            <div className={s.founderCaption}>Iain &amp; Lisette, February 2005</div>
           </div>
           <div className={s.founderBody}>
           <div className={s.founderTag}>A Message From Our Founder</div>

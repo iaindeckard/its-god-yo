@@ -47,15 +47,15 @@ export function applicationReceivedEmail(churchName: string): CornerstoneEmail {
   return {
     subject: "We received your Cornerstone Partner application",
     text:
-`Thank you — we've received ${churchName}'s application to become a Cornerstone Partner of It's God, Yo!
+`Thank you. We've received ${churchName}'s application to become a Cornerstone Partner of It's God, Yo!
 
 Our team reviews each application personally. We'll follow up at this address with next steps. There's nothing more you need to do right now.
 
-— It's God, Yo!`,
+It's God, Yo!`,
     html: wrapHtml(
-`  <p>Thank you — we've received <strong>${esc(churchName)}</strong>'s application to become a Cornerstone Partner of It's God, Yo!</p>
+`  <p>Thank you. We've received <strong>${esc(churchName)}</strong>'s application to become a Cornerstone Partner of It's God, Yo!</p>
   <p>Our team reviews each application personally. We'll follow up at this address with next steps. There's nothing more you need to do right now.</p>
-  <p>— It's God, Yo!</p>`,
+  <p>It's God, Yo!</p>`,
     ),
   };
 }
@@ -65,30 +65,30 @@ Our team reviews each application personally. We'll follow up at this address wi
 // (no login — a signed token). It's the ONLY way in, so this email must carry it.
 export function applicationApprovedEmail(churchName: string, partnerNumber: number, statusUrl?: string): CornerstoneEmail {
   const label = partnerLabel(partnerNumber);
-  const linkText = statusUrl ? `\n\nView your Cornerstone Partner details anytime:\n${statusUrl}\n(Keep this private link — it's how you reach your Cornerstone page.)` : "";
+  const linkText = statusUrl ? `\n\nView your Cornerstone Partner details anytime:\n${statusUrl}\n(Keep this private link. It's how you reach your Cornerstone page.)` : "";
   const linkHtml = statusUrl
     ? `  <p style="margin:18px 0;"><a href="${esc(statusUrl)}" style="display:inline-block;background:#00ABBC;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600;">View your Cornerstone Partner details</a></p>
-  <p style="font-size:13px;color:#555;">Keep this private link — it's how you reach your Cornerstone page (there's no separate login).</p>`
+  <p style="font-size:13px;color:#555;">Keep this private link. It's how you reach your Cornerstone page (there's no separate login).</p>`
     : "";
   return {
     subject: `${churchName} is now a Cornerstone Partner (#${partnerNumber})`,
     text:
 `Your church has been approved as a Cornerstone Partner of It's God, Yo!
 
-You are helping establish a new way for churches and families to keep teenagers connected to Scripture between Sundays — and you're now permanently recognized for it.
+You are helping establish a new way for churches and families to keep teenagers connected to Scripture between Sundays, and you're now permanently recognized for it.
 
 Your permanent designation: ${label}.${linkText}
 
 Thank you for helping build this from the beginning.
 
-— It's God, Yo!`,
+It's God, Yo!`,
     html: wrapHtml(
 `  <p>Your church has been approved as a <strong>Cornerstone Partner</strong> of It's God, Yo!</p>
-  <p>You are helping establish a new way for churches and families to keep teenagers connected to Scripture between Sundays — and you're now permanently recognized for it.</p>
+  <p>You are helping establish a new way for churches and families to keep teenagers connected to Scripture between Sundays, and you're now permanently recognized for it.</p>
   <p>Your permanent designation: <strong>${esc(label)}</strong>.</p>
 ${linkHtml}
   <p>Thank you for helping build this from the beginning.</p>
-  <p>— It's God, Yo!</p>`,
+  <p>It's God, Yo!</p>`,
     ),
   };
 }
@@ -103,14 +103,14 @@ export function partnerLinkEmail(churchName: string, partnerNumber: number, stat
 
 ${statusUrl}
 
-Keep it somewhere safe — it's how you reach your Cornerstone page, and it doesn't expire.
+Keep it somewhere safe. It's how you reach your Cornerstone page, and it doesn't expire.
 
-— It's God, Yo!`,
+It's God, Yo!`,
     html: wrapHtml(
 `  <p>Here's your private link to <strong>${esc(churchName)}</strong>'s Cornerstone Partner page (<strong>${esc(label)}</strong>):</p>
   <p style="margin:18px 0;"><a href="${esc(statusUrl)}" style="display:inline-block;background:#00ABBC;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600;">Open your Cornerstone page</a></p>
-  <p style="font-size:13px;color:#555;">Keep it somewhere safe — it's how you reach your Cornerstone page, and it doesn't expire.</p>
-  <p>— It's God, Yo!</p>`,
+  <p style="font-size:13px;color:#555;">Keep it somewhere safe. It's how you reach your Cornerstone page, and it doesn't expire.</p>
+  <p>It's God, Yo!</p>`,
     ),
   };
 }
@@ -126,12 +126,12 @@ After review, we aren't able to move forward with this application at this time.
 
 Thank you again for your heart for reaching teenagers with Scripture.
 
-— It's God, Yo!`,
+It's God, Yo!`,
     html: wrapHtml(
 `  <p>Thank you for your interest in the Cornerstone Partner Program and for taking the time to apply on behalf of <strong>${esc(churchName)}</strong>.</p>
   <p>After review, we aren't able to move forward with this application at this time. This doesn't affect your ability to use It's God, Yo, and you're welcome to reach out if you have questions.</p>
   <p>Thank you again for your heart for reaching teenagers with Scripture.</p>
-  <p>— It's God, Yo!</p>`,
+  <p>It's God, Yo!</p>`,
     ),
   };
 }
@@ -141,15 +141,15 @@ export function paymentRequiredEmail(churchName: string): CornerstoneEmail {
   return {
     subject: "One more step to activate your Cornerstone Partnership",
     text:
-`Good news — ${churchName}'s Cornerstone Partner application has been approved, and there's one remaining step to activate it: completing your subscription payment.
+`Good news. ${churchName}'s Cornerstone Partner application has been approved, and there's one remaining step to activate it: completing your subscription payment.
 
 We'll be in touch with the details, or you can reach out and we'll walk you through it. Your Cornerstone Partner recognition is reserved for you in the meantime.
 
-— It's God, Yo!`,
+It's God, Yo!`,
     html: wrapHtml(
-`  <p>Good news — <strong>${esc(churchName)}</strong>'s Cornerstone Partner application has been approved, and there's one remaining step to activate it: completing your subscription payment.</p>
+`  <p>Good news. <strong>${esc(churchName)}</strong>'s Cornerstone Partner application has been approved, and there's one remaining step to activate it: completing your subscription payment.</p>
   <p>We'll be in touch with the details, or you can reach out and we'll walk you through it. Your Cornerstone Partner recognition is reserved for you in the meantime.</p>
-  <p>— It's God, Yo!</p>`,
+  <p>It's God, Yo!</p>`,
     ),
   };
 }
@@ -162,13 +162,13 @@ export function partnerActivatedEmail(churchName: string, partnerNumber: number)
     text:
 `${churchName}'s Cornerstone Partnership is active again.
 
-You remain ${label} — your permanent recognition and number never change. Welcome back.
+You remain ${label}. Your permanent recognition and number never change. Welcome back.
 
-— It's God, Yo!`,
+It's God, Yo!`,
     html: wrapHtml(
 `  <p><strong>${esc(churchName)}</strong>'s Cornerstone Partnership is active again.</p>
-  <p>You remain <strong>${esc(label)}</strong> — your permanent recognition and number never change. Welcome back.</p>
-  <p>— It's God, Yo!</p>`,
+  <p>You remain <strong>${esc(label)}</strong>. Your permanent recognition and number never change. Welcome back.</p>
+  <p>It's God, Yo!</p>`,
     ),
   };
 }
@@ -187,13 +187,13 @@ It recognizes your church as ${label}. Download your certificate (PDF) and badge
 
 ${statusUrl}
 
-— It's God, Yo!`,
+It's God, Yo!`,
     html: wrapHtml(
 `  <p><strong>${esc(churchName)}</strong>'s Cornerstone Partner certificate is ready to download, along with your Cornerstone Partner badge.</p>
   <p>It recognizes your church as <strong>${esc(label)}</strong>.</p>
   <p style="margin:18px 0;"><a href="${esc(statusUrl)}" style="display:inline-block;background:#00ABBC;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600;">Download your certificate &amp; badge</a></p>
   <p style="font-size:13px;color:#555;">Use your badge on your church website, newsletter, or socials.</p>
-  <p>— It's God, Yo!</p>`,
+  <p>It's God, Yo!</p>`,
     ),
   };
 }
@@ -207,7 +207,7 @@ export function lockedPricingChangedEmail(churchName: string, status: string): C
     : status === "suspended"
       ? "Your Cornerstone locked pricing is currently suspended under the Cornerstone Partner terms. Your church remains a Cornerstone Partner."
       : removed
-        ? "Your original locked-pricing benefit is no longer active. Your church remains a Cornerstone Partner — the recognition is permanent — but the locked rate no longer applies under the terms."
+        ? "Your original locked-pricing benefit is no longer active. Your church remains a Cornerstone Partner, and that recognition is permanent. The locked rate no longer applies under the terms."
         : `Your Cornerstone locked-pricing status is now: ${status}.`;
   return {
     subject: "An update to your Cornerstone locked pricing",
@@ -218,12 +218,12 @@ ${line}
 
 If you have any questions about this, just reply and we'll help.
 
-— It's God, Yo!`,
+It's God, Yo!`,
     html: wrapHtml(
 `  <p>There's an update to <strong>${esc(churchName)}</strong>'s Cornerstone locked pricing.</p>
   <p>${esc(line)}</p>
   <p>If you have any questions about this, just reply and we'll help.</p>
-  <p>— It's God, Yo!</p>`,
+  <p>It's God, Yo!</p>`,
     ),
   };
 }
@@ -232,7 +232,7 @@ If you have any questions about this, just reply and we'll help.
 export function publicRecognitionEmail(churchName: string, enabled: boolean): CornerstoneEmail {
   const line = enabled
     ? "Your church now appears on our public Cornerstone Partners page, with the recognition you approved."
-    : "Your church has been removed from the public Cornerstone Partners page. Your Cornerstone Partner recognition itself is unchanged — this only affects public listing.";
+    : "Your church has been removed from the public Cornerstone Partners page. Your Cornerstone Partner recognition itself is unchanged. This only affects public listing.";
   return {
     subject: enabled
       ? "Your church is now recognized on our Cornerstone Partners page"
@@ -242,11 +242,11 @@ export function publicRecognitionEmail(churchName: string, enabled: boolean): Co
 
 ${line}
 
-— It's God, Yo!`,
+It's God, Yo!`,
     html: wrapHtml(
 `  <p>An update on public recognition for <strong>${esc(churchName)}</strong>.</p>
   <p>${esc(line)}</p>
-  <p>— It's God, Yo!</p>`,
+  <p>It's God, Yo!</p>`,
     ),
   };
 }
@@ -258,13 +258,13 @@ export function enrollmentDeadlineEmail(churchName: string, closesOn: string): C
     text:
 `A quick heads-up for ${churchName}: Cornerstone Partner enrollment closes on ${closesOn}.
 
-If your church is still deciding, this is the window to be recognized as a founding Cornerstone Partner. We're glad to answer any questions — just reply.
+If your church is still deciding, this is the window to be recognized as a founding Cornerstone Partner. We're glad to answer any questions. Just reply.
 
-— It's God, Yo!`,
+It's God, Yo!`,
     html: wrapHtml(
 `  <p>A quick heads-up for <strong>${esc(churchName)}</strong>: Cornerstone Partner enrollment closes on <strong>${esc(closesOn)}</strong>.</p>
-  <p>If your church is still deciding, this is the window to be recognized as a founding Cornerstone Partner. We're glad to answer any questions — just reply.</p>
-  <p>— It's God, Yo!</p>`,
+  <p>If your church is still deciding, this is the window to be recognized as a founding Cornerstone Partner. We're glad to answer any questions. Just reply.</p>
+  <p>It's God, Yo!</p>`,
     ),
   };
 }

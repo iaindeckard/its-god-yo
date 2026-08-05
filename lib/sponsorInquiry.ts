@@ -38,7 +38,7 @@ function validEmail(e: string): boolean {
 
 function notificationBody(inquiry: InquiryInput) {
   return {
-    subject: `Sponsor inquiry — ${inquiry.orgName}`,
+    subject: `Sponsor inquiry from ${inquiry.orgName}`,
     text:
       `New sponsor inquiry from the It's God, Yo site:\n\n` +
       `Organization: ${inquiry.orgName}\n` +
@@ -83,7 +83,7 @@ async function sendNotification(inquiry: InquiryInput): Promise<{ sent: boolean;
   } catch (e) {
     return { sent: false, error: e instanceof Error ? e.message : "send_failed" };
   }
-  console.log(`[sponsor-inquiry] No email sender configured (set RESEND_API_KEY or SPONSOR_SMTP_*) — notification skipped, lead persisted. Would notify ${NOTIFY_TO} re: ${inquiry.orgName}`);
+  console.log(`[sponsor-inquiry] No email sender configured (set RESEND_API_KEY or SPONSOR_SMTP_*). Notification skipped, lead persisted. Would notify ${NOTIFY_TO} re: ${inquiry.orgName}`);
   return { sent: false, error: "email_not_configured" };
 }
 

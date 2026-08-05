@@ -4,7 +4,7 @@ import { CORNERSTONE_ENABLED } from "@/lib/flags";
 import ApplicationForm from "./ApplicationForm";
 
 export const metadata: Metadata = {
-  title: "Become a Cornerstone Partner — It's God, Yo!™",
+  title: "Become a Cornerstone Partner | It's God, Yo!™",
   description: "Churches that join during the founding stage of It's God, Yo are permanently recognized as Cornerstone Partners.",
 };
 

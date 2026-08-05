@@ -4,8 +4,8 @@ import LegalPage from "@/components/LegalPage";
 import { CORNERSTONE_ENABLED, PURCHASES_ENABLED } from "@/lib/flags";
 
 export const metadata: Metadata = {
-  title: "Program Terms — It's God, Yo!™",
-  description: "The terms for It's God, Yo!™ programs — the Cornerstone Partner Program and the DM from Him™ add-on — in one place.",
+  title: "Program Terms | It's God, Yo!™",
+  description: "The terms for It's God, Yo!™ programs, the Cornerstone Partner Program and the DM from Him™ add-on, in one place.",
   robots: { index: false, follow: false }, // pre-launch: not indexed until a program is live
 };
 
@@ -103,7 +103,7 @@ export default function ProgramTermsPage() {
 
       <h3>2.1 What it is</h3>
       <p>
-        &ldquo;DM from Him&rdquo;&trade; is an optional paid add-on that a purchaser may add to any It&rsquo;s God, Yo! subscription. It is <strong>not</strong> a second, separately-selected message and does not send different or additional content. It takes the <strong>same</strong> daily verse the recipient already receives and re-frames it as a personal, first-person note &mdash; the feel of a text written directly to the recipient rather than a citation. The underlying Scripture selected for that day is unchanged; only the wording and framing of the message differ.
+        &ldquo;DM from Him&rdquo;&trade; is an optional paid add-on that a purchaser may add to any It&rsquo;s God, Yo! subscription. It is <strong>not</strong> a second, separately-selected message and does not send different or additional content. It takes the <strong>same</strong> daily verse the recipient already receives and re-frames it as a personal, first-person note. It has the feel of a text written directly to the recipient rather than a citation. The underlying Scripture selected for that day is unchanged; only the wording and framing of the message differ.
       </p>
 
       <h3>2.2 Pricing and billing</h3>
@@ -113,12 +113,12 @@ export default function ProgramTermsPage() {
 
       <h3>2.3 Trial, adding, removing, and cancelling</h3>
       <p>
-        The add-on shares the base subscription&rsquo;s single free-trial period &mdash; there is no separate trial for the add-on, and no charge for it occurs until the base subscription&rsquo;s trial ends. Because It&rsquo;s God, Yo! has no separate account login, the add-on is managed by text message:
+        The add-on shares the base subscription&rsquo;s single free-trial period. There is no separate trial for the add-on, and no charge for it occurs until the base subscription&rsquo;s trial ends. Because It&rsquo;s God, Yo! has no separate account login, the add-on is managed by text message:
       </p>
       <ul>
         <li>The add-on can be turned on at signup, or added or removed later at any time by texting <strong>DM ON</strong> or <strong>DM OFF</strong> to the daily-message number. This changes only the add-on and does not affect the base subscription.</li>
         <li>Turning the add-on on or off mid-cycle may be reflected as a proration on the next invoice for the affected billing period.</li>
-        <li>Replying <strong>STOP</strong> cancels the <strong>entire</strong> subscription &mdash; the base plan and the DM from Him&trade; add-on together. There is no way to cancel only the base plan while keeping the add-on; use DM OFF to remove just the add-on.</li>
+        <li>Replying <strong>STOP</strong> cancels the <strong>entire</strong> subscription, both the base plan and the DM from Him&trade; add-on together. There is no way to cancel only the base plan while keeping the add-on; use DM OFF to remove just the add-on.</li>
       </ul>
 
       {/*

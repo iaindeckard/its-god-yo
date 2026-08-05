@@ -125,7 +125,7 @@ export async function submitReport(input: SubmitReportInput): Promise<ReportRow>
   if (!input.reportDate?.trim()) throw new Error("report date is required");
   if (!input.description?.trim()) throw new Error("a description of the issue is required");
   if (input.textLang !== "en" && input.textLang !== "es") {
-    throw new Error("please choose which text you're reporting — the English reword or the Spanish translation");
+    throw new Error("please choose which text you're reporting. The English reword or the Spanish translation");
   }
   const email = input.reporterEmail.trim().toLowerCase();
   const track = input.themeTrack?.trim() || "general";
@@ -149,7 +149,7 @@ export async function submitReport(input: SubmitReportInput): Promise<ReportRow>
     .gte("submitted_at", startOfDayUTC());
   if (rlErr) throw new Error(`rate_limit_check_failed: ${rlErr.message}`);
   if ((count ?? 0) >= 1) {
-    throw new Error("You've already submitted a report today — thank you! Please come back tomorrow with any others.");
+    throw new Error("You've already submitted a report today. Thank you! Please come back tomorrow with any others.");
   }
 
   // §8 Step 2 — already-resolved dedupe: this exact error (same group, incl. text_lang)
@@ -415,8 +415,8 @@ export async function assessReport(gkey: string): Promise<AssessResult> {
   const slot = await resolveSlot(rep);
   if (!slot.ok) {
     const msg = slot.reason === "no_matching_slot"
-      ? "No matching daily_slot for this report's date/track/verse — can't assess or publish. Verify the report details or map a slot manually."
-      : `Multiple daily_slots match (${(slot.slotIds ?? []).join(", ")}) — can't auto-target. Resolve manually.`;
+      ? "No matching daily_slot for this report's date/track/verse. Can't assess or publish. Verify the report details or map a slot manually."
+      : `Multiple daily_slots match (${(slot.slotIds ?? []).join(", ")}). Can't auto-target. Resolve manually.`;
     await persist({ ai_is_error: null, ai_assessment: msg, ai_proposed_fix: null, ai_target_slot_id: null });
     return { group_key: gkey, slot_error: slot.reason, ai_is_error: null, ai_assessment: msg, ai_proposed_fix: null, ai_target_slot_id: null };
   }
@@ -581,7 +581,7 @@ export async function confirmGroup(gkey: string, decision: "confirm" | "reject",
         `credit_issued_but_unrecorded: Stripe balance txn ${txn.id} for ${amountUsd} to ${winner.reporter_email} succeeded, but the ledger could not be written (${ins.error.message}; reconcile insert: ${recon.error.message}). Record this credit manually.`,
       );
     }
-    warning = `Credit ${amountUsd} was issued in Stripe (txn ${txn.id}) but the ledger write was degraded — it's logged as 'reconcile' for you to verify.`;
+    warning = `Credit ${amountUsd} was issued in Stripe (txn ${txn.id}) but the ledger write was degraded. It's logged as 'reconcile' for you to verify.`;
     console.error(`[bounty] ${warning}`);
   }
 
@@ -632,7 +632,7 @@ export async function publishCorrection(gkey: string, finalText: string, staff: 
   if (!rep) throw new Error("no pending reports in this group");
 
   const slot = await resolveSlot(rep);
-  if (!slot.ok) throw new Error(`cannot publish: ${slot.reason} — resolve the target slot first`);
+  if (!slot.ok) throw new Error(`cannot publish: ${slot.reason}. Resolve the target slot first`);
   const now = new Date().toISOString();
   const reviewerUuid = staff.userId ?? FALLBACK_REVIEWER_ID;
 
@@ -739,7 +739,7 @@ export async function revertCorrection(correctionId: string, staff: Staff): Prom
   let field: "final_translation" | "final_translation_es";
   if (s.final_translation === c.corrected_translation) field = "final_translation";
   else if (s.final_translation_es === c.corrected_translation) field = "final_translation_es";
-  else throw new Error("the slot text has changed since this correction — revert it by hand");
+  else throw new Error("the slot text has changed since this correction. Revert it by hand");
 
   const now = new Date().toISOString();
   const reviewerUuid = staff.userId ?? FALLBACK_REVIEWER_ID;

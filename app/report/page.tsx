@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import ReportForm from "./ReportForm";
 
 export const metadata: Metadata = {
-  title: "Report an issue — It's God, Yo!™",
+  title: "Report an issue | It's God, Yo!™",
   description: "Spot a translation or wording issue in a daily text? Tell us. If it's confirmed, the first person to report it earns an account credit.",
 };
 

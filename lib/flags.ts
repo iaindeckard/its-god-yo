@@ -43,27 +43,6 @@ export const SPONSORS_ENABLED = false;
 export const CORNERSTONE_ENABLED = true;
 
 /**
- * Preorder mode — collect reservations AHEAD of Twilio approval / real launch.
- *
- * While true, the signup flow runs in "reserve" mode: the landing + wizard commit
- * buttons read "Reserve Your Spot", the fineprint promises no charge today, and a
- * completed signup writes status='preorder_pending' / is_preorder=true (card saved
- * via SetupIntent, NO subscription, NO confirmation SMS). It also OPENS the
- * coming-soon gate (this flag OR PURCHASES_ENABLED lets /signup + /api/setup-intent
- * run) — but a preorder is NEVER charged at capture, so opening it is safe even
- * while PURCHASES_ENABLED stays false. This only affects NEW signups going forward;
- * existing rows are untouched.
- *
- * IMPORTANT: this const gates the Next.js (Vercel) side only. The submit-consent
- * Supabase Edge Function cannot import lib/, so it reads its OWN `PREORDER_MODE`
- * env var — keep the two in sync (set the edge env when you flip this to true).
- *
- * The launch trigger (admin batch that flips preorder_pending -> awaiting_confirmation
- * and sends the "reply YES" invites) is INDEPENDENT of this flag.
- */
-export const PREORDER_MODE = false;
-
-/**
  * Master switch for the Stage 2 daily send (the /api/cron/daily-send tick).
  * While false, the cron runs in DRY mode: it still computes who is due and
  * whether approved content exists, but makes NO Twilio calls and writes NO

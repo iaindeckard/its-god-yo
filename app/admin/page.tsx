@@ -9,7 +9,6 @@ const SECTIONS = [
   { href: "/admin/review", label: "Review queue", need: "content.queue.view", desc: "Approve or reject flagged daily-verse slots." },
   { href: "/admin/dashboard", label: "KPI dashboard", need: "analytics.dashboard.view", desc: "Subscribers, MRR, funnel, backlog." },
   { href: "/admin/consent-thresholds", label: "Consent thresholds", need: "admin.consent_thresholds.manage", desc: "Per-country age-consent rules (fail-safe until counsel confirms)." },
-  { href: "/admin/preorder", label: "Preorder launch", need: "billing.preorder.launch", desc: "Fire the one-time launch trigger — invite all reservations to reply YES." },
 ];
 
 export default async function AdminHome() {

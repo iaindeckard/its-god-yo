@@ -5,7 +5,7 @@ import { SPONSORS_ENABLED } from "@/lib/flags";
 import s from "./sponsors.module.css";
 
 export const metadata: Metadata = {
-  title: "Our sponsors — It's God, Yo!™",
+  title: "Our sponsors | It's God, Yo!™",
   description: "The faith-aligned organizations who help make It's God, Yo possible.",
 };
 

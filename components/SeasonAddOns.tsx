@@ -37,7 +37,7 @@ export default function SeasonAddOns({
   return (
     <div style={{ maxWidth: 560, margin: "0 auto", padding: 20 }}>
       <h1>Holy Season add-ons</h1>
-      <p style={{ color: "#555" }}>Whole-family — each add-on applies to every teen on your account. Add or remove any time.</p>
+      <p style={{ color: "#555" }}>Whole-family. Each add-on applies to every teen on your account. Add or remove any time.</p>
       <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 16 }}>
         {SEASON_KEYS.map((k) => {
           const on = state[k]?.status === "active";

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import LegalPage from "@/components/LegalPage";
 
 export const metadata: Metadata = {
-  title: "Cookie Policy — It's God, Yo!™",
+  title: "Cookie Policy | It's God, Yo!™",
   description: "What cookies and similar technologies the It's God, Yo!™ website uses.",
 };
 
@@ -36,7 +36,7 @@ export default function CookiesPage() {
 
       <h2>5. Changes to this policy</h2>
       <p>
-        If our actual use of cookies changes (for example, if we add an analytics tool), we will update this page to match &mdash; not the other way around. This page should always describe what the site actually does.
+        If our actual use of cookies changes (for example, if we add an analytics tool), we will update this page to match, not the other way around. This page should always describe what the site actually does.
       </p>
 
       <h2>6. Contact us</h2>

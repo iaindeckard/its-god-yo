@@ -13,7 +13,6 @@ export const dynamic = "force-dynamic"; // identity/permissions resolve per-requ
 // see, so search / TOC / quick-jump all inherently respect the gating.
 const ROUTE_PERMISSION: Record<string, string> = {
   "/admin/cornerstone": "partners.view",
-  "/admin/preorder": "billing.preorder.launch",
   "/admin/review": "content.queue.view",
   "/admin/theme-tags": "content.theme_tags.view",
   "/admin/bounty": "finance.bounty.view",

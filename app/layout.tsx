@@ -13,7 +13,7 @@ const poppins = Poppins({
 // Individual pages can override title/description by exporting their own
 // `metadata`; the OG/Twitter image comes from app/opengraph-image.tsx +
 // app/twitter-image.tsx (Next injects those tags for every route).
-const OG_TITLE = "It's God, Yo!™ — Faith that fits in a text";
+const OG_TITLE = "It's God, Yo!™ | Faith that fits in a text";
 const OG_DESCRIPTION =
   "A daily verse, texted the way they'd actually read it. Faith-based texting for teens, and a reminder for the families who love them too.";
 const SITE_URL = "https://itsgodyo.com"; // canonical custom domain (used for absolute og:url + image URLs)

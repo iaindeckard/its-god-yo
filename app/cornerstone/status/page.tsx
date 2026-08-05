@@ -5,7 +5,7 @@ import { verifyPartnerAccessToken, getPartnerStatusView } from "@/lib/cornerston
 import CornerstoneSection from "./CornerstoneSection";
 
 export const metadata: Metadata = {
-  title: "Your Cornerstone Partner status — It's God, Yo!™",
+  title: "Your Cornerstone Partner status | It's God, Yo!™",
   robots: { index: false, follow: false }, // private, token-gated — never index
 };
 

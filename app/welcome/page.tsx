@@ -2,7 +2,7 @@ import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import WelcomeForm from "./WelcomeForm";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Set your daily time — It's God, Yo!™" };
+export const metadata = { title: "Set your daily time | It's God, Yo!™" };
 
 const PAGE_BG = "#0B1830";
 

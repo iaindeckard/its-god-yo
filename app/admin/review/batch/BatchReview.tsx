@@ -191,7 +191,7 @@ function BatchSlotCard({
 
       {approved ? (
         <div className="muted" style={{ marginTop: 14, fontSize: 13, borderTop: "1px solid var(--igy-line)", paddingTop: 14 }}>
-          ✓ Approved — send-ready. Final: <strong>{slot.en.final ?? "—"}</strong>
+          ✓ Approved — send-ready. Final: <strong>{slot.en.final ?? "N/A"}</strong>
         </div>
       ) : (
         <div style={{ marginTop: 14, borderTop: "1px solid var(--igy-line)", paddingTop: 14 }}>
@@ -253,7 +253,7 @@ function StatusBadge({ status }: { status: string | null }) {
   if (status === "approved" || status === "sent") return <span className="pill pill-off">✓ {status}</span>;
   if (status === "needs_review") return <span className="pill pill-warn">needs review</span>;
   if (status === "agreed") return <span className="pill pill-off">agreed</span>;
-  return <span className="pill pill-off">{status ?? "—"}</span>;
+  return <span className="pill pill-off">{status ?? "N/A"}</span>;
 }
 
 function LangPanel({ label, side }: { label: string; side: ReviewLangSide }) {
@@ -261,7 +261,7 @@ function LangPanel({ label, side }: { label: string; side: ReviewLangSide }) {
     <div style={{ background: "var(--igy-bg-alt)", borderRadius: 10, padding: 14, border: "1px solid var(--igy-line)" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
         <strong>{label}</strong>
-        {side.flagged ? <span className="pill pill-warn">needs review</span> : <span className="pill pill-off">{side.status ?? "—"}</span>}
+        {side.flagged ? <span className="pill pill-warn">needs review</span> : <span className="pill pill-off">{side.status ?? "N/A"}</span>}
         {side.agreement && <span className="muted" style={{ fontSize: 12 }}>similarity: {side.agreement}</span>}
       </div>
       {side.reasons.length > 0 && (

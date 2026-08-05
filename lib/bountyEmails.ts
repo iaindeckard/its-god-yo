@@ -49,20 +49,20 @@ export interface BountyEmail {
 export function earnedEmail(verseRef: string, amountCents: number): BountyEmail {
   const amt = usd(amountCents);
   return {
-    subject: "Thank you — your It's God, Yo! report earned a credit",
+    subject: "Thank you. Your It's God, Yo! report earned a credit",
     text:
 `Thank you for reporting an issue with ${verseRef}.
 
-You were the first to catch it, so we've added a ${amt} credit to your account. It'll show up automatically on your next invoice — nothing for you to do.
+You were the first to catch it, so we've added a ${amt} credit to your account. It'll show up automatically on your next invoice. Nothing for you to do.
 
 Reports like yours are exactly how we keep the Word accurate for every teen reading it. Please keep them coming.
 
-— It's God, Yo!`,
+It's God, Yo!`,
     html: wrapHtml(
 `  <p>Thank you for reporting an issue with <strong>${esc(verseRef)}</strong>.</p>
-  <p>You were the first to catch it, so we've added a <strong>${esc(amt)}</strong> credit to your account. It'll show up automatically on your next invoice — nothing for you to do.</p>
+  <p>You were the first to catch it, so we've added a <strong>${esc(amt)}</strong> credit to your account. It'll show up automatically on your next invoice. Nothing for you to do.</p>
   <p>Reports like yours are exactly how we keep the Word accurate for every teen reading it. Please keep them coming.</p>
-  <p>— It's God, Yo!</p>`,
+  <p>It's God, Yo!</p>`,
     ),
   };
 }
@@ -74,16 +74,16 @@ export function notFirstEmail(verseRef: string): BountyEmail {
     text:
 `Thank you for reporting an issue with ${verseRef}.
 
-You were right — but someone reported this exact one just before you, so the credit went to them this time. That takes nothing away from your catch, and we're grateful for it.
+You were right, but someone reported this exact one just before you, so the credit went to them this time. That takes nothing away from your catch, and we're grateful for it.
 
 Please keep reporting anything that looks off. The next one could be yours first.
 
-— It's God, Yo!`,
+It's God, Yo!`,
     html: wrapHtml(
 `  <p>Thank you for reporting an issue with <strong>${esc(verseRef)}</strong>.</p>
-  <p>You were right — but someone reported this exact one just before you, so the credit went to them this time. That takes nothing away from your catch, and we're grateful for it.</p>
+  <p>You were right, but someone reported this exact one just before you, so the credit went to them this time. That takes nothing away from your catch, and we're grateful for it.</p>
   <p>Please keep reporting anything that looks off. The next one could be yours first.</p>
-  <p>— It's God, Yo!</p>`,
+  <p>It's God, Yo!</p>`,
     ),
   };
 }
@@ -95,16 +95,16 @@ export function rejectedEmail(verseRef: string): BountyEmail {
     text:
 `Thank you for reporting ${verseRef} and taking the time to help.
 
-We took a close look, and on this one the text is actually correct as written — sometimes the teen wording reads differently than expected but still faithfully carries the meaning. No credit this time, but we genuinely appreciate you looking closely.
+We took a close look, and on this one the text is actually correct as written. Sometimes the teen wording reads differently than expected but still faithfully carries the meaning. No credit this time, but we genuinely appreciate you looking closely.
 
 Please keep reporting anything that seems off. It all helps.
 
-— It's God, Yo!`,
+It's God, Yo!`,
     html: wrapHtml(
 `  <p>Thank you for reporting <strong>${esc(verseRef)}</strong> and taking the time to help.</p>
-  <p>We took a close look, and on this one the text is actually correct as written — sometimes the teen wording reads differently than expected but still faithfully carries the meaning. No credit this time, but we genuinely appreciate you looking closely.</p>
+  <p>We took a close look, and on this one the text is actually correct as written. Sometimes the teen wording reads differently than expected but still faithfully carries the meaning. No credit this time, but we genuinely appreciate you looking closely.</p>
   <p>Please keep reporting anything that seems off. It all helps.</p>
-  <p>— It's God, Yo!</p>`,
+  <p>It's God, Yo!</p>`,
     ),
   };
 }
@@ -112,20 +112,20 @@ Please keep reporting anything that seems off. It all helps.
 /** Confirmed + first, but the reporter has reached this year's credit cap. */
 export function cappedEmail(verseRef: string): BountyEmail {
   return {
-    subject: "Thank you — great catch on your It's God, Yo! report",
+    subject: "Thank you. Great catch on your It's God, Yo! report",
     text:
-`Thank you for reporting ${verseRef} — and you were first to catch it.
+`Thank you for reporting ${verseRef}, and you were first to catch it.
 
 You've already reached the maximum error-report credit for this year, so we can't add another one right now. But your report still counts: we've confirmed the fix, and catches like yours keep the text accurate for everyone.
 
 Please don't stop reporting. Your eyes on this genuinely help, reward or not.
 
-— It's God, Yo!`,
+It's God, Yo!`,
     html: wrapHtml(
-`  <p>Thank you for reporting <strong>${esc(verseRef)}</strong> — and you were first to catch it.</p>
+`  <p>Thank you for reporting <strong>${esc(verseRef)}</strong>, and you were first to catch it.</p>
   <p>You've already reached the maximum error-report credit for this year, so we can't add another one right now. But your report still counts: we've confirmed the fix, and catches like yours keep the text accurate for everyone.</p>
   <p>Please don't stop reporting. Your eyes on this genuinely help, reward or not.</p>
-  <p>— It's God, Yo!</p>`,
+  <p>It's God, Yo!</p>`,
     ),
   };
 }
@@ -134,20 +134,20 @@ Please don't stop reporting. Your eyes on this genuinely help, reward or not.
  *  subscription matched to credit). We owe them a personal follow-up. */
 export function snagEmail(verseRef: string): BountyEmail {
   return {
-    subject: "Thank you — we're sorting out your It's God, Yo! credit",
+    subject: "Thank you. We're sorting out your It's God, Yo! credit",
     text:
-`Thank you for reporting an issue with ${verseRef} — you were the first to catch it, and you've earned a credit.
+`Thank you for reporting an issue with ${verseRef}. You were the first to catch it, and you've earned a credit.
 
-We hit a snag applying it to your account automatically (we couldn't match an active subscription to credit). Nothing is lost — we'll sort this out and follow up with you personally to make sure you get it.
+We hit a snag applying it to your account automatically (we couldn't match an active subscription to credit). Nothing is lost. We'll sort this out and follow up with you personally to make sure you get it.
 
 Thank you for your patience, and please keep reporting anything that looks off.
 
-— It's God, Yo!`,
+It's God, Yo!`,
     html: wrapHtml(
-`  <p>Thank you for reporting an issue with <strong>${esc(verseRef)}</strong> — you were the first to catch it, and you've earned a credit.</p>
-  <p>We hit a snag applying it to your account automatically (we couldn't match an active subscription to credit). Nothing is lost — we'll sort this out and follow up with you personally to make sure you get it.</p>
+`  <p>Thank you for reporting an issue with <strong>${esc(verseRef)}</strong>. You were the first to catch it, and you've earned a credit.</p>
+  <p>We hit a snag applying it to your account automatically (we couldn't match an active subscription to credit). Nothing is lost. We'll sort this out and follow up with you personally to make sure you get it.</p>
   <p>Thank you for your patience, and please keep reporting anything that looks off.</p>
-  <p>— It's God, Yo!</p>`,
+  <p>It's God, Yo!</p>`,
     ),
   };
 }
@@ -155,20 +155,20 @@ Thank you for your patience, and please keep reporting anything that looks off.
 /** Report of a verse that was already caught + fixed before this report arrived. */
 export function alreadyCorrectedEmail(verseRef: string): BountyEmail {
   return {
-    subject: "Thank you — that one's already been fixed",
+    subject: "Thank you. That one's already been fixed",
     text:
 `Thank you for reporting ${verseRef}.
 
-Good eye — but this exact one was already caught and corrected before your report came in, so there's no credit to give this time. The fix is already live.
+Good eye, but this exact one was already caught and corrected before your report came in, so there's no credit to give this time. The fix is already live.
 
 Please keep reporting anything that looks off; the next catch could be a brand-new one that's yours first.
 
-— It's God, Yo!`,
+It's God, Yo!`,
     html: wrapHtml(
 `  <p>Thank you for reporting <strong>${esc(verseRef)}</strong>.</p>
-  <p>Good eye — but this exact one was already caught and corrected before your report came in, so there's no credit to give this time. The fix is already live.</p>
+  <p>Good eye, but this exact one was already caught and corrected before your report came in, so there's no credit to give this time. The fix is already live.</p>
   <p>Please keep reporting anything that looks off; the next catch could be a brand-new one that's yours first.</p>
-  <p>— It's God, Yo!</p>`,
+  <p>It's God, Yo!</p>`,
     ),
   };
 }

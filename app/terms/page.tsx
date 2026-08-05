@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import LegalPage from "@/components/LegalPage";
 
 export const metadata: Metadata = {
-  title: "Terms of Service — It's God, Yo!™",
+  title: "Terms of Service | It's God, Yo!™",
   description: "The terms that govern your use of It's God, Yo!™",
   // DRAFT legal content pending attorney review (§9a/§9b added 2026-08-04): not
   // indexed until counsel signs off, matching the /faq + /program-terms convention.
@@ -75,7 +75,7 @@ export default function TermsPage() {
           not finalized. Page is noindex per the /faq + /program-terms draft convention. */}
       <h2>9a. Content availability and focus tracks</h2>
       <p>
-        Your selected focus is a preference for the kind of daily message you receive when such content is available &mdash; not a guarantee that every message will match it. On any day your selected focus does not have a message available, IGY sends that day&rsquo;s General message instead, so you still receive your one daily message. You will never receive more than one message per day as a result.
+        Your selected focus is a preference for the kind of daily message you receive when such content is available. It is not a guarantee that every message will match it. On any day your selected focus does not have a message available, IGY sends that day&rsquo;s General message instead, so you still receive your one daily message. You will never receive more than one message per day as a result.
       </p>
 
       <h2>9b. AI-generated content and moderation</h2>

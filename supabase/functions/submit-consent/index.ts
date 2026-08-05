@@ -19,14 +19,6 @@ function json(status: number, body: unknown) {
   return new Response(JSON.stringify(body), { status, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
 }
 
-// Preorder (reserve-ahead-of-launch) mode. This Edge Function cannot import
-// lib/flags.ts (Deno), so it reads its OWN env var — keep it in sync with the
-// Next-side lib/flags.ts PREORDER_MODE. While true, a completed signup is written
-// as status='preorder_pending' / is_preorder=true and the confirmation SMS is
-// NOT sent (the admin launch trigger sends "reply YES" later and flips the row to
-// awaiting_confirmation). The card is still saved via SetupIntent — never charged.
-const PREORDER_MODE = Deno.env.get("PREORDER_MODE") === "true";
-
 // ---- Locked consent copy (versioned). Built server-side from templates so the
 // stored record is authoritative and matches exactly what the UI must display.
 const CONSENT_VERSION = "2026-07-20";
@@ -294,21 +286,11 @@ Deno.serve(async (req: Request) => {
       teen_consent_id: consentIds[0], plus_one_consent_id: null,
       stripe_customer_id: p.stripe?.customer_id ?? null, stripe_setup_intent_id: p.stripe?.setup_intent_id ?? null,
       stripe_payment_method_id: p.stripe?.payment_method_id ?? null,
-      status: PREORDER_MODE ? "preorder_pending" : "awaiting_confirmation", is_preorder: PREORDER_MODE,
+      status: "awaiting_confirmation",
     }).select("id").single();
     if (sErr) return json(500, { error: "failed_to_write_family_signup", detail: sErr.message });
     await supa.from("consent_log").update({ pending_signup_id: signup.id }).in("id", consentIds);
     await recordPromoAttestation(supa, signup.id, p, lang);
-
-    // Preorder: hold the confirmation SMS entirely — the launch trigger sends it later.
-    if (PREORDER_MODE) {
-      return json(200, {
-        status: "preorder_pending", plan: "family", pending_signup_id: signup.id, teen_consent_ids: consentIds, teen_count: teens.length,
-        message: lang === "es"
-          ? "Apartaste tu lugar — sin cargo hoy. Le enviaremos un mensaje a cada joven para confirmar justo antes de lanzar."
-          : "You've reserved your spot — no charge today. We'll text each teen to confirm right before we launch.",
-      });
-    }
 
     const twilioSid = Deno.env.get("TWILIO_ACCOUNT_SID"); const twilioToken = Deno.env.get("TWILIO_AUTH_TOKEN"); const twilioFrom = Deno.env.get("TWILIO_FROM_NUMBER");
     let sent = 0; const sendErrors: Array<{ to: string; error: string }> = [];
@@ -449,25 +431,10 @@ Deno.serve(async (req: Request) => {
     stripe_customer_id: p.stripe?.customer_id ?? null,
     stripe_setup_intent_id: p.stripe?.setup_intent_id ?? null,
     stripe_payment_method_id: p.stripe?.payment_method_id ?? null,
-    status: PREORDER_MODE ? "preorder_pending" : "awaiting_confirmation",
-    is_preorder: PREORDER_MODE,
+    status: "awaiting_confirmation",
   }).select("id").single();
   if (signupErr) return json(500, { error: "failed_to_write_pending_signup", detail: signupErr.message });
   await recordPromoAttestation(supa, signup.id, p, lang);
-
-  // Preorder: reservation captured (card saved, uncharged). Hold the confirmation
-  // SMS — the admin launch trigger sends "reply YES" and flips the row later.
-  if (PREORDER_MODE) {
-    return json(200, {
-      status: "preorder_pending",
-      message: lang === "es"
-        ? `Apartaste el lugar de ${teenName} — sin cargo hoy. Te enviaremos un mensaje para confirmar justo antes de lanzar.`
-        : `You've reserved ${teenName}'s spot — no charge today. We'll text to confirm right before we launch.`,
-      pending_signup_id: signup.id,
-      teen_consent_id: teenRow.id,
-      age_gate: { teen: { country: teenGate.country, computed_age: teenGate.age, decision: teenGateDecision } },
-    });
-  }
 
   // 4) Deliver the confirmation SMS(es) via Twilio IF credentials are present.
   //    Until the Twilio account is verified/credentialed this is a no-op and we

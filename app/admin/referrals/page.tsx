@@ -12,7 +12,7 @@ function money(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
 function shortId(id: string | null): string {
-  if (!id) return "—";
+  if (!id) return "N/A";
   return id.length > 16 ? `${id.slice(0, 15)}…` : id;
 }
 
@@ -73,7 +73,7 @@ export default async function ReferralsAdminPage() {
                 <td style={cell}>{r.status}</td>
                 <td style={{ ...cell, fontFamily: "var(--font-mono, monospace)" }}>{shortId(r.referrer)}</td>
                 <td style={{ ...cell, fontFamily: "var(--font-mono, monospace)" }}>{shortId(r.referee)}</td>
-                <td style={cell}>{r.rewardedAt ? new Date(r.rewardedAt).toLocaleDateString() : "—"}</td>
+                <td style={cell}>{r.rewardedAt ? new Date(r.rewardedAt).toLocaleDateString() : "N/A"}</td>
               </tr>
             ))}
           </tbody>

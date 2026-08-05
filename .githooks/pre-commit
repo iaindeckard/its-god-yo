@@ -1,0 +1,13 @@
+#!/bin/sh
+# Dash-policy guard: block commits that introduce an em dash (or connector en
+# dash) into customer-facing copy (SMS, transactional/outreach email, on-site
+# app + marketing, onboarding). Admin UI and the Pass-2 lib/i18n + API copy are
+# out of scope for now. See scripts/lint-dashes.mjs.
+#
+# Bypass in a genuine emergency with:  git commit --no-verify
+node scripts/lint-dashes.mjs || {
+  echo ""
+  echo "✗ Commit blocked: em/en dash found in customer-facing copy (see above)."
+  echo "  Rewrite as two sentences, or use a period/comma. Do not swap in a shorter dash."
+  exit 1
+}

@@ -183,6 +183,31 @@ h1, h2, h3 { line-height: 1.12; letter-spacing: -0.02em; margin: 0 0 0.4em; }
 .footer { background: var(--igy-bg-alt); border-top: 1px solid var(--igy-line); padding: 40px 0; color: var(--igy-slate); font-size: 14px; }
 
 /* ---------- Signup wizard ---------- */
+/* Onboarding header wordmark: text-only (no bubble icon) and much larger than the
+   body wordmark. The single brand bubble lives in the left gutter (.signup-aside). */
+.signup-wordmark { font-size: clamp(26px, 5vw, 44px); }
+
+/* The wizard is 620px centered inside the 1080px container, leaving a wide dead
+   gutter on each side. Park the single brand mark in that left gutter, absolutely
+   positioned relative to the container so it never enters the wizard's column.
+   Hidden below 1000px, where the gutter is too narrow to hold it clear of the
+   form. Below that breakpoint it simply does not render, so it can never crowd
+   the fields, progress bar, or header. */
+.signup-body { position: relative; }
+.signup-aside { display: none; }
+.signup-aside-mark { width: 128px; height: 128px; display: block; }
+@media (min-width: 1000px) {
+  .signup-aside {
+    display: block;
+    position: absolute;
+    left: var(--space-5);
+    top: 92px;
+  }
+}
+@media (min-width: 1180px) {
+  .signup-aside-mark { width: 152px; height: 152px; }
+}
+
 .wizard { max-width: 620px; margin: 0 auto; padding: var(--space-8) 0 80px; }
 .steps { display: flex; gap: 6px; margin-bottom: 28px; }
 .steps .dot { height: 6px; border-radius: 3px; background: var(--igy-line); flex: 1; }

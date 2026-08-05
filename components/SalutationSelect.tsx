@@ -19,7 +19,7 @@ export default function SalutationSelect({
   onChange,
   label = "Title(s)",
   otherLabel = "Other",
-  hint = "Optional. Pick any that apply — combine titles if you like (e.g. Rev. Dr.).",
+  hint = "Optional. Pick any that apply. Combine titles if you like (e.g. Rev. Dr.).",
 }: {
   lang: Lang;
   value: string[];

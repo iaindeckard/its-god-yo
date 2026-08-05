@@ -11,7 +11,7 @@ import SalutationSelect from "@/components/SalutationSelect";
  */
 
 const PLAN_OPTIONS: { value: string; label: string }[] = [
-  { value: "", label: "Not sure yet — let's discuss" },
+  { value: "", label: "Not sure yet, let's discuss" },
   { value: "group", label: "Group / church subscription" },
   { value: "family_annual", label: "Family subscription" },
   { value: "individual_annual", label: "Individual (annual)" },
@@ -69,7 +69,7 @@ export default function ApplicationForm() {
         <div className="card">
           <p className="strong" style={{ fontSize: 20, marginBottom: 6 }}>Application received. 🙏</p>
           <p className="muted">
-            Thank you — we&rsquo;ve received your church&rsquo;s Cornerstone Partner application. Our team reviews each
+            Thank you. We&rsquo;ve received your church&rsquo;s Cornerstone Partner application. Our team reviews each
             one personally and will follow up at the email you provided.
           </p>
           <a className="btn btn-ghost" href="/" style={{ marginTop: 16 }}>Back home</a>
@@ -109,7 +109,7 @@ export default function ApplicationForm() {
         <div className="field">
           <label>Address</label>
           <input value={f.address} onChange={(e) => set("address", e.target.value)} placeholder="123 Main St" />
-          <p className="hint">Used only to show your church&rsquo;s approximate location on our public partner map — never sold, never used to mail you.</p>
+          <p className="hint">Used only to show your church&rsquo;s approximate location on our public partner map. Never sold, never used to mail you.</p>
         </div>
         <div className="row">
           <div className="field"><label>City</label><input value={f.city} onChange={(e) => set("city", e.target.value)} /></div>
@@ -137,7 +137,7 @@ export default function ApplicationForm() {
             value={contactSalutation}
             onChange={setContactSalutation}
             label="Salutation / honorific(s)"
-            hint="Optional. How this contact should be addressed — combine if needed (e.g. Rev. Dr.). Separate from their role above."
+            hint="Optional. How this contact should be addressed. Combine if needed (e.g. Rev. Dr.). Separate from their role above."
           />
         </div>
         <div className="row">

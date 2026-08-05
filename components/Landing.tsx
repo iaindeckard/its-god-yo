@@ -4,17 +4,13 @@ import { useState } from "react";
 import Wordmark from "./Wordmark";
 import BubbleMark from "./BubbleMark";
 import SponsorRotator from "./SponsorRotator";
-import { PURCHASES_ENABLED, PREORDER_MODE, SPANISH_ENABLED, SPONSORS_ENABLED, CORNERSTONE_ENABLED } from "@/lib/flags";
+import { PURCHASES_ENABLED, SPANISH_ENABLED, SPONSORS_ENABLED, CORNERSTONE_ENABLED } from "@/lib/flags";
 import s from "./landing.module.css";
 
 type Audience = "parent" | "teen";
 
-// The parent commit CTA is reachable when purchases are live OR we're taking
-// preorders. Preorder swaps the label + fineprint to reservation copy (kept
-// identical to lib/i18n.ts reserveCta / reserveFineprint).
-const SIGNUP_OPEN = PURCHASES_ENABLED || PREORDER_MODE;
-const RESERVE_CTA = "Reserve Your Spot";
-const RESERVE_FINEPRINT = "No charge today — we'll text you to confirm right before we launch.";
+// The parent commit CTA is reachable when purchases are live.
+const SIGNUP_OPEN = PURCHASES_ENABLED;
 
 const CONTENT: Record<Audience, {
   headline: string; // may contain <br>
@@ -68,9 +64,9 @@ export default function Landing() {
   const c = audience ? CONTENT[audience] : null;
 
   const shareUrl = "https://its-god-yo.vercel.app";
-  const shareText = "Check out It's God, Yo — a daily scripture text in language that actually lands. A parent sets it up:";
+  const shareText = "Check out It's God, Yo, a daily scripture text in language that actually lands. A parent sets it up:";
   const smsHref = `sms:?&body=${encodeURIComponent(`${shareText} ${shareUrl}`)}`;
-  const mailHref = `mailto:?subject=${encodeURIComponent("It's God, Yo — daily scripture text")}&body=${encodeURIComponent(`${shareText}\n\n${shareUrl}`)}`;
+  const mailHref = `mailto:?subject=${encodeURIComponent("It's God, Yo, daily scripture text")}&body=${encodeURIComponent(`${shareText}\n\n${shareUrl}`)}`;
 
   function handleCta() {
     if (audience === "parent") {
@@ -109,7 +105,7 @@ export default function Landing() {
           <div className={s.gateChoices}>
             <button className={s.gateCard} onClick={() => setAudience("parent")}>
               <figure className={s.gateFigure}>
-                <img className={s.gateImg} src="/gate/parent.jpg" width={480} height={384} alt="A multi-generational family — parents and a grandmother gathered around a teenager at sunset (AI-generated image)" />
+                <img className={s.gateImg} src="/gate/parent.jpg" width={480} height={384} alt="A multi-generational family, parents and a grandmother gathered around a teenager at sunset (AI-generated image)" />
                 <figcaption className={s.gateAiTag}>AI-generated image</figcaption>
               </figure>
               <div className={s.gateCardTitle}>I&rsquo;m a parent or caregiver</div>
@@ -143,7 +139,7 @@ export default function Landing() {
             <button className={s.switch} onClick={() => setAudience(audience === "parent" ? "teen" : "parent")}>{c!.switchLabel}</button>
             {audience === "parent"
               ? (SIGNUP_OPEN
-                  ? <a href="/signup" className={s.btnWhite}>{PREORDER_MODE ? RESERVE_CTA : c!.navCta}</a>
+                  ? <a href="/signup" className={s.btnWhite}>{c!.navCta}</a>
                   : <span className={s.btnWhite} style={{ opacity: 0.55, cursor: "not-allowed" }} aria-disabled="true">Coming soon</span>)
               : <button className={s.btnWhite} onClick={handleCta}>{c!.navCta}</button>}
           </nav>
@@ -163,14 +159,12 @@ export default function Landing() {
           <div className={s.ctaRow}>
             {audience === "parent" && !SIGNUP_OPEN
               ? <button className={s.btnBlue} disabled style={{ opacity: 0.55, cursor: "not-allowed" }}>Coming soon</button>
-              : <button className={s.btnBlue} onClick={handleCta}>{audience === "parent" && PREORDER_MODE ? RESERVE_CTA : c!.cta}</button>}
+              : <button className={s.btnBlue} onClick={handleCta}>{c!.cta}</button>}
             <a href="#pricing" className={s.btnOutline}>See pricing</a>
           </div>
           <div className={s.fineprint}>
             {audience === "parent" && !SIGNUP_OPEN
               ? "Signups aren't open just yet, so you can look around but you can't be charged. Check back soon."
-              : audience === "parent" && PREORDER_MODE
-              ? RESERVE_FINEPRINT
               : c!.fineprint}
           </div>
 
@@ -229,11 +223,20 @@ export default function Landing() {
             {showVerse && (
               <p style={{ fontSize: 13, color: "#a9bad6", lineHeight: 1.6, marginTop: 10 }}>
                 &ldquo;Be still, and know that I am God: I will be exalted among the heathen, I will be exalted in the earth.&rdquo;
-                <br /><span style={{ color: "#7686a0" }}>— Psalm 46:10, King James Version (public domain)</span>
+                <br /><span style={{ color: "#7686a0" }}>Psalm 46:10, King James Version (public domain)</span>
               </p>
             )}
           </div>
           <span className={s.threadTag}>One text a day. That&rsquo;s the whole thing.</span>
+        </div>
+      </section>
+
+      <section className={s.sectionDark}>
+        <div className={s.wrap}>
+          <div className={s.eyebrow}>THE PROBLEM WE&rsquo;RE SOLVING</div>
+          <p className={s.problemCopy}>
+            You went from &lsquo;Mom&rsquo; to &lsquo;Bruh&rsquo; and didn&rsquo;t even notice it happen. Somehow you&rsquo;re supposed to talk to your teen about faith in a language you don&rsquo;t speak anymore. So we skipped the lecture and sent a text instead. That&rsquo;s the one language they never stopped checking.
+          </p>
         </div>
       </section>
 
@@ -326,7 +329,7 @@ export default function Landing() {
             </div>
             <div className={s.extraBody}>
               Teens tune out anything that sounds aimed at everyone. DM from Him&trade; takes your teen&rsquo;s
-              same daily verse and rewraps it as a personal, first-person note &mdash; like a text written
+              same daily verse and rewraps it as a personal, first-person note, like a text written
               straight from Him, just for them. Same message, no extra texts. Toggle it on or off anytime
               by replying <strong>DM ON</strong> or <strong>DM OFF</strong>.
             </div>

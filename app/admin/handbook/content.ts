@@ -64,7 +64,7 @@ export const PARTS: Part[] = [
             "Part 1 — Welcome & Mission: what IGY is and how we carry ourselves.",
             "Part 2 — The Product: plans, pricing, the DM from Him add-on, and how a daily verse actually reaches a subscriber.",
             "Part 3 — Programs: Cornerstone Partner Program, the paused Sponsor Program, and the affinity promo codes.",
-            "Part 4 — How We Operate: deploy discipline, the DEI financial rollup, and the flags that gate live billing and preorder.",
+            "Part 4 — How We Operate: deploy discipline, the DEI financial rollup, and the flags that gate live billing.",
             "Part 5 — Admin Panel Walkthrough: every internal /admin screen, what it does, and the permission it checks. You only see the sections your role can access.",
             "Part 6 — Policies & Escalation: the four scenarios that matter and exactly who to contact.",
             "Part 7 — Common Questions: intentionally empty for now (see the note there).",
@@ -243,21 +243,6 @@ export const PARTS: Part[] = [
           { type: "callout", kind: "warning", title: "Current value: false (verified 2026-08-03)", text: "PURCHASES_ENABLED is currently false. While false, /signup shows a “coming soon” notice and /api/setup-intent refuses to create a SetupIntent — no card can be entered and no one can be charged." },
         ],
       },
-      {
-        id: "preorder-flow",
-        title: "Preorder / activation flow",
-        blocks: [
-          { type: "prose", text: "The preorder flow (built and merged 2026-08-02) lets customers reserve a plan and save a card via a Stripe SetupIntent before Twilio toll-free verification clears — without being charged. It's governed by PREORDER_MODE, a hardcoded flag (deliberately not env-flippable; changing it requires a real deploy)." },
-          { type: "subheading", text: "State machine" },
-          { type: "list", ordered: true, items: [
-            "preorder_pending — card saved, no subscription, no charge.",
-            "awaiting_confirmation — after an admin fires the one-time launch trigger, which sends a confirmation text.",
-            "active — on YES + a successful immediate charge (no trial period), or…",
-            "payment_failed — on YES + a declined charge, with a 7-day retry window before PII is scrubbed and a non-PII stub is kept.",
-          ] },
-          { type: "callout", kind: "warning", title: "Currently dormant (verified 2026-08-03)", text: "PREORDER_MODE is currently false, and the documented 4-step go-live sequence has NOT been run. The feature is fully built and tested but dormant — no customer sees preorder copy and nothing charges. (Operational note: the submit-consent Edge Function's PREORDER_MODE env has been pre-staged to true, but with the frontend flag false and PURCHASES_ENABLED false, no signup can reach it — there is no customer-facing effect until the go-live sequence runs.)" },
-        ],
-      },
     ],
   },
 
@@ -281,21 +266,6 @@ export const PARTS: Part[] = [
             "Recover a church's tokenized status link if they lose it (resend-link recovery).",
           ] },
           { type: "callout", kind: "info", title: "Permission: partners.view", text: "Viewing this screen requires partners.view. Approving/declining requires partners.review; editing records/pricing/config requires partners.manage. All three are currently super_admin only." },
-        ],
-      },
-      {
-        id: "admin-preorder",
-        title: "Preorder Launch",
-        address: "/admin/preorder",
-        relatedRoute: "/admin/preorder",
-        blocks: [
-          { type: "prose", text: "Visibility into the preorder pipeline (counts by state: reserved, awaiting confirmation, payment failed, active, removed) and the one-time launch trigger that moves every reserved signup to awaiting_confirmation and sends the “reply YES” invites." },
-          { type: "list", items: [
-            "See how many reservations sit in each state of the preorder state machine.",
-            "Dry-run the launch trigger (preview, sends nothing) before firing it for real.",
-            "Fire the launch trigger — a confirm-gated, one-time batch action.",
-          ] },
-          { type: "callout", kind: "warning", title: "Permission: billing.preorder.launch (super_admin)", text: "The launch trigger is independent of PREORDER_MODE and is a real, outward-facing action once Twilio delivery is live. As of now the pipeline is empty and preorder is dormant (see Part 4)." },
         ],
       },
       {
@@ -485,7 +455,6 @@ export const PARTS: Part[] = [
             ["DM from Him", "The personalized-framing add-on to the daily verse."],
             ["PURCHASES_ENABLED", "Flag gating whether IGY can actually bill anyone (currently false)."],
             ["CORNERSTONE_ENABLED", "Flag gating the Cornerstone program's public surfaces (currently true)."],
-            ["PREORDER_MODE", "Hardcoded flag gating whether signup buttons show “Reserve Your Spot” preorder copy instead of normal instant-activate signup (currently false). Not env-flippable — requires a real deploy to change."],
           ] },
         ],
       },

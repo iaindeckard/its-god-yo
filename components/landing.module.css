@@ -119,6 +119,11 @@
 .stepTitle { font-weight: 500; font-size: 15px; margin-bottom: 6px; }
 .stepBody { font-size: 13px; color: #a9bad6; line-height: 1.55; }
 
+/* ---------- "The problem we're solving" (dark, between hero and How it works) ---------- */
+/* Copy-only block; scaled a touch above the body text of neighboring sections so
+   it carries the section without graphics, but well below the hero headline. */
+.problemCopy { font-size: clamp(16px, 2vw, 19px); font-weight: 500; color: #c7d6ee; line-height: 1.65; max-width: 680px; margin: 0; }
+
 /* ---------- Which text we use ---------- */
 .sectionPlain { padding: 44px 0; border-bottom: 1px solid rgba(255,255,255,0.06); }
 .translationCopy { font-size: 14.5px; color: #a9bad6; line-height: 1.65; margin-bottom: 20px; max-width: 600px; }

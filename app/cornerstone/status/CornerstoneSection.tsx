@@ -86,8 +86,8 @@ export default function CornerstoneSection({
           <Row label="Cornerstone status">{cornerstoneStatus}</Row>
           <Row label="Recognized since">{recognitionDate}</Row>
           {activationDate && <Row label="Activated">{activationDate}</Row>}
-          <Row label="Subscription plan">{planLabel ?? "—"}</Row>
-          <Row label="Included participants">{includedParticipants ?? "—"}</Row>
+          <Row label="Subscription plan">{planLabel ?? "N/A"}</Row>
+          <Row label="Included participants">{includedParticipants ?? "N/A"}</Row>
           <Row label="Locked-pricing status">{lockedPricingStatus}</Row>
           {lockedPriceLabel && <Row label="Locked rate">{lockedPriceLabel}</Row>}
           <Row label="Public recognition">{publicListingStatus === "listed" ? "Listed on the public Cornerstone Partners page" : "Not publicly listed"}</Row>

@@ -1,9 +1,9 @@
 import SignupFlow from "./SignupFlow";
 import type { Lang } from "@/lib/i18n";
-import { PURCHASES_ENABLED, PREORDER_MODE, SPANISH_ENABLED } from "@/lib/flags";
+import { PURCHASES_ENABLED, SPANISH_ENABLED } from "@/lib/flags";
 
 export const metadata = {
-  title: "Get started — It's God, Yo!™",
+  title: "Get started | It's God, Yo!™",
 };
 
 function ComingSoon() {
@@ -29,9 +29,8 @@ export default async function SignupPage({
   searchParams: Promise<{ lang?: string; plan?: string }>;
 }) {
   const sp = await searchParams;
-  // Hard block unless purchases are live OR we're in preorder (reserve) mode.
-  // Preorder opens the flow to SAVE a card without charging (see lib/flags.ts).
-  if (!PURCHASES_ENABLED && !PREORDER_MODE) return <ComingSoon />;
+  // Hard block unless purchases are live.
+  if (!PURCHASES_ENABLED) return <ComingSoon />;
   // Ignore ?lang=es while Spanish is gated — signup is English-only.
   const initialLang: Lang = SPANISH_ENABLED && sp.lang === "es" ? "es" : "en";
   return <SignupFlow initialLang={initialLang} initialPlan={sp.plan} />;

@@ -4,8 +4,8 @@ import { useState } from "react";
 import type { ReviewGroup, BountyLedger, CorrectionRow } from "@/lib/bounty";
 
 const usd = (cents: number) => `$${(cents / 100).toFixed(2)}`;
-const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : "—");
-const truncate = (s: string | null, n = 90) => (s ? (s.length > n ? s.slice(0, n) + "…" : s) : "—");
+const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : "N/A");
+const truncate = (s: string | null, n = 90) => (s ? (s.length > n ? s.slice(0, n) + "…" : s) : "N/A");
 
 export default function BountyManager({
   initialGroups,
@@ -212,7 +212,7 @@ export default function BountyManager({
                     <td><span className="pill pill-warn">{c.status}</span></td>
                     <td className="mono">{c.reporter_email}</td>
                     <td style={{ fontWeight: 700, whiteSpace: "nowrap" }}>{c.amount_cents > 0 ? usd(c.amount_cents) : "1 month"}</td>
-                    <td style={{ maxWidth: 320, fontSize: 12 }} className="muted">{c.skipped_reason ?? "—"}</td>
+                    <td style={{ maxWidth: 320, fontSize: 12 }} className="muted">{c.skipped_reason ?? "N/A"}</td>
                     <td className="mono" style={{ fontSize: 11 }}>
                       {c.stripe_balance_transaction_id && <div>txn: {c.stripe_balance_transaction_id}</div>}
                       {c.reporter_stripe_customer_id && <div>cust: {c.reporter_stripe_customer_id}</div>}
@@ -235,7 +235,7 @@ export default function BountyManager({
             {corrections.length === 0 && <tr><td colSpan={canPublish ? 5 : 4} className="muted">No corrections published yet.</td></tr>}
             {corrections.map((c) => (
               <tr key={c.id}>
-                <td className="mono">{c.original_verse_ref ?? "—"}</td>
+                <td className="mono">{c.original_verse_ref ?? "N/A"}</td>
                 <td>{c.action_type === "bounty_revert" ? <span className="pill pill-off">revert</span> : <span className="pill pill-on">correction</span>}</td>
                 <td style={{ maxWidth: 380, fontSize: 12 }}>
                   <div className="muted">&ldquo;{truncate(c.original_translation)}&rdquo;</div>
@@ -263,7 +263,7 @@ export default function BountyManager({
             {ledger.recentCredits.map((c) => (
               <tr key={c.id}>
                 <td className="mono">{c.reporter_email}</td>
-                <td>{c.amount_cents > 0 ? usd(c.amount_cents) : "—"}</td>
+                <td>{c.amount_cents > 0 ? usd(c.amount_cents) : "N/A"}</td>
                 <td className="muted" style={{ whiteSpace: "nowrap" }}>{when(c.issued_at)}</td>
                 <td>
                   {c.status === "issued" && <span className="pill pill-on">issued</span>}

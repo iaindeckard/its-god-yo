@@ -43,7 +43,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         </nav>
         <div style={{ marginTop: "auto", paddingTop: 24, fontSize: 12, color: "var(--igy-on-dark-meta)" }}>
           <div>Acting role</div>
-          <div style={{ color: "var(--igy-admin-text)", fontWeight: 700 }}>{staff?.jobRole ?? "—"}</div>
+          <div style={{ color: "var(--igy-admin-text)", fontWeight: 700 }}>{staff?.jobRole ?? "N/A"}</div>
         </div>
       </aside>
       <main className="admin-main">{children}</main>

@@ -6,7 +6,7 @@ import PartnerGlobe from "./PartnerGlobe";
 import s from "./cornerstone-partners.module.css";
 
 export const metadata: Metadata = {
-  title: "Cornerstone Partners — It's God, Yo!™",
+  title: "Cornerstone Partners | It's God, Yo!™",
   description: "The churches recognized as Cornerstone Partners of It's God, Yo. Founding supporters who help keep teenagers connected to Scripture.",
 };
 

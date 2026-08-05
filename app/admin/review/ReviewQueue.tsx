@@ -210,7 +210,7 @@ function LangPanel({ label, side }: { label: string; side: ReviewLangSide }) {
     <div style={{ background: "var(--igy-bg-alt)", borderRadius: 10, padding: 14, border: "1px solid var(--igy-line)" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
         <strong>{label}</strong>
-        {side.flagged ? <span className="pill pill-warn">needs review</span> : <span className="pill pill-off">{side.status ?? "—"}</span>}
+        {side.flagged ? <span className="pill pill-warn">needs review</span> : <span className="pill pill-off">{side.status ?? "N/A"}</span>}
         {side.agreement && <span className="muted" style={{ fontSize: 12 }}>similarity: {side.agreement}</span>}
       </div>
       {side.reasons.length > 0 && (

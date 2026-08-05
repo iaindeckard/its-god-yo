@@ -12,7 +12,7 @@ interface TierOption {
 function discountLabel(c: PromoCodeView): string {
   if (c.percent_off != null) return `${c.percent_off}% off`;
   if (c.amount_off != null) return `$${(c.amount_off / 100).toFixed(2)} off`;
-  return "—";
+  return "N/A";
 }
 function redemptionLabel(c: PromoCodeView): string {
   return `${c.times_redeemed} / ${c.max_redemptions ?? "∞"}`;
@@ -24,7 +24,7 @@ function durationLabel(c: PromoCodeView): string {
 function windowLabel(c: PromoCodeView): string {
   const s = c.starts_at ? new Date(c.starts_at * 1000).toLocaleDateString() : null;
   const e = c.expires_at ? new Date(c.expires_at * 1000).toLocaleDateString() : null;
-  if (!s && !e) return "—";
+  if (!s && !e) return "N/A";
   return `${s ?? "now"} → ${e ?? "∞"}`;
 }
 function tiersLabel(c: PromoCodeView, tierOptions: TierOption[]): string {
@@ -279,7 +279,7 @@ export default function PromoCodeManager({
             )}
             {codes.map((c) => (
               <tr key={c.id}>
-                <td style={{ maxWidth: 170 }}>{c.internal_label ?? c.note ?? "—"}</td>
+                <td style={{ maxWidth: 170 }}>{c.internal_label ?? c.note ?? "N/A"}</td>
                 <td className="mono">{c.code}</td>
                 <td>{discountLabel(c)}</td>
                 <td>{durationLabel(c)}</td>

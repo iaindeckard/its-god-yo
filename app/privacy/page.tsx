@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import LegalPage from "@/components/LegalPage";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy — It's God, Yo!™",
+  title: "Privacy Policy | It's God, Yo!™",
   description: "How It's God, Yo!™ collects, uses, and protects your information.",
 };
 
@@ -53,7 +53,7 @@ export default function PrivacyPage() {
 
       <h2>8. Your rights</h2>
       <p>
-        You may request access to, correction of, or deletion of your personal information by contacting us. Applicable state privacy law rights (access, deletion, opt-out of sale &mdash; we do not sell data) apply where relevant.
+        You may request access to, correction of, or deletion of your personal information by contacting us. Applicable state privacy law rights (access, deletion, opt-out of sale, though we do not sell data) apply where relevant.
       </p>
 
       <h2>9. Changes to this policy</h2>

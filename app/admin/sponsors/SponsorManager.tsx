@@ -160,9 +160,9 @@ export default function SponsorManager({
               <tr key={s.id}>
                 <td><img src={s.logo_url} alt={s.name} style={{ maxHeight: 34, maxWidth: 90, objectFit: "contain", background: "#0b1830", borderRadius: 4 }} /></td>
                 <td>{s.name}</td>
-                <td className="muted" style={{ whiteSpace: "nowrap" }}>{s.start_date ?? "—"} → {s.end_date ?? "∞"}</td>
+                <td className="muted" style={{ whiteSpace: "nowrap" }}>{s.start_date ?? "N/A"} → {s.end_date ?? "∞"}</td>
                 <td><span className={statusPill(s.status)}>{s.status.replace("_", " ")}</span></td>
-                <td className="muted" style={{ maxWidth: 200 }}>{s.vetting_notes ?? "—"}</td>
+                <td className="muted" style={{ maxWidth: 200 }}>{s.vetting_notes ?? "N/A"}</td>
                 {canManage && (
                   <td style={{ whiteSpace: "nowrap" }}>
                     <button className="btn btn-ghost" style={{ padding: "5px 10px", fontSize: 12, marginRight: 6 }} onClick={() => openEdit(s)}>Edit</button>

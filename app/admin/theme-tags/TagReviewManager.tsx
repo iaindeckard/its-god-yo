@@ -113,9 +113,9 @@ export default function TagReviewManager({
                 {tags.map((t) => (
                   <tr key={t.id}>
                     <td className="mono" style={{ whiteSpace: "nowrap" }}>{t.verse_ref}</td>
-                    <td style={{ maxWidth: 360 }}>{t.kjv_text ?? "—"}</td>
-                    <td>{t.confidence != null ? t.confidence.toFixed(2) : "—"}</td>
-                    <td className="muted" style={{ maxWidth: 200 }}>{t.rationale ?? "—"}</td>
+                    <td style={{ maxWidth: 360 }}>{t.kjv_text ?? "N/A"}</td>
+                    <td>{t.confidence != null ? t.confidence.toFixed(2) : "N/A"}</td>
+                    <td className="muted" style={{ maxWidth: 200 }}>{t.rationale ?? "N/A"}</td>
                     {canReview && (
                       <td style={{ whiteSpace: "nowrap" }}>
                         <button className="btn btn-primary" style={{ padding: "6px 12px", fontSize: 13, marginRight: 6 }} onClick={() => review(t.id, "approve")}>Approve</button>
