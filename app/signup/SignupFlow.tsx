@@ -52,11 +52,11 @@ const THEME_TRACKS: Array<{ key: string; en: string; es: string }> = [
   { key: "courage_confidence", en: "Courage & confidence", es: "Valor y confianza" },
   { key: "comfort_hard_times", en: "Comfort in hard times", es: "Consuelo en tiempos difíciles" },
 ];
-// Launch gate: only offer focus tracks that actually have reviewed content.
-// General-only at launch (the other tracks have empty verse pools + no approved
-// slots — a subscriber picking one would get skipped_no_content). Add a key here
-// as each track earns a real pool + approved runway. See the content re-launch plan.
-const ENABLED_TRACK_KEYS = new Set(["general"]);
+// Focus tracks offered on the signup step. All active user tracks are enabled.
+// On a day a themed track has no approved slot, the subscriber still gets that
+// day's General verse via the disclosed no-silence fallback (see lib/dailySend +
+// the THEMED_FALLBACK_DISCLOSURE below), so a themed pick is always safe.
+const ENABLED_TRACK_KEYS = new Set(THEME_TRACKS.map((t) => t.key));
 
 // General-fallback disclosure, shown only when a THEMED (non-General) focus is
 // selected — discloses that on days the chosen focus has no content, the
@@ -135,7 +135,9 @@ export default function SignupFlow({
   const [planChoice, setPlanChoice] = useState<PlanChoice>(
     (["individual", "family", "gift", "group"].includes(initialPlan || "") ? initialPlan : "individual") as PlanChoice
   );
-  const [individualInterval, setIndividualInterval] = useState<"month" | "year">("month");
+  // Default the Individual plan to the $59/yr annual price (individual_annual,
+  // price_1TyZ72…). Monthly stays selectable via the interval toggle.
+  const [individualInterval, setIndividualInterval] = useState<"month" | "year">("year");
   const [teenCount, setTeenCount] = useState<number>(25);
   // Family plan: 2+ teens, each their own phone (min 2). Extra teens are $28/yr.
   const [familyTeens, setFamilyTeens] = useState<Array<{ name: string; phone: string; year: string; country: string }>>([
@@ -583,7 +585,9 @@ export default function SignupFlow({
                     <div className="muted" style={{ fontSize: 14 }}>{s.planIndividualDesc}</div>
                   </div>
                   <div className="c-price">
-                    {money(PLANS.individual_monthly.amount!)}{s.perMonth}
+                    {individualInterval === "year"
+                      ? <>{money(PLANS.individual_annual.amount!)}{s.perYear}</>
+                      : <>{money(PLANS.individual_monthly.amount!)}{s.perMonth}</>}
                   </div>
                 </div>
                 {planChoice === "individual" && (

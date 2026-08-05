@@ -231,12 +231,26 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* Audience-specific manifesto, keyed off the same `audience` gate as the rest
+          of the site. Parent sees the "Mom to Bruh" problem framing; teen sees
+          "Real talk". Same dark treatment + placement (hero -> here -> How it works). */}
       <section className={s.sectionDark}>
         <div className={s.wrap}>
-          <div className={s.eyebrow}>THE PROBLEM WE&rsquo;RE SOLVING</div>
-          <p className={s.problemCopy}>
-            You went from &lsquo;Mom&rsquo; to &lsquo;Bruh&rsquo; and didn&rsquo;t even notice it happen. Somehow you&rsquo;re supposed to talk to your teen about faith in a language you don&rsquo;t speak anymore. So we skipped the lecture and sent a text instead. That&rsquo;s the one language they never stopped checking.
-          </p>
+          {audience === "parent" ? (
+            <>
+              <div className={s.eyebrow}>THE PROBLEM WE&rsquo;RE SOLVING</div>
+              <p className={s.problemCopy}>
+                You went from &lsquo;Mom&rsquo; to &lsquo;Bruh&rsquo; and didn&rsquo;t even notice it happen. Somehow you&rsquo;re supposed to talk to your teen about faith in a language you don&rsquo;t speak anymore. So we skipped the lecture and sent a text instead. That&rsquo;s the one language they never stopped checking.
+              </p>
+            </>
+          ) : (
+            <>
+              <div className={s.eyebrow}>REAL TALK</div>
+              <p className={s.problemCopy}>
+                Life&rsquo;s a lot right now. School, comparison, everything moving fast, and it&rsquo;s easy to feel like God&rsquo;s somewhere far off. He&rsquo;s not. You don&rsquo;t need a lecture. You need something real that actually shows up, daily, no cap. That&rsquo;s this.
+              </p>
+            </>
+          )}
         </div>
       </section>
 
