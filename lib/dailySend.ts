@@ -4,6 +4,9 @@ import { DAILY_SEND_ENABLED, SPANISH_ENABLED } from "./flags";
 import { smsCostCents, TWILIO_US_SEGMENT_PRICE_CENTS, TWILIO_US_TOLLFREE_CARRIER_FEE_CENTS } from "./costs";
 import { evaluateDue } from "./sendTiming";
 import { composeDailyMessage } from "./dmAddon";
+import { DM_OPENERS, renderOpener } from "./dmOpeners";
+import { peekOpenerIndex, advanceOpener } from "./dmOpenerRotation";
+import { smsSegments } from "./smsSegments";
 
 /**
  * Stage 2 daily-send tick (spec: docs/STAGE-2-SEND-MECHANISM-SPEC.md). Invoked
@@ -198,8 +201,26 @@ export async function runDailySend(opts: { dryRun?: boolean } = {}): Promise<Dai
       continue;
     }
 
+    // DM from Him inspirational opener (English only). Prepend the next opener in
+    // this subscriber's rotation ONLY if the resulting message still fits 2 SMS
+    // segments (fit-guard); otherwise fall back to the standard wrap so we never
+    // add a 3rd segment. The rotation cursor advances only on a confirmed send.
+    let sendBody = body!;
+    let openerUsed = false;
+    if (dmOn && lang === "en" && text != null) {
+      try {
+        const openerIdx = await peekOpenerIndex(r.consent_id);
+        const opener = renderOpener(DM_OPENERS[openerIdx], r.recipient_first_name);
+        const withOpener = composeDailyMessage(text, { dm: true, firstName: r.recipient_first_name, lang, opener });
+        if (smsSegments(withOpener) <= 2) { sendBody = withOpener; openerUsed = true; }
+      } catch (e) {
+        console.error(`[daily-send] opener_select_failed consent=${r.consent_id}: ${e instanceof Error ? e.message : e}`);
+      }
+    }
+
     try {
-      const { sid, segments } = await sendSms(r.recipient_phone, body!);
+      const { sid, segments } = await sendSms(r.recipient_phone, sendBody);
+      if (openerUsed) await advanceOpener(r.consent_id).catch((e) => console.error(`[daily-send] opener_advance_failed consent=${r.consent_id}: ${e instanceof Error ? e.message : e}`));
       await admin.from("daily_send_log").update({ status: "sent", message_sid: sid, segments, updated_at: new Date().toISOString() }).eq("id", logId);
       // Stamp the financial cost row (segment-based, per lib/costs.ts constants).
       // Exactly-once already guaranteed by the claim, so no dup cost rows.

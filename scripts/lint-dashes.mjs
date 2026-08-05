@@ -48,7 +48,7 @@ const ENFORCED_LIB_FILES = new Set([
   "lib/preorder/messages.ts", "lib/preorder/notify.ts", "lib/preorder/launch.ts", "lib/preorder/removal.ts",
   "lib/twilio.ts", "lib/twilioInbound.ts", "lib/dailySend.ts", "lib/dmAddon.ts", "lib/bounty.ts",
   "lib/cornerstoneEmails.ts", "lib/bountyEmails.ts", "lib/outreach/email.ts", "lib/sponsorInquiry.ts",
-  "lib/i18n.ts",
+  "lib/i18n.ts", "lib/dmOpeners.ts", "lib/dmAddon.ts",
 ]);
 // Internal-only API routes: their strings are console logs and ops-alert emails
 // to staff, not customer-facing output, so they're exempt from the dash policy.

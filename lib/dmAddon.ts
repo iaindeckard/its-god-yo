@@ -32,10 +32,18 @@ const DM_NICKNAMES = ["dm_addon_monthly", "dm_addon_annual"];
  */
 export function composeDailyMessage(
   verseText: string,
-  opts: { dm: boolean; firstName?: string | null; lang: "en" | "es" },
+  opts: { dm: boolean; firstName?: string | null; lang: "en" | "es"; opener?: string | null },
 ): string {
   if (!opts.dm) return verseText;
   const name = opts.firstName?.trim();
+  // English DM with an inspirational opener that fit the 2-segment budget: the
+  // opener REPLACES the standard greeting line (it IS the personalized lead-in).
+  // `opener` is already [name]-substituted (lib/dmOpeners.renderOpener) and only
+  // passed by lib/dailySend after the fit-guard clears it; everything else falls
+  // through to the standard wrap.
+  if (opts.opener && opts.lang === "en") {
+    return `${opts.opener}\n\n${verseText}\n\nI've got you.`;
+  }
   // GSM-7-safe wrap (no emoji, straight apostrophe) so the DM-wrapped message can
   // stay within the 2-segment budget — see docs/VERSE-LENGTH-AND-FIDELITY-SPEC.md
   // (§1.3/§1.4). The generation-side segment check (generate-daily-verse /
