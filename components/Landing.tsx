@@ -119,6 +119,16 @@ export default function Landing() {
               <div className={s.gateCardTitle}>I&rsquo;m a teen</div>
               <div className={s.gateCardBody}>See what it is, then loop in a parent or guardian to set it up.</div>
             </button>
+            {CORNERSTONE_ENABLED && (
+              <a className={s.gateCard} href="/cornerstone" style={{ textDecoration: "none" }}>
+                <figure className={s.gateFigure}>
+                  <img className={s.gateImg} src="/gate/group.jpg" width={480} height={384} alt="A church youth group and a family bowing their heads together in prayer near a lit cross (AI-generated image)" />
+                  <figcaption className={s.gateAiTag}>AI-generated image</figcaption>
+                </figure>
+                <div className={s.gateCardTitle}>I&rsquo;m signing up a group or church</div>
+                <div className={s.gateCardBody}>Bring the daily verse to your whole youth group or congregation.</div>
+              </a>
+            )}
           </div>
         </div>
       </div>

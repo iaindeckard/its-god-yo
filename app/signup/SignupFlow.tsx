@@ -11,7 +11,7 @@ import {
   t, ATTESTATION, DISCLOSURE, type Lang,
 } from "@/lib/i18n";
 import {
-  PLANS, GROUP_BANDS, DM_ADDON, FAMILY_EXTRA_TEEN, FAMILY_BASE_TEENS, bandForCount, GROUP_CONTACT_THRESHOLD,
+  PLANS, DM_ADDON, FAMILY_EXTRA_TEEN, FAMILY_BASE_TEENS,
 } from "@/lib/plans";
 import { submitConsent, type ConsentResult } from "@/lib/consent";
 import { SPANISH_ENABLED } from "@/lib/flags";
@@ -36,7 +36,7 @@ function getStripePromise() {
   return stripePromise;
 }
 
-type PlanChoice = "individual" | "family" | "gift" | "group";
+type PlanChoice = "individual" | "family" | "gift";
 
 const STEP = { LANG: 0, FOCUS: 1, PLAN: 2, RECIPIENT: 3, PLUSONE: 4, REFERRAL: 5, PAY: 6, PHONE: 7, DONE: 8 } as const;
 
@@ -138,12 +138,11 @@ export default function SignupFlow({
 
   // plan
   const [planChoice, setPlanChoice] = useState<PlanChoice>(
-    (["individual", "family", "gift", "group"].includes(initialPlan || "") ? initialPlan : "individual") as PlanChoice
+    (["individual", "family", "gift"].includes(initialPlan || "") ? initialPlan : "individual") as PlanChoice
   );
   // Default the Individual plan to the $59/yr annual price (individual_annual,
   // price_1TyZ72…). Monthly stays selectable via the interval toggle.
   const [individualInterval, setIndividualInterval] = useState<"month" | "year">("year");
-  const [teenCount, setTeenCount] = useState<number>(25);
   // Family plan: 2+ teens, each their own phone (min 2). Extra teens are $28/yr.
   const [familyTeens, setFamilyTeens] = useState<Array<{ name: string; phone: string; year: string; country: string }>>([
     { name: "", phone: "", year: "", country: DEFAULT_COUNTRY },
@@ -212,29 +211,15 @@ export default function SignupFlow({
   }, [step, teenPhoneE164, teenBirthYear]);
 
   // ---- derived plan ----
-  const band = planChoice === "group" ? bandForCount(teenCount) : null;
-  const isGroupContact = planChoice === "group" && teenCount >= GROUP_CONTACT_THRESHOLD;
-
   const resolved = useMemo(() => {
     if (planChoice === "individual") {
       return individualInterval === "month" ? PLANS.individual_monthly : PLANS.individual_annual;
     }
     if (planChoice === "family") return PLANS.family_annual;
-    if (planChoice === "gift") return PLANS.gift_annual;
-    if (band) {
-      return {
-        key: band.band_key,
-        price_id: band.price_id,
-        amount: band.amount,
-        interval: "year" as const,
-        per: "teen" as const,
-      };
-    }
-    return null; // group contact
-  }, [planChoice, individualInterval, band]);
+    return PLANS.gift_annual; // gift
+  }, [planChoice, individualInterval]);
 
-  const baseAmount =
-    planChoice === "group" && band ? band.amount * teenCount : resolved?.amount ?? 0;
+  const baseAmount = resolved?.amount ?? 0;
   const baseInterval = resolved?.interval ?? "year";
   // Referrals no longer discount at signup — they credit the referee a free
   // month at their first invoice (via customer-balance credit, see lib/referral.ts).
@@ -342,7 +327,6 @@ export default function SignupFlow({
         theme_track: themeTrack,
         plan_key: resolved!.key,
         base_price_id: resolved!.price_id!,
-        group_teen_count: planChoice === "group" ? teenCount : null,
         dm_addon: dmEnabled,
         dm_addon_price_id: dmEnabled ? DM_ADDON.price_id : null,
         referral_code: referralApplied ? referralInput.trim() : null,
@@ -645,49 +629,11 @@ export default function SignupFlow({
                   </div>
                   <div className="c-price">{money(PLANS.gift_annual.amount!)}{s.perYear}</div>
                 </div>
-
-                {/* Group */}
-                <div className={`choice ${planChoice === "group" ? "selected" : ""}`} onClick={() => setPlanChoice("group")} role="button" tabIndex={0}>
-                  <div>
-                    <div className="c-title">{s.planGroupName}</div>
-                    <div className="muted" style={{ fontSize: 14 }}>{s.planGroupDesc}</div>
-                  </div>
-                  <div className="c-price">{s.from} {money(GROUP_BANDS[0].amount)}{s.perTeenYear}</div>
-                </div>
-
-                {planChoice === "group" && (
-                  <div className="field" style={{ marginLeft: 16, marginTop: 8 }}>
-                    <label>{s.teenCount}</label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={teenCount}
-                      onChange={(e) => setTeenCount(Math.max(1, parseInt(e.target.value || "1", 10)))}
-                    />
-                    <p className="hint">{s.teenCountHint}</p>
-                    {isGroupContact ? (
-                      <div className="consent-box">
-                        <strong>{s.groupContactTitle}</strong>
-                        <p style={{ margin: "6px 0 0" }}>{s.groupContactBody}</p>
-                        <a className="btn btn-primary" style={{ marginTop: 12 }} href={`mailto:hello@itsgodyo.com?subject=Group%20quote%20(${teenCount}%20teens)`}>
-                          {s.requestQuote}
-                        </a>
-                      </div>
-                    ) : band ? (
-                      <div className="consent-box">
-                        <div className="summary-line">
-                          <span>{teenCount} × {money(band.amount)}{s.perTeenYear}</span>
-                          <strong>{money(band.amount * teenCount)} {s.perYearTotal}</strong>
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
-                )}
               </div>
 
               <div className="wizard-nav">
                 <button className="btn btn-ghost" onClick={() => setStep(STEP.FOCUS)}>{s.back}</button>
-                <button className="btn btn-primary" disabled={isGroupContact || !resolved} onClick={() => setStep(STEP.RECIPIENT)}>
+                <button className="btn btn-primary" disabled={!resolved} onClick={() => setStep(STEP.RECIPIENT)}>
                   {s.continue}
                 </button>
               </div>
@@ -848,7 +794,7 @@ export default function SignupFlow({
               <div className="consent-box">
                 <div className="summary-line">
                   <span>{s.plan}</span>
-                  <span>{planChoice === "group" ? `${teenCount} × ${money(band?.amount ?? 0)}` : money(baseAmount)} / {baseInterval === "month" ? s.perMonth.replace("/", "") : s.perYear.replace("/", "")}</span>
+                  <span>{money(baseAmount)} / {baseInterval === "month" ? s.perMonth.replace("/", "") : s.perYear.replace("/", "")}</span>
                 </div>
                 {dmEnabled && (
                   <div className="summary-line">
