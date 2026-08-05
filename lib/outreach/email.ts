@@ -111,6 +111,69 @@ Unsubscribe (one click): ${link}`;
   return { to: lead.contact_email, from: OUTREACH.from, replyTo: OUTREACH.replyTo, subject, text, html, headers };
 }
 
+/**
+ * The second-touch (email 2) follow-up: a light variant of buildEmail with a
+ * "circling back" framing plus the 10%-off code. Sent ~30 days after email 1 to
+ * leads that haven't signed up (i.e. still active). Same compliance envelope as
+ * email 1 (From/Reply-To, physical address, one-click unsubscribe). This is the
+ * final touch: the copy says so, and the send logic stops after it.
+ */
+export function buildFollowupEmail(lead: OutreachLead, promoCode: string): BuiltEmail {
+  const org = lead.org_name;
+  const link = unsubUrl(lead.id);
+  const site = OUTREACH.appUrl;
+
+  const subject = `Following up for ${org}'s youth ministry`;
+
+  const text =
+`Hi ${org} team,
+
+I reached out a few weeks back about It's God, Yo!, our daily Scripture text for teens (English KJV and Spanish Reina-Valera 1909, rewritten into the slang they actually read). No worries if it slipped by.
+
+If it might be a fit for the students at ${org}, here's a code for 10% off any plan, on us:
+
+${promoCode} gets you 10% off at ${site}
+
+Same as before: share it if it helps, ignore it if it's not for you. This is the last you'll hear from us unless you reach out. The link below removes ${org} for good.
+
+Thanks for everything you pour into young people.
+
+Iain Deckard · It's God, Yo!
+Reply to this email directly, it comes to me.
+
+---
+It's God, Yo!™ is operated by ${OUTREACH.physicalAddress}.
+You received this because ${org} is a Wichita-area church with a publicly listed youth ministry. We're proud to say we're local too. We found your general contact address at ${sourceNote(lead)}. Please, help support a local small business!
+Unsubscribe (one click): ${link}`;
+
+  const html =
+`<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:#1a1a1a;max-width:600px;margin:0 auto;">
+  <p>Hi ${esc(org)} team,</p>
+  <p>I reached out a few weeks back about <strong>It's God, Yo!</strong>, our daily Scripture text for teens (English KJV and Spanish Reina-Valera 1909, rewritten into the slang they actually read). No worries if it slipped by.</p>
+  <p>If it might be a fit for the students at ${esc(org)}, here's a code for <strong>10% off</strong> any plan, on us:</p>
+  <p style="background:#f4f7f7;border:1px solid #d7e2e2;border-radius:8px;padding:12px 16px;font-size:16px;">
+    <strong>${esc(promoCode)}</strong> gets you 10% off at <a href="${site}" style="color:#00ABBC;">${esc(site.replace(/^https?:\/\//, ""))}</a>
+  </p>
+  <p>Same as before: share it if it helps, ignore it if it's not for you. This is the last you'll hear from us unless you reach out. The link below removes ${esc(org)} for good.</p>
+  <p style="margin-bottom:2px;">Thanks for everything you pour into young people.</p>
+  <p style="margin-bottom:2px;"><strong>Iain Deckard</strong> · It's God, Yo!</p>
+  <p style="color:#555;">Reply to this email directly, it comes to me.</p>
+  <hr style="border:none;border-top:1px solid #e2e2e2;margin:22px 0;"/>
+  <p style="font-size:12px;color:#777;">
+    It's God, Yo!™ is operated by ${esc(OUTREACH.physicalAddress)}.<br/>
+    You received this because ${esc(org)} is a Wichita-area church with a publicly listed youth ministry. We're proud to say we're local too. We found your general contact address at ${esc(sourceNote(lead))}. Please, help support a local small business!<br/>
+    <a href="${link}" style="color:#777;">Unsubscribe (one click)</a>
+  </p>
+</div>`;
+
+  const headers: Record<string, string> = {
+    "List-Unsubscribe": `<${link}>, <mailto:unsubscribe@outreach.itsgodyo.com?subject=unsub-${lead.id}>`,
+    "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+  };
+
+  return { to: lead.contact_email, from: OUTREACH.from, replyTo: OUTREACH.replyTo, subject, text, html, headers };
+}
+
 /** Send one built email via Resend (reuses RESEND_API_KEY). Returns the provider
  *  message id on success. Throws on any non-2xx so the caller can record failure
  *  without advancing the lead. */
