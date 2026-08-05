@@ -1,6 +1,8 @@
 import type { PartnerStatusView } from "@/lib/cornerstone";
 import type { EnrollmentLink, EnrollmentProgress } from "@/lib/churchEnrollment";
+import type { RosterStatus } from "@/lib/churchRoster";
 import CopyField from "./CopyField";
+import RosterTracker from "./RosterTracker";
 
 /**
  * The church-facing Cornerstone Partner section. Presentational only (no client
@@ -86,10 +88,11 @@ function GroupEnrollment({ link, progress }: { link: EnrollmentLink; progress: E
 }
 
 export default function CornerstoneSection({
-  view, enrollment, certificateUrl, badgePngUrl, badgeSvgUrl,
+  view, enrollment, auth, certificateUrl, badgePngUrl, badgeSvgUrl,
 }: {
   view: PartnerStatusView;
-  enrollment: { link: EnrollmentLink; progress: EnrollmentProgress } | null;
+  enrollment: { link: EnrollmentLink; progress: EnrollmentProgress; roster: RosterStatus } | null;
+  auth: { p: string; t: string };
   certificateUrl: string;
   badgePngUrl: string;
   badgeSvgUrl: string;
@@ -159,6 +162,8 @@ export default function CornerstoneSection({
         </div>
 
         {enrollment && <GroupEnrollment link={enrollment.link} progress={enrollment.progress} />}
+
+        {enrollment && <RosterTracker initial={enrollment.roster} auth={auth} />}
 
         <div style={{ marginTop: 24, paddingTop: 16, borderTop: "1px solid #eef0f4", display: "flex", gap: 18, flexWrap: "wrap" }}>
           <a href="/program-terms#cornerstone-partner-program" style={linkStyle}>Program terms</a>

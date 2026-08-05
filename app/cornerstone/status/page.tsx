@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { CORNERSTONE_ENABLED } from "@/lib/flags";
 import { verifyPartnerAccessToken, getPartnerStatusView } from "@/lib/cornerstone";
 import { getOrCreateEnrollmentLink, getEnrollmentProgress } from "@/lib/churchEnrollment";
+import { getRosterStatus } from "@/lib/churchRoster";
 import CornerstoneSection from "./CornerstoneSection";
 
 export const metadata: Metadata = {
@@ -37,7 +38,11 @@ export default async function CornerstoneStatusPage({
   // isn't active can't invite yet, so we hide the whole section.
   const enrollment =
     view.cornerstoneStatus === "active"
-      ? { link: await getOrCreateEnrollmentLink(p), progress: await getEnrollmentProgress(p) }
+      ? {
+          link: await getOrCreateEnrollmentLink(p),
+          progress: await getEnrollmentProgress(p),
+          roster: await getRosterStatus(p),
+        }
       : null;
 
   const q = `p=${encodeURIComponent(p)}&t=${encodeURIComponent(t)}`;
@@ -45,6 +50,7 @@ export default async function CornerstoneStatusPage({
     <CornerstoneSection
       view={view}
       enrollment={enrollment}
+      auth={{ p, t }}
       certificateUrl={`/api/cornerstone/certificate?${q}`}
       badgePngUrl={`/api/cornerstone/badge?${q}&format=png`}
       badgeSvgUrl={`/api/cornerstone/badge?${q}&format=svg`}
