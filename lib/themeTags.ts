@@ -1,5 +1,6 @@
 import "server-only";
 import { getSupabaseAdmin } from "./supabaseAdmin";
+import { invokeReviewFn } from "./reviewFunctions";
 import type { Staff } from "./rbac";
 
 /**
@@ -88,18 +89,12 @@ export async function reviewTag(id: string, decision: "approve" | "reject", staf
 
 /**
  * Trigger the AI first pass for a track by invoking the propose-theme-verses
- * edge function (service-role authenticated). Returns its summary.
+ * edge function. Forwards the signed-in staff member's access token (via
+ * invokeReviewFn) so the function's auth.getUser + has_permission('content.generate')
+ * gate passes — the service-role key resolves to no user and 401s, so it must not
+ * be used here. The route already gated the caller with a content.theme_tags
+ * permission; content.generate is re-checked inside the function.
  */
 export async function proposeForTrack(track: string, sampleSize?: number): Promise<unknown> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error("supabase env not configured for edge-function invoke");
-  const res = await fetch(`${url}/functions/v1/propose-theme-verses`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}`, apikey: key },
-    body: JSON.stringify({ theme_track: track, sample_size: sampleSize }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.error || `propose_failed_${res.status}`);
-  return data;
+  return invokeReviewFn("propose-theme-verses", { theme_track: track, sample_size: sampleSize });
 }
