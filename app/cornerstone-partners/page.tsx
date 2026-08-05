@@ -41,7 +41,7 @@ export default async function CornerstonePartnersPage({
     <main className={s.page}>
       <div className={s.wrap}>
         <div className={s.head}>
-          <div className={s.eyebrow}>Cornerstone Partners</div>
+          <div className={s.eyebrow}>Cornerstone Partners&trade;</div>
           <h1 className={s.headline}>The churches who helped build this</h1>
           <p className={s.sub}>
             These churches joined during the founding stage of It&rsquo;s God, Yo! and are permanently recognized as

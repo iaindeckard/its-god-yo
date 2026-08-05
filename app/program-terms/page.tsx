@@ -31,7 +31,7 @@ export default function ProgramTermsPage() {
   return (
     <LegalPage title="Program Terms" updated="August 1, 2026">
       <p>
-        This page brings together the terms for It&rsquo;s God, Yo!&trade; (&ldquo;IGY,&rdquo; operated by Deckard Enterprise International, LLC) programs in one place. These program terms are in addition to our general <a href="/terms">Terms of Service</a> and <a href="/privacy">Privacy Policy</a>. Where a program term conflicts with the general Terms of Service, the program term controls for that program.
+        This page brings together the terms for It&rsquo;s God, Yo!&trade; (&ldquo;IGY&trade;,&rdquo; operated by Deckard Enterprise International, LLC) programs in one place. These program terms are in addition to our general <a href="/terms">Terms of Service</a> and <a href="/privacy">Privacy Policy</a>. Where a program term conflicts with the general Terms of Service, the program term controls for that program.
       </p>
 
       {/* Topic index — jump links to each live program's terms. */}
@@ -44,7 +44,7 @@ export default function ProgramTermsPage() {
       </nav>
 
       {/* ─────────────────────────── Cornerstone ─────────────────────────── */}
-      <h2 id="cornerstone-partner-program">1. Cornerstone Partner Program</h2>
+      <h2 id="cornerstone-partner-program">1. Cornerstone Partner Program&trade;</h2>
 
       <h3>1.1 What the program is</h3>
       <p>

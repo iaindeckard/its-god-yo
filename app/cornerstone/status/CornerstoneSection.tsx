@@ -124,10 +124,10 @@ export default function CornerstoneSection({
       <div style={{ maxWidth: 560, margin: "0 auto", background: "#fff", borderRadius: 16, padding: "32px 28px", fontFamily: "-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif" }}>
         <div style={{ textAlign: "center" }}>
           <Badge />
-          <div style={{ fontSize: 12, letterSpacing: "0.14em", textTransform: "uppercase", color: TEAL, fontWeight: 700 }}>Cornerstone Partner</div>
+          <div style={{ fontSize: 12, letterSpacing: "0.14em", textTransform: "uppercase", color: TEAL, fontWeight: 700 }}>Cornerstone Partner&trade;</div>
           <h1 style={{ fontSize: 26, margin: "6px 0 10px", color: "#111826" }}>{displayNumber}</h1>
           <p style={{ color: "#4a5462", fontSize: 15, lineHeight: 1.55, margin: 0 }}>
-            {churchName} joined during the founding stage of It&rsquo;s God, Yo! and is permanently recognized as a Cornerstone Partner.
+            {churchName} joined during the founding stage of It&rsquo;s God, Yo!&trade; and is permanently recognized as a Cornerstone Partner.
           </p>
           {cornerstoneStatus !== "active" && (
             <p style={{ color: "#9a6b00", background: "#fff7e0", borderRadius: 8, padding: "8px 12px", fontSize: 13, marginTop: 14 }}>

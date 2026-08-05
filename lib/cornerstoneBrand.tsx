@@ -39,7 +39,7 @@ export function ogFonts(f: { poppins400: Buffer; poppins700: Buffer }) {
 
 /** The recognition sentence — same tone as the approved email + status page. */
 export function recognitionStatement(churchName: string): string {
-  return `${churchName} joined during the founding stage of It's God, Yo! and is permanently recognized as a Cornerstone Partner.`;
+  return `${churchName} joined during the founding stage of It's God, Yo! and is permanently recognized as a Cornerstone Partner™.`;
 }
 
 /** The locked "It's God, Yo!™" wordmark treatment (brass "God,"), as JSX for Satori. */

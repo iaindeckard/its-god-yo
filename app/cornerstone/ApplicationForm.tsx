@@ -80,9 +80,9 @@ export default function ApplicationForm() {
 
   return (
     <main style={{ maxWidth: 620, margin: "0 auto", padding: "48px 24px" }}>
-      <h1 style={{ fontSize: 28, marginBottom: 8 }}>Become a Cornerstone Partner</h1>
+      <h1 style={{ fontSize: 28, marginBottom: 8 }}>Become a Cornerstone Partner&trade;</h1>
       <p className="muted" style={{ marginBottom: 24 }}>
-        Churches that join during the founding stage of It&rsquo;s God, Yo are permanently recognized as Cornerstone
+        Churches that join during the founding stage of It&rsquo;s God, Yo&trade; are permanently recognized as Cornerstone
         Partners. Tell us about your church and we&rsquo;ll take it from there.
       </p>
 
