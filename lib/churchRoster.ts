@@ -58,8 +58,10 @@ export function parseRosterInput(raw: string): string[] {
   for (const piece of (raw || "").split(/[\n,]+/)) {
     const name = piece.trim().replace(/\s+/g, " ").slice(0, NAME_MAX_LEN);
     if (!name) continue;
-    // De-dupe on the same normalized key the DB uses (lowercase, alnum-only).
-    const key = name.toLowerCase().replace(/[^a-z0-9]/gi, "");
+    // De-dupe on the same normalized key the DB uses (fold diacritics, lowercase,
+    // alnum-only) so "María" and "Maria" collapse to one and don't collide on the
+    // unique index at insert. Mirrors igy_norm_name (migration 20260805210000).
+    const key = name.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().replace(/[^a-z0-9]/g, "");
     if (!key || seen.has(key)) continue;
     seen.add(key);
     out.push(name);
