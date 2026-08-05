@@ -52,11 +52,12 @@ const THEME_TRACKS: Array<{ key: string; en: string; es: string }> = [
   { key: "courage_confidence", en: "Courage & confidence", es: "Valor y confianza" },
   { key: "comfort_hard_times", en: "Comfort in hard times", es: "Consuelo en tiempos difíciles" },
 ];
-// Focus tracks offered on the signup step. All active user tracks are enabled.
-// On a day a themed track has no approved slot, the subscriber still gets that
-// day's General verse via the disclosed no-silence fallback (see lib/dailySend +
-// the THEMED_FALLBACK_DISCLOSURE below), so a themed pick is always safe.
-const ENABLED_TRACK_KEYS = new Set(THEME_TRACKS.map((t) => t.key));
+// Launch gate: only offer focus tracks that actually have reviewed content.
+// General-only until the other 6 tracks have approved content of their own — we do
+// NOT want a subscriber picking a theme and silently receiving General instead
+// (even though the disclosed no-silence fallback would serve it). Add a key here
+// as each track earns a real approved pool.
+const ENABLED_TRACK_KEYS = new Set(["general"]);
 
 // General-fallback disclosure, shown only when a THEMED (non-General) focus is
 // selected — discloses that on days the chosen focus has no content, the
