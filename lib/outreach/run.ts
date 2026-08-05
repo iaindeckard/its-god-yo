@@ -1,32 +1,11 @@
 import "server-only";
-import { OUTREACH, sendGate, sendAllowlist } from "./config";
-import { fetchActiveLeads, recordSend, ageOut, AGE_OUT_LIMIT, type OutreachLead } from "./leads";
+import { sendGate, sendAllowlist } from "./config";
+import { fetchActiveLeads, recordSend, ageOut, AGE_OUT_LIMIT } from "./leads";
 import { buildEmail, sendViaResend } from "./email";
-import { createPromoCode } from "../promoCodes";
 
-function codeSlug(org: string): string {
-  return org.toUpperCase().replace(/[^A-Z0-9]+/g, "").slice(0, 16) || "CHURCH";
-}
-
-/** Mint (or reuse) this lead's unique one-time 10%-off Stripe promo code (§5).
- *  Reuses lib/promoCodes.ts so the coupon/PromotionCode plumbing matches the rest
- *  of the app. The code is minted once (first send) and reused on later months. */
-async function ensurePromoCode(lead: OutreachLead): Promise<{ code: string; promotionCodeId: string }> {
-  if (lead.promo_code && lead.promo_promotion_code_id) {
-    return { code: lead.promo_code, promotionCodeId: lead.promo_promotion_code_id };
-  }
-  const code = `${OUTREACH.promoPrefix}-${codeSlug(lead.org_name)}-${lead.id.slice(0, 6).toUpperCase()}`;
-  const view = await createPromoCode({
-    code,
-    discountType: "percent",
-    value: 10,
-    duration: "once",
-    maxRedemptions: 1,
-    internalLabel: `outreach:${lead.id}`,
-    note: `Church outreach — ${lead.org_name}`,
-  });
-  return { code: view.code, promotionCodeId: view.id };
-}
+// Promo-code minting moved to the second-touch (email 2) path. The first outreach
+// email is code-free (Iain, 2026-08-05); the code-minting helpers return here when
+// email 2 is built.
 
 export interface SendItem {
   lead_id: string;
@@ -97,29 +76,26 @@ export async function runSend(forceDry = false): Promise<SendReport> {
     }
 
     if (!live) {
-      // Dry run: render, mint nothing, send nothing. Show the code that WOULD be
-      // used (the already-minted one, or a placeholder for a first send).
-      const previewCode = lead.promo_code ?? `${OUTREACH.promoPrefix}-${codeSlug(lead.org_name)}-${lead.id.slice(0, 6).toUpperCase()}`;
-      const preview = buildEmail(lead, previewCode);
+      // Dry run: render, send nothing. Email 1 is code-free.
+      const preview = buildEmail(lead);
       report.would_send++;
       report.items.push({
         lead_id: lead.id, org_name: lead.org_name, to: lead.contact_email,
-        outcome: "would_send", promo_code: previewCode,
+        outcome: "would_send", promo_code: "",
         subject: preview.subject, send_count_after: lead.send_count + 1,
       });
       continue;
     }
 
-    // Live send.
+    // Live send (email 1 — code-free; the 10%-off code comes with email 2).
     try {
-      const promo = await ensurePromoCode(lead);
-      const email = buildEmail(lead, promo.code);
+      const email = buildEmail(lead);
       await sendViaResend(email);
-      await recordSend(lead.id, lead.send_count, promo);
+      await recordSend(lead.id, lead.send_count, null);
       report.sent++;
       report.items.push({
         lead_id: lead.id, org_name: lead.org_name, to: lead.contact_email,
-        outcome: "sent", promo_code: promo.code, subject: email.subject,
+        outcome: "sent", promo_code: "", subject: email.subject,
         send_count_after: lead.send_count + 1,
       });
     } catch (e) {
