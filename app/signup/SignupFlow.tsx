@@ -92,9 +92,14 @@ const validYear = (s: string) => {
 export default function SignupFlow({
   initialLang,
   initialPlan,
+  church,
 }: {
   initialLang: Lang;
   initialPlan?: string;
+  // Set when the teen arrived via a church's group enrollment link (/join). Used
+  // only for the "joining through {church}" banner + attribution on submit — it
+  // does NOT change the plan, price, or consent gate.
+  church?: { partnerId: string; linkId: string | null; churchName: string | null } | null;
 }) {
   const [lang, setLang] = useState<Lang>(initialLang);
 
@@ -351,6 +356,8 @@ export default function SignupFlow({
         purchaser_first_name: purchaserFirstName.trim() || null,
         purchaser_last_name: purchaserLastName.trim() || null,
         purchaser_salutation: purchaserSalutation,
+        cornerstone_partner_id: church?.partnerId ?? null,
+        enrollment_link_id: church?.linkId ?? null,
         teen: {
           first_name: teenFirstName.trim(),
           phone: teenPhoneE164,
@@ -392,6 +399,8 @@ export default function SignupFlow({
         purchaser_first_name: purchaserFirstName.trim() || null,
         purchaser_last_name: purchaserLastName.trim() || null,
         purchaser_salutation: purchaserSalutation,
+        cornerstone_partner_id: church?.partnerId ?? null,
+        enrollment_link_id: church?.linkId ?? null,
         family_teens: familyTeens.map((tn) => ({ first_name: tn.name.trim(), phone: toE164FromParts(countryByIso2(tn.country).dial, tn.phone), birth_year: Number(tn.year) })),
         stripe: ids,
       });
@@ -458,6 +467,24 @@ export default function SignupFlow({
               {Array.from({ length: TOTAL_DOTS }).map((_, i) => (
                 <div key={i} className={`dot ${i < dotIndex ? "done" : i === dotIndex ? "active" : ""}`} />
               ))}
+            </div>
+          )}
+
+          {/* Church group enrollment banner — shown when the teen arrived via a
+              church's /join link. Attribution only; the flow is otherwise normal. */}
+          {church?.churchName && step < STEP.DONE && (
+            <div
+              style={{
+                display: "flex", alignItems: "center", gap: 10, margin: "0 0 16px",
+                padding: "10px 14px", borderRadius: 10, background: "rgba(0,171,188,0.10)",
+                border: "1px solid rgba(0,171,188,0.35)", fontSize: 14, lineHeight: 1.4,
+              }}
+            >
+              <span aria-hidden="true" style={{ fontSize: 18 }}>⛪</span>
+              <span>
+                You&rsquo;re joining through <strong>{church.churchName}</strong>. You&rsquo;ll still
+                enter your own info and confirm by text.
+              </span>
             </div>
           )}
 

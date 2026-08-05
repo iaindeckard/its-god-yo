@@ -42,6 +42,12 @@ export interface ConsentPayload {
   purchaser_first_name?: string | null;
   purchaser_last_name?: string | null;
   purchaser_salutation?: string[];
+  // Church group enrollment (Phase 1): set when the teen arrived via a Cornerstone
+  // partner's enrollment link/code. Attribution ONLY — no effect on pricing, plan,
+  // or consent. The submit-consent function validates the partner is real + active
+  // before storing it on pending_signups.
+  cornerstone_partner_id?: string | null;
+  enrollment_link_id?: string | null;
   teen?: { first_name: string; phone: string; birth_year?: number; enhanced_consent_ack?: boolean };
   family_teens?: Array<{ first_name: string; phone: string; birth_year?: number; enhanced_consent_ack?: boolean }>;
   // NOTE: the former `plus_one` (second-recipient) input was removed 2026-08-01 when

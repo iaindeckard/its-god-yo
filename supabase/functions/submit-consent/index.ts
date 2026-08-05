@@ -137,10 +137,40 @@ interface Payload {
   purchaser_first_name?: string;
   purchaser_last_name?: string;
   purchaser_salutation?: string[]; // structured multi-select; "Other" is just another element
+  cornerstone_partner_id?: string; // church group enrollment (Phase 1) — attribution only
+  enrollment_link_id?: string;
   teen?: { first_name?: string; phone?: string; birth_year?: number; enhanced_consent_ack?: boolean };
   plus_one?: PlusOne | null;
   family_teens?: Array<{ first_name?: string; phone?: string; birth_year?: number; enhanced_consent_ack?: boolean }>;
   stripe?: { customer_id?: string; setup_intent_id?: string; payment_method_id?: string };
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Church group enrollment (Phase 1): resolve + VALIDATE the attribution a teen
+// carried in from a Cornerstone partner's enrollment link. Attribution only — it
+// never affects pricing, plan, or the consent gate. We store the partner id only
+// when it names a real, ACTIVE Cornerstone partner (a bad/forged id is silently
+// dropped, never a signup failure). The link id is kept only when it belongs to
+// that partner and is active. Cross-church spoofing via a crafted request is
+// possible but harmless for attribution-only counts; it hardens to a signed proof
+// if/when church-scoped pricing or sponsored seats (Option A) land.
+// deno-lint-ignore no-explicit-any
+async function resolveChurchAttribution(supa: any, p: Payload): Promise<{ partnerId: string | null; linkId: string | null }> {
+  const pid = p.cornerstone_partner_id?.trim();
+  if (!pid || !UUID_RE.test(pid)) return { partnerId: null, linkId: null };
+  const { data: partner, error } = await supa
+    .from("cornerstone_partners").select("id, cornerstone_status").eq("id", pid).maybeSingle();
+  if (error) { console.error(`[submit-consent] partner attribution lookup failed: ${error.message}`); return { partnerId: null, linkId: null }; }
+  if (!partner || partner.cornerstone_status !== "active") return { partnerId: null, linkId: null };
+  let linkId: string | null = null;
+  const lid = p.enrollment_link_id?.trim();
+  if (lid && UUID_RE.test(lid)) {
+    const { data: link } = await supa
+      .from("church_enrollment_links").select("id").eq("id", lid).eq("cornerstone_partner_id", pid).eq("status", "active").maybeSingle();
+    linkId = link?.id ?? null;
+  }
+  return { partnerId: partner.id, linkId };
 }
 
 // ============================ AGE-CONSENT GATE ============================
@@ -277,12 +307,14 @@ Deno.serve(async (req: Request) => {
       consentIds.push(row.id);
       stubs.push({ to: phoneE164, body: sms, cid: row.id });
     }
+    const church = await resolveChurchAttribution(supa, p);
     const { data: signup, error: sErr } = await supa.from("pending_signups").insert({
       language: lang, theme_track: p.theme_track?.trim() || "general", plan_key: "family", base_price_id: p.base_price_id, dm_addon: false,
       referral_code: p.referral_code?.trim() || null, referral_discount_applied: !!p.referral_discount_applied,
       promo_code: p.promo_code?.trim() || null, promo_promotion_code_id: p.promo_promotion_code_id?.trim() || null,
       purchaser_email: p.purchaser_email?.trim() || null, purchaser_timezone: p.purchaser_timezone?.trim() || null,
       purchaser_first_name: p.purchaser_first_name?.trim() || null, purchaser_last_name: p.purchaser_last_name?.trim() || null, purchaser_salutation: normSalutation(p.purchaser_salutation),
+      cornerstone_partner_id: church.partnerId, enrollment_link_id: church.linkId,
       teen_consent_id: consentIds[0], plus_one_consent_id: null,
       stripe_customer_id: p.stripe?.customer_id ?? null, stripe_setup_intent_id: p.stripe?.setup_intent_id ?? null,
       stripe_payment_method_id: p.stripe?.payment_method_id ?? null,
@@ -409,6 +441,7 @@ Deno.serve(async (req: Request) => {
   const plusOneId: string | null = null;
 
   // 3) pending signup: plan + saved (uncharged) payment method + consent links
+  const church = await resolveChurchAttribution(supa, p);
   const { data: signup, error: signupErr } = await supa.from("pending_signups").insert({
     language: lang,
     theme_track: p.theme_track?.trim() || "general",
@@ -426,6 +459,8 @@ Deno.serve(async (req: Request) => {
     purchaser_first_name: p.purchaser_first_name?.trim() || null,
     purchaser_last_name: p.purchaser_last_name?.trim() || null,
     purchaser_salutation: normSalutation(p.purchaser_salutation),
+    cornerstone_partner_id: church.partnerId,
+    enrollment_link_id: church.linkId,
     teen_consent_id: teenRow.id,
     plus_one_consent_id: plusOneId,
     stripe_customer_id: p.stripe?.customer_id ?? null,

@@ -1,4 +1,6 @@
 import type { PartnerStatusView } from "@/lib/cornerstone";
+import type { EnrollmentLink, EnrollmentProgress } from "@/lib/churchEnrollment";
+import CopyField from "./CopyField";
 
 /**
  * The church-facing Cornerstone Partner section. Presentational only (no client
@@ -35,10 +37,59 @@ function Badge() {
   );
 }
 
+function EnrollmentStat({ n, label, emphasis }: { n: number; label: string; emphasis?: boolean }) {
+  return (
+    <div style={{ flex: "1 1 96px", textAlign: "center", padding: "12px 8px", borderRadius: 10, background: emphasis ? "#0B1830" : "#f7f9fb", border: emphasis ? "none" : "1px solid #eef0f4" }}>
+      <div style={{ fontSize: 24, fontWeight: 700, color: emphasis ? GOLD : "#111826" }}>{n}</div>
+      <div style={{ fontSize: 12, color: emphasis ? "#c9d3e4" : "#5b6472", marginTop: 2 }}>{label}</div>
+    </div>
+  );
+}
+
+function GroupEnrollment({ link, progress }: { link: EnrollmentLink; progress: EnrollmentProgress }) {
+  const paused = link.status !== "active";
+  return (
+    <div style={{ marginTop: 26, paddingTop: 20, borderTop: "1px solid #eef0f4" }}>
+      <div style={{ fontSize: 12, letterSpacing: "0.14em", textTransform: "uppercase", color: TEAL, fontWeight: 700, marginBottom: 4 }}>
+        Invite your group
+      </div>
+      <h2 style={{ fontSize: 18, margin: "0 0 6px", color: "#111826" }}>Your enrollment link</h2>
+      <p style={{ color: "#4a5462", fontSize: 14, lineHeight: 1.55, margin: "0 0 8px" }}>
+        Share this with your youth. Announce it, text it, or print the code in your bulletin.
+        Each teen signs up on their own and confirms by text; you never handle anyone&rsquo;s phone
+        number, and every teen who joins through your link is credited to your church.
+      </p>
+
+      {paused ? (
+        <p style={{ color: "#9a6b00", background: "#fff7e0", borderRadius: 8, padding: "10px 12px", fontSize: 13 }}>
+          Your enrollment link is currently paused. Contact support to turn it back on.
+        </p>
+      ) : (
+        <>
+          <CopyField label="Share link" value={link.url} />
+          <CopyField label="Or share this code" value={link.displayCode} />
+
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 18 }}>
+            <EnrollmentStat n={progress.joined} label="Joined" emphasis />
+            <EnrollmentStat n={progress.active} label="Active" />
+            <EnrollmentStat n={progress.awaitingConfirmation} label="Invited, not yet confirmed" />
+            <EnrollmentStat n={progress.totalStarted} label="Total started" />
+          </div>
+          <p style={{ color: "#9aa2ad", fontSize: 12, marginTop: 8 }}>
+            &ldquo;Joined&rdquo; means a teen confirmed by text and their subscription started.
+            {progress.lastSignupAt ? ` Most recent: ${new Date(progress.lastSignupAt).toLocaleDateString()}.` : " No signups through your link yet."}
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function CornerstoneSection({
-  view, certificateUrl, badgePngUrl, badgeSvgUrl,
+  view, enrollment, certificateUrl, badgePngUrl, badgeSvgUrl,
 }: {
   view: PartnerStatusView;
+  enrollment: { link: EnrollmentLink; progress: EnrollmentProgress } | null;
   certificateUrl: string;
   badgePngUrl: string;
   badgeSvgUrl: string;
@@ -106,6 +157,8 @@ export default function CornerstoneSection({
           </div>
           <p style={{ color: "#9aa2ad", fontSize: 12, marginTop: 8 }}>Use your badge on your church website, newsletter, or socials. Your certificate is a print-ready PDF.</p>
         </div>
+
+        {enrollment && <GroupEnrollment link={enrollment.link} progress={enrollment.progress} />}
 
         <div style={{ marginTop: 24, paddingTop: 16, borderTop: "1px solid #eef0f4", display: "flex", gap: 18, flexWrap: "wrap" }}>
           <a href="/program-terms#cornerstone-partner-program" style={linkStyle}>Program terms</a>

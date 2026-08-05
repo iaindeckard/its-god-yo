@@ -84,6 +84,25 @@ export default function CornerstoneManager({
     setNotice(d.sent ? `Private status link re-sent to ${d.recipient}.` : `No contact email on file — couldn't send (recipient: ${d.recipient ?? "none"}).`);
   }
 
+  // Group enrollment link management (Phase 1). Result (code/status/joined count)
+  // is surfaced in the notice banner — staff copy the live link from the church's
+  // status page. Rotate disables the old code; pause/resume toggles the link.
+  async function enrollmentAction(id: string, action: string) {
+    setError(null); setNotice(null);
+    const r = await fetch(`/api/admin/cornerstone/partners/${id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }),
+    });
+    const d = await r.json();
+    if (!r.ok) { setError(d.error || "Failed"); return; }
+    const code = d.link?.displayCode ?? "?", status = d.link?.status ?? "?", joined = d.progress?.joined ?? 0;
+    setNotice(
+      action === "enrollment_rotate" ? `New enrollment code ${code} — the old code no longer works.`
+      : action === "enrollment_pause" ? `Enrollment link paused (was ${code}).`
+      : action === "enrollment_reactivate" ? `Enrollment link reactivated (${code}).`
+      : `Enrollment code ${code} — link ${status}, ${joined} joined so far.`,
+    );
+  }
+
   const isTerminal = (s: string) => ["approved", "active", "declined", "cancelled"].includes(s);
 
   return (
@@ -216,7 +235,13 @@ export default function CornerstoneManager({
                   </td>
                   {canManage && (
                     <td style={{ whiteSpace: "nowrap" }}>
-                      <button className="btn btn-ghost" style={{ padding: "5px 10px", fontSize: 12 }} onClick={() => resendLink(p.id)}>Resend link</button>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        <button className="btn btn-ghost" style={{ padding: "5px 10px", fontSize: 12 }} onClick={() => resendLink(p.id)}>Resend link</button>
+                        <button className="btn btn-ghost" style={{ padding: "5px 10px", fontSize: 12 }} onClick={() => enrollmentAction(p.id, "enrollment_status")} title="Show this church's group enrollment code + progress">Enroll code</button>
+                        <button className="btn btn-ghost" style={{ padding: "5px 10px", fontSize: 12 }} onClick={() => enrollmentAction(p.id, "enrollment_rotate")} title="Issue a new code and disable the old one">Rotate</button>
+                        <button className="btn btn-ghost" style={{ padding: "5px 10px", fontSize: 12 }} onClick={() => enrollmentAction(p.id, "enrollment_pause")} title="Pause the enrollment link">Pause</button>
+                        <button className="btn btn-ghost" style={{ padding: "5px 10px", fontSize: 12 }} onClick={() => enrollmentAction(p.id, "enrollment_reactivate")} title="Resume a paused enrollment link">Resume</button>
+                      </div>
                     </td>
                   )}
                 </tr>

@@ -1,6 +1,25 @@
+import { cookies } from "next/headers";
 import SignupFlow from "./SignupFlow";
 import type { Lang } from "@/lib/i18n";
 import { PURCHASES_ENABLED, SPANISH_ENABLED } from "@/lib/flags";
+import { CHURCH_ENROLL_COOKIE, readChurchCookie } from "@/lib/churchEnrollmentCookie";
+import { isActivePartner, churchNameForPartner } from "@/lib/churchEnrollment";
+
+/** Church context for signup, resolved server-side from the /join cookie. Null
+ *  for organic signups. Only used to (a) show the "joining through {church}"
+ *  banner and (b) carry attribution into the consent payload. */
+async function resolveChurchContext() {
+  const raw = (await cookies()).get(CHURCH_ENROLL_COOKIE)?.value;
+  const parsed = readChurchCookie(raw);
+  if (!parsed) return null;
+  try {
+    if (!(await isActivePartner(parsed.partnerId))) return null;
+    const churchName = await churchNameForPartner(parsed.partnerId);
+    return { partnerId: parsed.partnerId, linkId: parsed.linkId ?? null, churchName };
+  } catch {
+    return null; // never let attribution lookup break signup
+  }
+}
 
 export const metadata = {
   title: "Get started | It's God, Yo!™",
@@ -33,5 +52,6 @@ export default async function SignupPage({
   if (!PURCHASES_ENABLED) return <ComingSoon />;
   // Ignore ?lang=es while Spanish is gated — signup is English-only.
   const initialLang: Lang = SPANISH_ENABLED && sp.lang === "es" ? "es" : "en";
-  return <SignupFlow initialLang={initialLang} initialPlan={sp.plan} />;
+  const church = await resolveChurchContext();
+  return <SignupFlow initialLang={initialLang} initialPlan={sp.plan} church={church} />;
 }

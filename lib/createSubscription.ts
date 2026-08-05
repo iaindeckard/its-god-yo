@@ -104,6 +104,8 @@ export async function createSubscriptionForPendingSignup(pendingSignupId: string
       pending_signup_id: ps.id,
       teen_consent_id: ps.teen_consent_id ?? "",
       plan_key: ps.plan_key ?? "",
+      // Church group enrollment attribution (Phase 1). Empty for organic signups.
+      cornerstone_partner_id: ps.cornerstone_partner_id ?? "",
     },
   };
 

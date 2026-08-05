@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { CORNERSTONE_ENABLED } from "@/lib/flags";
 import { verifyPartnerAccessToken, getPartnerStatusView } from "@/lib/cornerstone";
+import { getOrCreateEnrollmentLink, getEnrollmentProgress } from "@/lib/churchEnrollment";
 import CornerstoneSection from "./CornerstoneSection";
 
 export const metadata: Metadata = {
@@ -31,10 +32,19 @@ export default async function CornerstoneStatusPage({
   const view = await getPartnerStatusView(p);
   if (!view) notFound();
 
+  // Group enrollment (Phase 1): ensure the church has a shareable link/code and
+  // pull its enrollment progress. Only shown for an active partner — a church that
+  // isn't active can't invite yet, so we hide the whole section.
+  const enrollment =
+    view.cornerstoneStatus === "active"
+      ? { link: await getOrCreateEnrollmentLink(p), progress: await getEnrollmentProgress(p) }
+      : null;
+
   const q = `p=${encodeURIComponent(p)}&t=${encodeURIComponent(t)}`;
   return (
     <CornerstoneSection
       view={view}
+      enrollment={enrollment}
       certificateUrl={`/api/cornerstone/certificate?${q}`}
       badgePngUrl={`/api/cornerstone/badge?${q}&format=png`}
       badgeSvgUrl={`/api/cornerstone/badge?${q}&format=svg`}

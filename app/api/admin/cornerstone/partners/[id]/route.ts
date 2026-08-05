@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { requirePermission } from "@/lib/rbac";
 import { apiError } from "@/lib/apiError";
 import { updatePartner, resendPartnerStatusLink, type PartnerPatch } from "@/lib/cornerstone";
+import {
+  getOrCreateEnrollmentLink, getEnrollmentProgress, rotateEnrollmentLink,
+  pauseEnrollmentLink, reactivateEnrollmentLink, getEnrollmentLink,
+} from "@/lib/churchEnrollment";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +29,25 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (body.action === "resend_link") {
       const res = await resendPartnerStatusLink(id);
       return NextResponse.json({ ok: true, ...res });
+    }
+
+    // Group enrollment link management (Phase 1).
+    if (typeof body.action === "string" && body.action.startsWith("enrollment_")) {
+      if (body.action === "enrollment_rotate") {
+        const link = await rotateEnrollmentLink(id, staff.userId);
+        return NextResponse.json({ ok: true, link, progress: await getEnrollmentProgress(id) });
+      }
+      if (body.action === "enrollment_pause" || body.action === "enrollment_reactivate") {
+        const current = await getEnrollmentLink(id);
+        if (current) {
+          if (body.action === "enrollment_pause") await pauseEnrollmentLink(current.id);
+          else await reactivateEnrollmentLink(current.id);
+        }
+      }
+      // enrollment_status (default): just read. Ensures a link exists so staff
+      // always see a code to share.
+      const link = await getOrCreateEnrollmentLink(id, staff.userId);
+      return NextResponse.json({ ok: true, link, progress: await getEnrollmentProgress(id) });
     }
 
     const patch: PartnerPatch = {};
