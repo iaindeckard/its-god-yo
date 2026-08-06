@@ -112,13 +112,13 @@ export async function resolveSmsAlert(args: {
  * pathway is alive without lowering the real emergency bar. Not cooldown-gated —
  * the monthly cron schedule is its cadence. No-op without a recipient.
  */
-export async function sendHeartbeatSms(): Promise<{ sent: boolean; reason?: string }> {
+export async function sendHeartbeatSms(): Promise<{ sent: boolean; sid?: string; segments?: number | null; reason?: string }> {
   const to = process.env.OPS_ALERT_SMS_TO;
   if (!to) {
     console.warn("[sms-alert] OPS_ALERT_SMS_TO not set — heartbeat not sent");
     return { sent: false, reason: "no_recipient" };
   }
-  await sendSms(to, "IGY alert system check, no action needed.");
-  console.error("[sms-alert][HEARTBEAT] sent");
-  return { sent: true };
+  const { sid, segments } = await sendSms(to, "IGY alert system check, no action needed.");
+  console.error(`[sms-alert][HEARTBEAT] sent sid=${sid}`);
+  return { sent: true, sid, segments };
 }
