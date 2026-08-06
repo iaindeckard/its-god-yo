@@ -5,8 +5,12 @@ import type { Block, CalloutKind, Entry, Part } from "./content";
 
 // IGY brand accents. Blue is primary; gold is the reserved accent (kept to a few
 // parts so it stays special, same restraint USN uses with its gold).
-const BLUE = "#378ADD";
+const BLUE = "#378ADD"; // vivid brand blue — decorative accent BARS/fills only (>=4.8:1 as a graphic on the navy)
 const GOLD = "#FFDC52";
+// Brand blue is only ~4.8:1 on the navy: acceptable for bars, but not comfortable
+// for small TEXT. Text accents use the site's on-dark blue (~7:1), matching the
+// public dark pages (legal / iotnbo / sponsors). All pairs WCAG AA audited.
+const BLUE_TEXT = "#7ea8e0";
 type Accent = "blue" | "gold";
 const PART_ACCENT: Record<string, Accent> = {
   "start-here": "blue",
@@ -19,7 +23,8 @@ const PART_ACCENT: Record<string, Accent> = {
   "common-questions": "blue",
   glossary: "blue",
 };
-const accentHex = (id: string) => (PART_ACCENT[id] === "gold" ? GOLD : BLUE);
+const accentHex = (id: string) => (PART_ACCENT[id] === "gold" ? GOLD : BLUE); // accent BAR/fill
+const accentText = (id: string) => (PART_ACCENT[id] === "gold" ? GOLD : BLUE_TEXT); // accent TEXT (AA-safe)
 
 const CALLOUT: Record<CalloutKind, { color: string; bg: string; border: string; label: string }> = {
   info: { color: "#7EB8F0", bg: "rgba(55,138,221,0.10)", border: "rgba(55,138,221,0.45)", label: "Good to know" },
@@ -34,7 +39,7 @@ function BlockView({ block }: { block: Block }) {
     case "prose":
       return <p style={{ fontSize: 14.5, lineHeight: 1.65, margin: "10px 0", color: "var(--igy-admin-text, #e7edf6)" }}>{block.text}</p>;
     case "subheading":
-      return <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", margin: "18px 0 6px", color: BLUE }}>{block.text}</h4>;
+      return <h4 style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", margin: "18px 0 6px", color: BLUE_TEXT }}>{block.text}</h4>;
     case "list":
       return React.createElement(
         block.ordered ? "ol" : "ul",
@@ -132,10 +137,11 @@ export default function HandbookView({ parts, hiddenCount, updated, jobRole }: {
   };
 
   return (
+    <div className="handbook-root">
     <div style={{ maxWidth: 1120, margin: "0 auto" }}>
       {/* HERO */}
       <div className="admin-head" style={{ display: "block", marginBottom: 8 }}>
-        <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.28em", color: BLUE, margin: "0 0 6px" }}>IGY Employee Manual</p>
+        <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.28em", color: BLUE_TEXT, margin: "0 0 6px" }}>IGY Employee Manual</p>
         <h1 style={{ margin: 0 }}>How IGY Actually Works</h1>
         <p className="muted" style={{ maxWidth: 640, marginTop: 8, lineHeight: 1.6 }}>
           Every plan, program, flag, and admin screen — written so a brand-new teammate can help a real customer and know exactly what to do. You&rsquo;re viewing as <strong style={{ color: "var(--igy-admin-text, #e7edf6)" }}>{jobRole || "staff"}</strong>.
@@ -168,10 +174,9 @@ export default function HandbookView({ parts, hiddenCount, updated, jobRole }: {
       {!q && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 10, margin: "6px 0 20px" }}>
           {parts.map((part) => {
-            const a = accentHex(part.id);
             return (
               <button key={part.id} onClick={() => jumpTo(part.id)} className="card" style={{ textAlign: "left", cursor: "pointer", padding: "12px 14px", borderColor: "rgba(255,255,255,0.10)", background: "rgba(255,255,255,0.03)" }}>
-                <span style={{ display: "block", fontSize: 9.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.16em", color: a }}>{part.number ? `Part ${part.number}` : "Reference"}</span>
+                <span style={{ display: "block", fontSize: 9.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.16em", color: accentText(part.id) }}>{part.number ? `Part ${part.number}` : "Reference"}</span>
                 <span style={{ display: "block", fontSize: 13.5, fontWeight: 700, marginTop: 2, color: "var(--igy-admin-text, #e7edf6)" }}>{part.title}</span>
               </button>
             );
@@ -183,10 +188,9 @@ export default function HandbookView({ parts, hiddenCount, updated, jobRole }: {
         {/* TABLE OF CONTENTS */}
         <nav className="handbook-toc" style={{ width: 236, flexShrink: 0, position: "sticky", top: 72, maxHeight: "calc(100vh - 90px)", overflowY: "auto", paddingBottom: 24 }}>
           {filtered.map((part) => {
-            const a = accentHex(part.id);
             return (
               <div key={part.id} style={{ marginBottom: 14 }}>
-                <button onClick={() => jumpTo(part.id)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.14em", color: a, marginBottom: 4, textAlign: "left" }}>
+                <button onClick={() => jumpTo(part.id)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.14em", color: accentText(part.id), marginBottom: 4, textAlign: "left" }}>
                   {part.number ? `${part.number}. ` : ""}{part.title}
                 </button>
                 <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
@@ -196,7 +200,7 @@ export default function HandbookView({ parts, hiddenCount, updated, jobRole }: {
                       <li key={entry.id}>
                         <button
                           onClick={() => jumpTo(entry.id)}
-                          style={{ display: "block", width: "100%", textAlign: "left", background: active ? "rgba(55,138,221,0.14)" : "transparent", border: "none", cursor: "pointer", fontSize: 12.5, lineHeight: 1.35, padding: "5px 8px", borderRadius: 6, color: active ? a : "var(--igy-on-dark-meta, #9fb0c9)", fontWeight: active ? 600 : 400 }}
+                          style={{ display: "block", width: "100%", textAlign: "left", background: active ? "rgba(55,138,221,0.14)" : "transparent", border: "none", cursor: "pointer", fontSize: 12.5, lineHeight: 1.35, padding: "5px 8px", borderRadius: 6, color: active ? accentText(part.id) : "var(--igy-on-dark-meta, #9fb0c9)", fontWeight: active ? 600 : 400 }}
                         >
                           {entry.title}
                         </button>
@@ -223,7 +227,7 @@ export default function HandbookView({ parts, hiddenCount, updated, jobRole }: {
             return (
               <section key={part.id} id={part.id} style={{ marginBottom: 40, scrollMarginTop: 20 }}>
                 <div style={{ marginBottom: 14 }}>
-                  {part.number && <span style={{ display: "block", fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.2em", color: a }}>Part {part.number}</span>}
+                  {part.number && <span style={{ display: "block", fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.2em", color: accentText(part.id) }}>Part {part.number}</span>}
                   <h2 style={{ fontSize: 26, fontWeight: 800, margin: "2px 0 0", color: "var(--igy-admin-text, #e7edf6)" }}>{part.title}</h2>
                   <div style={{ height: 2, width: 46, background: a, borderRadius: 2, margin: "10px 0 0" }} />
                   {part.blurb && <p className="muted" style={{ marginTop: 10, maxWidth: 640, lineHeight: 1.6 }}>{part.blurb}</p>}
@@ -236,7 +240,7 @@ export default function HandbookView({ parts, hiddenCount, updated, jobRole }: {
                       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px 12px" }}>
                         <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "var(--igy-admin-text, #e7edf6)" }}>{entry.title}</h3>
                         {entry.address && (
-                          <span style={{ fontSize: 11.5, fontFamily: "ui-monospace, monospace", padding: "2px 8px", borderRadius: 6, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", color: a }}>{entry.address}</span>
+                          <span style={{ fontSize: 11.5, fontFamily: "ui-monospace, monospace", padding: "2px 8px", borderRadius: 6, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", color: accentText(part.id) }}>{entry.address}</span>
                         )}
                       </div>
                       <div style={{ marginTop: 2 }}>
@@ -250,6 +254,7 @@ export default function HandbookView({ parts, hiddenCount, updated, jobRole }: {
           })}
         </div>
       </div>
+    </div>
     </div>
   );
 }

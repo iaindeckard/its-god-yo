@@ -275,6 +275,27 @@ h1, h2, h3 { line-height: 1.12; letter-spacing: -0.02em; margin: 0 0 0.4em; }
 .dev-badge { font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: var(--radius-pill); background: var(--igy-caution-bg); color: var(--igy-caution-text); border: 1px solid var(--igy-caution-border); }
 .admin-note { font-size: 13px; color: var(--igy-caution-text); background: var(--igy-caution-bg); border: 1px solid var(--igy-caution-border); border-radius: var(--radius-xs); padding: 10px 14px; margin-bottom: var(--space-5); }
 
+/* Employee handbook — reuse the site's proven public dark theme (the same tokens
+   as /its-okay-to-not-be-okay, the legal pages, and the sponsor pages) instead of
+   the light admin surface, which was rendering light dark-theme text on white
+   .card panels (unreadable). Scoped to .handbook-root so no other admin screen is
+   touched. Every text/surface pair here is contrast-audited to WCAG AA (>= 6:1). */
+.handbook-root {
+  margin: -28px -32px;          /* bleed over the light .admin-main padding... */
+  padding: 28px 32px;           /* ...then restore the inner gutter */
+  min-height: 100vh;
+  background: #0B1830;
+  color: #eaf1fb;
+  --igy-admin-bg: #0B1830;       /* dark-theme values for the tokens the inline styles read */
+  --igy-admin-text: #eaf1fb;
+  --igy-on-dark-meta: #9fb0c9;
+}
+.handbook-root .card { background: #111b30; border-color: rgba(255,255,255,0.08); color: #eaf1fb; }
+.handbook-root .muted { color: #a9bad6; }
+.handbook-root .admin-head h1 { color: #fff; }
+.handbook-root .btn-ghost { color: #7ea8e0; border-color: rgba(126,168,224,0.5); }
+.handbook-root .btn-ghost:hover { background: rgba(126,168,224,0.12); color: #fff; border-color: rgba(126,168,224,0.75); }
+
 .table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid var(--igy-line); border-radius: var(--radius-sm); overflow: hidden; }
 .table th, .table td { text-align: left; padding: 11px 14px; font-size: 14px; border-bottom: 1px solid var(--igy-line); }
 .table th { background: var(--igy-surface-header); font-weight: 700; color: var(--igy-slate); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
