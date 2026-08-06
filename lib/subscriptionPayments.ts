@@ -47,6 +47,10 @@ export interface PaymentCapture {
 export function buildPaymentRow(p: PaymentCapture, bt: Stripe.BalanceTransaction) {
   return {
     business_unit: "igy",
+    // Stripe's own test/live signal, stamped from the balance transaction so test
+    // artifacts (e.g. test clocks) can never silently count as revenue. The DEI
+    // ETL / rollup counts only livemode=true. (Migration 20260806000001.)
+    livemode: (bt as unknown as { livemode: boolean }).livemode,
     kind: p.kind,
     balance_transaction_id: bt.id,
     stripe_charge_id: p.chargeId,
