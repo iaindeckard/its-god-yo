@@ -1,6 +1,7 @@
 import "server-only";
 import { createClient } from "./supabase/server";
 import { getSupabaseAdmin } from "./supabaseAdmin";
+import { reportAdminAccessFailure } from "./securityAlert";
 
 /**
  * Real staff RBAC. Identity comes from the Supabase Auth session (@supabase/ssr);
@@ -87,7 +88,13 @@ export async function requirePermission(permissionKey: string): Promise<Staff> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new UnauthorizedError();
   const { data: allowed } = await supabase.rpc("has_permission", { p_user_id: user.id, p_permission_key: permissionKey });
-  if (allowed !== true) throw new ForbiddenError(permissionKey);
+  if (allowed !== true) {
+    // Tier 3 security signal: record this authenticated-but-denied attempt and let
+    // the reporter decide whether repeated failures warrant an emergency SMS.
+    // Best-effort and self-contained — never blocks the 403.
+    await reportAdminAccessFailure({ principal: user.id, permissionKey }).catch(() => {});
+    throw new ForbiddenError(permissionKey);
+  }
   const { data: sm } = await getSupabaseAdmin()
     .from("staff_members").select("job_role").eq("user_id", user.id).maybeSingle();
   return { userId: user.id, jobRole: (sm?.job_role as string) ?? "" };

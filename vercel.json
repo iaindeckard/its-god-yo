@@ -12,6 +12,9 @@
     { "path": "/api/cron/season-billing", "schedule": "0 8 * * *" },
     { "path": "/api/cron/season-content-generate", "schedule": "0 6 * * *" },
     { "path": "/api/cron/season-content-alarm", "schedule": "0 7 * * *" },
-    { "path": "/api/cron/climax-send", "schedule": "0,30 * * * *" }
+    { "path": "/api/cron/content-runway-alarm", "schedule": "0 7 * * *" },
+    { "path": "/api/cron/climax-send", "schedule": "0,30 * * * *" },
+    { "path": "/api/cron/twilio-health", "schedule": "15,45 * * * *" },
+    { "path": "/api/cron/alert-heartbeat", "schedule": "0 15 1 * *" }
   ]
 }

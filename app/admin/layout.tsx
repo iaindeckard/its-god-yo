@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Wordmark from "@/components/Wordmark";
 import { getCurrentStaff, getEffectivePermissions } from "@/lib/rbac";
+import { getPendingCountsByHref } from "@/lib/pendingTasks";
 
 export const metadata = { title: "Admin — It's God, Yo!" };
 export const dynamic = "force-dynamic"; // identity/permissions resolve per-request, never at build
@@ -25,6 +26,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const staff = await getCurrentStaff();
   const perms = staff ? await getEffectivePermissions(staff) : new Set<string>();
   const nav = NAV.filter((n) => perms.has(n.need));
+  // Tier 1 badges: one centralized pending-tasks computation, keyed by nav href.
+  // Best-effort — a failure must not break the shell, so fall back to no badges.
+  const pending = staff ? await getPendingCountsByHref().catch(() => ({} as Record<string, number>)) : {};
 
   return (
     <div className="admin-shell">
@@ -39,9 +43,17 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <div style={{ fontSize: 12, color: "var(--igy-on-dark-meta)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Admin</div>
         <nav className="admin-nav">
           {nav.length === 0 && !staff && <span style={{ fontSize: 13, color: "var(--igy-on-dark-meta)", padding: "8px 12px" }}>No sections available for this role.</span>}
-          {nav.map((n) => (
-            <Link key={n.href} href={n.href}>{n.label}</Link>
-          ))}
+          {nav.map((n) => {
+            const c = pending[n.href] ?? 0;
+            return (
+              <Link key={n.href} href={n.href} className="admin-nav-item">
+                <span>{n.label}</span>
+                {c > 0 && (
+                  <span className="nav-count" aria-label={`${c} item${c === 1 ? "" : "s"} need attention`}>{c}</span>
+                )}
+              </Link>
+            );
+          })}
           {/* Employee Manual is open to every staff member; its sections are individually role-gated on the page itself. */}
           {staff && <Link href="/admin/handbook">Employee Manual</Link>}
         </nav>

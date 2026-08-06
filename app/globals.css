@@ -268,6 +268,14 @@ h1, h2, h3 { line-height: 1.12; letter-spacing: -0.02em; margin: 0 0 0.4em; }
 .admin-nav a { color: var(--igy-admin-nav); padding: 9px 12px; border-radius: var(--radius-xs); font-weight: 500; font-size: 15px; }
 .admin-nav a:hover { background: rgba(255,255,255,0.06); text-decoration: none; }
 .admin-nav a.active { background: var(--igy-blue); color: #fff; }
+/* Tier 1 pending-task badge: a small count pill trailing the nav label so Iain
+   knows which screen needs attention without opening pages speculatively. */
+.admin-nav a.admin-nav-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.nav-count {
+  background: var(--igy-blue); color: #fff; font-size: 12px; font-weight: 700;
+  min-width: 20px; height: 20px; padding: 0 6px; border-radius: var(--radius-pill);
+  display: inline-flex; align-items: center; justify-content: center; line-height: 1;
+}
 .admin-main { padding: 28px 32px; background: var(--igy-bg-alt); }
 .admin-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px; flex-wrap: wrap; gap: var(--space-3); }
 .admin-head h1 { font-size: 26px; margin: 0; }

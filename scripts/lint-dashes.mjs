@@ -55,6 +55,7 @@ const ENFORCED_LIB_FILES = new Set([
 const INTERNAL_ONLY = new Set([
   "app/api/cron/reconcile-payments/route.ts",
   "app/api/cron/season-content-alarm/route.ts",
+  "app/api/cron/content-runway-alarm/route.ts",
   "app/api/stripe/webhook/route.ts",
 ]);
 // Admin is internal and exempt by default, EXCEPT these files. The employee

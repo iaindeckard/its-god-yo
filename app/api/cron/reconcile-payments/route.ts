@@ -3,6 +3,7 @@ import type Stripe from "stripe";
 import { getStripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { upsertSubscriptionPayment, tsIso, type PaymentCapture } from "@/lib/subscriptionPayments";
+import { sendSmsAlert, resolveSmsAlert, SMS_ALERT } from "@/lib/smsAlert";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -236,7 +237,23 @@ export async function GET(req: Request) {
         await sendGapAlert(gapBtIds, days, backfilled).catch((e) =>
           console.error("[reconcile-payments] gap alert email failed:", e),
         );
+        // Tier 3 emergency: a webhook capture is silently failing again (the exact
+        // class of bug fixed 2026-08-06 — payment processing quietly broken). SMS,
+        // scoped to entity "webhook" so a lingering break re-texts at most once per
+        // 4h; a later clean run (below) resolves it.
+        await sendSmsAlert({
+          alertType: SMS_ALERT.STRIPE_WEBHOOK_GAP,
+          entityKey: "webhook",
+          message: `Stripe webhook is silently failing — ${gapsOverGrace} payment(s) missed capture and were backfilled. Payment processing may be broken.`,
+          detail: `Reconcile found ${gapsOverGrace} webhook-responsible payment(s) missing beyond the grace window (look-back ${days}d). bt_ids=${gapBtIds.join(", ")}. Check the Stripe webhook, STRIPE_SECRET_KEY, and recent deploys.`,
+        }).catch((e) => console.error("[reconcile-payments] gap SMS alert failed:", e));
       }
+    } else if (!dryRun) {
+      // Clean run (no gaps) confirms the webhook is capturing again → reset the
+      // cooldown so a fresh break alerts immediately rather than being muffled.
+      await resolveSmsAlert({ alertType: SMS_ALERT.STRIPE_WEBHOOK_GAP, entityKey: "webhook" }).catch((e) =>
+        console.error("[reconcile-payments] gap resolve failed:", e),
+      );
     }
 
     return NextResponse.json({ ok: true, ...summary });
