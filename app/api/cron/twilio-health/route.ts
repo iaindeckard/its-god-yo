@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isAuthorizedCron } from "@/lib/cronAuth";
 import { sendSmsAlert, resolveSmsAlert, SMS_ALERT } from "@/lib/smsAlert";
 
 export const runtime = "nodejs";
@@ -17,12 +18,10 @@ export const maxDuration = 60;
  * back to the ops-alert email automatically, so the signal is never lost.
  *
  * No-op (200) without Twilio credentials, so it is safe while Twilio is pending.
- * Authorized by Vercel's cron header or a CRON_SECRET bearer.
+ * Authorized by a CRON_SECRET bearer (auto-sent by Vercel Cron).
  */
 export async function GET(req: Request) {
-  const isVercelCron = req.headers.get("x-vercel-cron") === "1";
-  const secret = process.env.CRON_SECRET;
-  const authed = isVercelCron || (!!secret && req.headers.get("authorization") === `Bearer ${secret}`);
+  const authed = isAuthorizedCron(req);
   if (!authed) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const sid = process.env.TWILIO_ACCOUNT_SID;

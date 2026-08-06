@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isAuthorizedCron } from "@/lib/cronAuth";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { sendOpsAlert } from "@/lib/opsAlert";
 import { runContentRunwayAlarm, RUNWAY_THRESHOLD_DAYS, type TrackRunway } from "@/lib/contentRunway";
@@ -11,13 +12,11 @@ export const maxDuration = 120;
  * Tier 2 daily content-runway alarm. For any daily-cadence track whose furthest
  * approved scheduled_date drops under RUNWAY_THRESHOLD_DAYS of runway, emails Iain
  * once per episode via the shared ops-alert channel (dedup + recovery handled in
- * lib/contentRunway via igy_alert_state). Authorized by Vercel's cron header or a
- * CRON_SECRET bearer. ?days=N overrides the threshold (manual/test runs).
+ * lib/contentRunway via igy_alert_state). Authorized by a CRON_SECRET bearer
+ * (auto-sent by Vercel Cron). ?days=N overrides the threshold (manual/test runs).
  */
 export async function GET(req: Request) {
-  const isVercelCron = req.headers.get("x-vercel-cron") === "1";
-  const secret = process.env.CRON_SECRET;
-  const authed = isVercelCron || (!!secret && req.headers.get("authorization") === `Bearer ${secret}`);
+  const authed = isAuthorizedCron(req);
   if (!authed) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const url = new URL(req.url);

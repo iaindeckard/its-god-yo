@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isAuthorizedCron } from "@/lib/cronAuth";
 import { sendOpsAlert } from "@/lib/opsAlert";
 import { OPENER_POOL_LIVE_DATE } from "@/lib/dmOpeners";
 
@@ -9,12 +10,10 @@ export const dynamic = "force-dynamic";
  * Monthly nudge (vercel.json: 0 13 1 * *): when the DM-from-Him opener pool nears
  * a yearly anniversary of going live, fire the shared ops-alert so a human reviews
  * the 130 lines (refresh / retire / expand). Notify only, never auto-regenerates.
- * Authorized by Vercel's cron header or the CRON_SECRET bearer.
+ * Authorized by a CRON_SECRET bearer (auto-sent by Vercel Cron).
  */
 export async function GET(req: Request) {
-  const isVercelCron = req.headers.get("x-vercel-cron") === "1";
-  const secret = process.env.CRON_SECRET;
-  const authed = isVercelCron || (!!secret && req.headers.get("authorization") === `Bearer ${secret}`);
+  const authed = isAuthorizedCron(req);
   if (!authed) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const live = new Date(`${OPENER_POOL_LIVE_DATE}T00:00:00Z`);

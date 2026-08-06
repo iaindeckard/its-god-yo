@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isAuthorizedCron } from "@/lib/cronAuth";
 import type Stripe from "stripe";
 import { getStripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
@@ -36,7 +37,7 @@ export const maxDuration = 300;
  * Every run writes one payment_reconciliation_runs row (including failures) so a
  * broken safety net is itself visible.
  *
- * Auth: Vercel cron header, or CRON_SECRET bearer for manual/test runs.
+ * Auth: a CRON_SECRET bearer (auto-sent by Vercel Cron) for manual/test runs.
  * Query: ?days=N look-back (default 7; monthly deep-reconcile calls ?days=40),
  *        ?dry=1 scans + records the run but inserts no ledger rows / sends no email.
  */
@@ -53,9 +54,7 @@ interface InScope {
 }
 
 export async function GET(req: Request) {
-  const isVercelCron = req.headers.get("x-vercel-cron") === "1";
-  const secret = process.env.CRON_SECRET;
-  const authed = isVercelCron || (!!secret && req.headers.get("authorization") === `Bearer ${secret}`);
+  const authed = isAuthorizedCron(req);
   if (!authed) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const url = new URL(req.url);

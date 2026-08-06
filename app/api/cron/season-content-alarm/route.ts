@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isAuthorizedCron } from "@/lib/cronAuth";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { sendOpsAlert } from "@/lib/opsAlert";
 import { runSeasonReviewAlarm, type SeasonReviewAlert } from "@/lib/seasons/content";
@@ -11,12 +12,10 @@ export const maxDuration = 120;
 /**
  * Daily T-14 season content-review alarm (Phase C). For any season batch not yet
  * approved whose season starts within 14 days, fires the shared ops-alert (Resend)
- * once. Authorized by Vercel's cron header or CRON_SECRET bearer.
+ * once. Authorized by a CRON_SECRET bearer (auto-sent by Vercel Cron).
  */
 export async function GET(req: Request) {
-  const isVercelCron = req.headers.get("x-vercel-cron") === "1";
-  const secret = process.env.CRON_SECRET;
-  const authed = isVercelCron || (!!secret && req.headers.get("authorization") === `Bearer ${secret}`);
+  const authed = isAuthorizedCron(req);
   if (!authed) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   if (!SEASONS_ENABLED) return NextResponse.json({ ok: true, skipped: "SEASONS_ENABLED=false" });
 

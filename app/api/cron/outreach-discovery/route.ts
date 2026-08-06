@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isAuthorizedCron } from "@/lib/cronAuth";
 import { runDiscovery } from "@/lib/outreach/discovery";
 
 export const runtime = "nodejs";
@@ -9,13 +10,11 @@ export const maxDuration = 300;
  * Monthly church-outreach discovery (Vercel Cron, see vercel.json). Runs the
  * guardrailed Claude web-search pass and upserts new leads into
  * igy_outreach_leads (never resurrecting a suppressed org). Read/discovery only
- * — this NEVER sends email. Auth: Vercel's cron header, or a CRON_SECRET bearer
+ * — this NEVER sends email. Auth: a CRON_SECRET bearer (auto-sent by Vercel Cron)
  * for manual/test runs.
  */
 export async function GET(req: Request) {
-  const isVercelCron = req.headers.get("x-vercel-cron") === "1";
-  const secret = process.env.CRON_SECRET;
-  const authed = isVercelCron || (!!secret && req.headers.get("authorization") === `Bearer ${secret}`);
+  const authed = isAuthorizedCron(req);
   if (!authed) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   try {

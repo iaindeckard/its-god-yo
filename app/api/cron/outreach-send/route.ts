@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isAuthorizedCron } from "@/lib/cronAuth";
 import { runSend } from "@/lib/outreach/run";
 
 export const runtime = "nodejs";
@@ -15,12 +16,10 @@ export const maxDuration = 300;
  * when the gate is open (for a safe manual preview). There is no way to force a
  * LIVE send from the request — only the server-side env flags do that.
  *
- * Auth: Vercel's cron header, or a CRON_SECRET bearer for manual/test runs.
+ * Auth: a CRON_SECRET bearer (auto-sent by Vercel Cron) for manual/test runs.
  */
 export async function GET(req: Request) {
-  const isVercelCron = req.headers.get("x-vercel-cron") === "1";
-  const secret = process.env.CRON_SECRET;
-  const authed = isVercelCron || (!!secret && req.headers.get("authorization") === `Bearer ${secret}`);
+  const authed = isAuthorizedCron(req);
   if (!authed) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const forceDry = new URL(req.url).searchParams.get("dry") === "1";

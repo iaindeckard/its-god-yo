@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isAuthorizedCron } from "@/lib/cronAuth";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { getConfig, logAudit } from "@/lib/cornerstone";
 import { sendCornerstoneEmail, enrollmentDeadlineEmail } from "@/lib/cornerstoneEmails";
@@ -17,15 +18,13 @@ export const maxDuration = 120;
  * applied themselves. Idempotent — an 'enrollment_reminder_sent' audit row per
  * application prevents a second send, so re-runs within the window are safe.
  *
- * Auth: Vercel cron header, or CRON_SECRET bearer for manual/test runs.
+ * Auth: a CRON_SECRET bearer (auto-sent by Vercel Cron) for manual/test runs.
  * Query: ?days=N reminder window (default 7); ?dry=1 counts targets, sends nothing.
  */
 const OPEN_STATUSES = ["submitted", "under_review", "awaiting_payment"];
 
 export async function GET(req: Request) {
-  const isVercelCron = req.headers.get("x-vercel-cron") === "1";
-  const secret = process.env.CRON_SECRET;
-  const authed = isVercelCron || (!!secret && req.headers.get("authorization") === `Bearer ${secret}`);
+  const authed = isAuthorizedCron(req);
   if (!authed) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const url = new URL(req.url);

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isAuthorizedCron } from "@/lib/cronAuth";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { makePoolVerseSelector, runSeasonGeneration } from "@/lib/seasons/content";
 import { SEASONS_ENABLED } from "@/lib/flags";
@@ -11,12 +12,10 @@ export const maxDuration = 300;
  * Daily T-30 season-content generation trigger (Phase C). For any season whose
  * review window has opened (≤30 days to start) and has no batch yet, generates the
  * batch (in_review) using the real get_theme_track_pool selector. Idempotent.
- * Authorized by Vercel's cron header or CRON_SECRET bearer.
+ * Authorized by a CRON_SECRET bearer (auto-sent by Vercel Cron).
  */
 export async function GET(req: Request) {
-  const isVercelCron = req.headers.get("x-vercel-cron") === "1";
-  const secret = process.env.CRON_SECRET;
-  const authed = isVercelCron || (!!secret && req.headers.get("authorization") === `Bearer ${secret}`);
+  const authed = isAuthorizedCron(req);
   if (!authed) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   if (!SEASONS_ENABLED) return NextResponse.json({ ok: true, skipped: "SEASONS_ENABLED=false" });
 
