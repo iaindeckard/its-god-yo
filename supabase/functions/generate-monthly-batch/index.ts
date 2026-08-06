@@ -62,6 +62,24 @@ function smsSegments(s: string): number {
   if (g !== null) return g <= 160 ? 1 : Math.ceil(g / 153);
   return s.length <= 70 ? 1 : Math.ceil(s.length / 67);
 }
+// Emoji-priority policy (LOCKED 2026-08-06): emoji are PERMITTED but are the FIRST
+// element cut when a candidate is over the segment budget (graceful degradation,
+// NOT a flag). Only when a candidate is over budget AND has emoji do we strip them
+// and re-measure (mechanical, no meaning judgment); still-over falls through to the
+// normal needs_review path; a candidate that already fits keeps its emoji. Emoji-
+// specific so accented Spanish and other legit non-GSM-7 chars survive. KEEP IN
+// SYNC with generate-daily-verse.
+const EMOJI_RE = /\p{Extended_Pictographic}(?:\u200D\p{Extended_Pictographic}|[\u{1F3FB}-\u{1F3FF}\uFE0F\u20E3])*|\p{Regional_Indicator}+/gu;
+function hasEmoji(s: string): boolean { return /\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(s); }
+function stripEmoji(s: string): string {
+  return s
+    .replace(EMOJI_RE, "")
+    .replace(/[\uFE0F\u200D\u20E3]/gu, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/ ([.,!?;:])/g, "$1")
+    .replace(/ +\n/g, "\n")
+    .trim();
+}
 // Verse citation (LOCKED 2026-08-06): every send carries a parenthetical citation
 // appended to the verse paragraph, so it MUST be counted in the segment budget.
 // citationFromRef replicates lib/dmAddon.formatCitation (Psalms -> Psalm display
@@ -135,18 +153,29 @@ Respond with ONLY compact JSON, no prose, no code fences:
   } catch (_e) { return { faithful: false, added_claims: ["judge_error"], omitted_core: [], drift: false, divine_lc_pronouns: [] }; }
 }
 
-function evalFlags(label: "A" | "B", text: string, judge: Judgement, citation: string): string[] {
-  const sentences = countSentences(text);
-  const segments = smsSegments(dmWrapForBudget(text, citation));
+interface OutputEval { text: string; emojiStripped: boolean; flags: string[]; }
+function evalOne(label: "A" | "B", text: string, judge: Judgement, citation: string): OutputEval {
+  // Emoji-priority pre-processing (before any flagging): over budget + has emoji ->
+  // strip emoji and use the stripped text going forward (mechanical, no meaning
+  // judgment). Still-over falls through to exceeds_sms_budget below; fits-with-emoji
+  // is left untouched.
+  let effective = text;
+  let emojiStripped = false;
+  if (smsSegments(dmWrapForBudget(text, citation)) > SEGMENT_MAX && hasEmoji(text)) {
+    effective = stripEmoji(text);
+    emojiStripped = true;
+  }
+  const sentences = countSentences(effective);
+  const segments = smsSegments(dmWrapForBudget(effective, citation));
   const flags: string[] = [];
   if (sentences < SENTENCE_MIN) flags.push(`${label}:too_short`);
   if (sentences > SENTENCE_MAX) flags.push(`${label}:too_long`);
   if (segments > SEGMENT_MAX) flags.push(`${label}:exceeds_sms_budget(${segments}seg)`);
-  if (AI_TELLS.test(text)) flags.push(`${label}:ai_tells`);
+  if (AI_TELLS.test(effective)) flags.push(`${label}:ai_tells`);
   // Divine-reference capitalization (house style, locked 2026-08-06). Regex catches
   // lowercase proper nouns; the fidelity judge catches lowercase pronouns referring
   // to God. Either -> flag for human review under 'divine_capitalization', never auto-fix.
-  const divineNoun = text.match(DIVINE_NOUN_LOWERCASE);
+  const divineNoun = effective.match(DIVINE_NOUN_LOWERCASE);
   if (divineNoun) flags.push(`${label}:divine_capitalization(noun:${divineNoun[0]})`);
   if (judge.divine_lc_pronouns.length > 0) flags.push(`${label}:divine_capitalization(pronoun:${judge.divine_lc_pronouns.join(",")})`);
   const bad = !judge.faithful || judge.added_claims.length > 0 || judge.omitted_core.length > 0 || judge.drift;
@@ -154,20 +183,21 @@ function evalFlags(label: "A" | "B", text: string, judge: Judgement, citation: s
     const detail = [...judge.added_claims.map((c) => `added:${c}`), ...judge.omitted_core.map((c) => `omitted:${c}`), judge.drift ? "drift" : ""].filter(Boolean).join("; ");
     flags.push(`${label}:fidelity_risk(${detail || "unfaithful"})`);
   }
-  return flags;
+  return { text: effective, emojiStripped, flags };
 }
 
 async function evaluate(anthropicKey: string, source: string, outA: string, outB: string, citation: string) {
   const [jA, jB] = await Promise.all([judgeFidelity(anthropicKey, source, outA), judgeFidelity(anthropicKey, source, outB)]);
-  const flagsA = evalFlags("A", outA, jA, citation);
-  const flagsB = evalFlags("B", outB, jB, citation);
+  const a = evalOne("A", outA, jA, citation);
+  const b = evalOne("B", outB, jB, citation);
   const sim = similarity(outA, outB);
   // #1 auto-agree if >=1 output passes every gate (prefer A); #2 ai_disagreement informational.
-  let status: "agreed" | "needs_review", finalTranslation: string | null = null, chosen: "A" | "B" | null = null, reasons: string[] = [];
-  if (flagsA.length === 0) { status = "agreed"; finalTranslation = outA; chosen = "A"; }
-  else if (flagsB.length === 0) { status = "agreed"; finalTranslation = outB; chosen = "B"; }
-  else { status = "needs_review"; reasons = [...flagsA, ...flagsB]; }
-  return { status, finalTranslation, chosen, reasons, sim };
+  // Store the EFFECTIVE (possibly emoji-stripped) text as final_translation.
+  let status: "agreed" | "needs_review", finalTranslation: string | null = null, chosen: "A" | "B" | null = null, reasons: string[] = [], emojiStripped = false;
+  if (a.flags.length === 0) { status = "agreed"; finalTranslation = a.text; chosen = "A"; emojiStripped = a.emojiStripped; }
+  else if (b.flags.length === 0) { status = "agreed"; finalTranslation = b.text; chosen = "B"; emojiStripped = b.emojiStripped; }
+  else { status = "needs_review"; reasons = [...a.flags, ...b.flags]; }
+  return { status, finalTranslation, chosen, reasons, sim, emojiStripped };
 }
 
 function daysInMonth(targetMonth: string): string[] {
@@ -246,7 +276,7 @@ Deno.serve(async (req: Request) => {
         needs_review_reasons: ev.reasons, generated_for_batch_month: `${targetMonth}-01`, updated_at: new Date().toISOString(),
       }, { onConflict: "scheduled_date,theme_track" }).select().single();
       if (slotErr) results.push({ date: targetDate, verse_ref: verseRef, error: slotErr.message });
-      else results.push({ date: targetDate, verse_ref: verseRef, slot_status: ev.status, chosen_output: ev.chosen, needs_review_reasons: ev.reasons, daily_slot_id: slot.id });
+      else results.push({ date: targetDate, verse_ref: verseRef, slot_status: ev.status, chosen_output: ev.chosen, emoji_stripped: ev.emojiStripped, needs_review_reasons: ev.reasons, daily_slot_id: slot.id });
     } catch (e) { results.push({ date: targetDate, verse_ref: verseRef, error: String((e as Error)?.message ?? e) }); }
   }
 

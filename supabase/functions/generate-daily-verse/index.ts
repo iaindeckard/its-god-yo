@@ -77,6 +77,31 @@ function smsSegments(s: string): number {
   const units = s.length;
   return units <= 70 ? 1 : Math.ceil(units / 67);
 }
+
+// Emoji-priority policy (LOCKED 2026-08-06): emoji are PERMITTED (no ban) but are
+// the LAST optional element and the FIRST cut when a candidate must shrink for the
+// segment budget. This is graceful degradation, NOT a detect-and-flag gate: only
+// when a candidate is over budget AND contains emoji do we strip them and
+// re-measure (a mechanical fix, no meaning judgment). If that brings it under
+// budget we keep the stripped text; if it's still over, it falls through to the
+// normal needs_review path unchanged. A candidate that already fits WITH emoji is
+// left completely untouched. Emoji-specific (Extended_Pictographic + ZWJ sequences,
+// skin-tone/variation/keycap modifiers, regional-indicator flags) so accented
+// Spanish letters and other legitimate non-GSM-7 characters are never removed.
+// KEEP IN SYNC with generate-monthly-batch.
+const EMOJI_RE = /\p{Extended_Pictographic}(?:\u200D\p{Extended_Pictographic}|[\u{1F3FB}-\u{1F3FF}\uFE0F\u20E3])*|\p{Regional_Indicator}+/gu;
+function hasEmoji(s: string): boolean {
+  return /\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(s);
+}
+function stripEmoji(s: string): string {
+  return s
+    .replace(EMOJI_RE, "")
+    .replace(/[\uFE0F\u200D\u20E3]/gu, "") // sweep any orphaned variation-selector/ZWJ/keycap
+    .replace(/[ \t]{2,}/g, " ")            // collapse a doubled space the removal left behind
+    .replace(/ ([.,!?;:])/g, "$1")         // drop a space now sitting before punctuation
+    .replace(/ +\n/g, "\n")                // trailing space before a newline
+    .trim();
+}
 // Verse citation (LOCKED 2026-08-06): every send carries a parenthetical citation
 // appended to the verse paragraph, so it MUST be counted in the segment budget.
 // citationFromRef replicates lib/dmAddon.formatCitation (Psalms -> Psalm display
@@ -188,19 +213,31 @@ Respond with ONLY compact JSON, no prose, no code fences:
   }
 }
 
-interface OutputEval { label: "A" | "B"; text: string; sentences: number; segments: number; judge: Judgement; flags: string[]; }
+interface OutputEval { label: "A" | "B"; text: string; emojiStripped: boolean; sentences: number; segments: number; judge: Judgement; flags: string[]; }
 function evalOne(label: "A" | "B", text: string, lang: "en" | "es", judge: Judgement, citation: string): OutputEval {
-  const sentences = countSentences(text);
-  const segments = smsSegments(dmWrapForBudget(text, lang, citation));
+  // Emoji-priority pre-processing (before any flagging): if this candidate is over
+  // the segment budget AND carries emoji, strip the emoji and use the stripped text
+  // going forward. This is the ONLY mitigation attempted here and it never touches
+  // wording/meaning -- if it's still over budget afterwards, the normal
+  // exceeds_sms_budget flag below routes it to needs_review just like today. A
+  // candidate that already fits keeps its emoji (no strip).
+  let effective = text;
+  let emojiStripped = false;
+  if (smsSegments(dmWrapForBudget(text, lang, citation)) > SEGMENT_MAX && hasEmoji(text)) {
+    effective = stripEmoji(text);
+    emojiStripped = true;
+  }
+  const sentences = countSentences(effective);
+  const segments = smsSegments(dmWrapForBudget(effective, lang, citation));
   const flags: string[] = [];
   if (sentences < SENTENCE_MIN) flags.push(`${label}:too_short`);
   if (sentences > SENTENCE_MAX) flags.push(`${label}:too_long`);
   if (segments > SEGMENT_MAX) flags.push(`${label}:exceeds_sms_budget(${segments}seg)`);
-  if (AI_TELLS.test(text)) flags.push(`${label}:ai_tells`);
+  if (AI_TELLS.test(effective)) flags.push(`${label}:ai_tells`);
   // Divine-reference capitalization (house style, locked 2026-08-06). Regex catches
   // lowercase proper nouns; the fidelity judge catches lowercase pronouns referring
   // to God. Either -> flag for human review under 'divine_capitalization', never auto-fix.
-  const divineNoun = text.match(DIVINE_NOUN_LOWERCASE);
+  const divineNoun = effective.match(DIVINE_NOUN_LOWERCASE);
   if (divineNoun) flags.push(`${label}:divine_capitalization(noun:${divineNoun[0]})`);
   if (judge.divine_lc_pronouns.length > 0) flags.push(`${label}:divine_capitalization(pronoun:${judge.divine_lc_pronouns.join(",")})`);
   const fidelityBad = !judge.faithful || judge.added_claims.length > 0 || judge.omitted_core.length > 0 || judge.drift;
@@ -208,7 +245,7 @@ function evalOne(label: "A" | "B", text: string, lang: "en" | "es", judge: Judge
     const detail = [...judge.added_claims.map((c) => `added:${c}`), ...judge.omitted_core.map((c) => `omitted:${c}`), judge.drift ? "drift" : ""].filter(Boolean).join("; ");
     flags.push(`${label}:fidelity_risk(${detail || "unfaithful"})`);
   }
-  return { label, text, sentences, segments, judge, flags };
+  return { label, text: effective, emojiStripped, sentences, segments, judge, flags };
 }
 
 interface Evaluation { status: "agreed" | "needs_review"; finalTranslation: string | null; chosen: "A" | "B" | null; reasons: string[]; sim: number; evalA: OutputEval; evalB: OutputEval; }
@@ -220,8 +257,10 @@ async function evaluate(anthropicKey: string, source: string, outA: string, outB
   // #1: auto-agree if at least one output passes every gate; prefer A. The chosen
   // output is stored as final_translation so it can be auto-approved directly.
   let status: "agreed" | "needs_review", finalTranslation: string | null = null, chosen: "A" | "B" | null = null, reasons: string[] = [];
-  if (evalA.flags.length === 0) { status = "agreed"; finalTranslation = outA; chosen = "A"; }
-  else if (evalB.flags.length === 0) { status = "agreed"; finalTranslation = outB; chosen = "B"; }
+  // Use the EFFECTIVE (possibly emoji-stripped) text as the stored translation, so
+  // a candidate that only passed because its emoji were cut is stored without them.
+  if (evalA.flags.length === 0) { status = "agreed"; finalTranslation = evalA.text; chosen = "A"; }
+  else if (evalB.flags.length === 0) { status = "agreed"; finalTranslation = evalB.text; chosen = "B"; }
   else { status = "needs_review"; reasons = [...evalA.flags, ...evalB.flags]; }
   // #2: ai_disagreement is informational only (recorded via agreement_status), not a blocker.
   return { status, finalTranslation, chosen, reasons, sim, evalA, evalB };
@@ -287,7 +326,7 @@ Deno.serve(async (req: Request) => {
     return json(200, {
       status: "generated", language: "es", theme_track: themeTrack, verse_ref: verseRef, source_text_es: esVerse.text,
       slot_status_es: ev.status, chosen_output: ev.chosen, needs_review_reasons_es: ev.reasons,
-      checks: { a: { sentences: ev.evalA.sentences, segments: ev.evalA.segments, judge: ev.evalA.judge }, b: { sentences: ev.evalB.sentences, segments: ev.evalB.segments, judge: ev.evalB.judge } },
+      checks: { a: { sentences: ev.evalA.sentences, segments: ev.evalA.segments, emoji_stripped: ev.evalA.emojiStripped, judge: ev.evalA.judge }, b: { sentences: ev.evalB.sentences, segments: ev.evalB.segments, emoji_stripped: ev.evalB.emojiStripped, judge: ev.evalB.judge } },
       daily_slot_id: updated.id,
     });
   }
@@ -328,7 +367,7 @@ Deno.serve(async (req: Request) => {
   return json(200, {
     status: "generated", language: "en", theme_track: themeTrack, verse_ref: verseRef,
     slot_status: ev.status, chosen_output: ev.chosen, needs_review_reasons: ev.reasons,
-    checks: { a: { sentences: ev.evalA.sentences, segments: ev.evalA.segments, judge: ev.evalA.judge }, b: { sentences: ev.evalB.sentences, segments: ev.evalB.segments, judge: ev.evalB.judge } },
+    checks: { a: { sentences: ev.evalA.sentences, segments: ev.evalA.segments, emoji_stripped: ev.evalA.emojiStripped, judge: ev.evalA.judge }, b: { sentences: ev.evalB.sentences, segments: ev.evalB.segments, emoji_stripped: ev.evalB.emojiStripped, judge: ev.evalB.judge } },
     daily_slot_id: slot.id,
   });
 });
