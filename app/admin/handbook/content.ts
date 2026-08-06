@@ -221,7 +221,7 @@ export const PARTS: Part[] = [
         id: "deploy-discipline",
         title: "Deploy discipline",
         blocks: [
-          { type: "callout", kind: "danger", title: "A git push does NOT ship IGY", text: "IGY does NOT auto-deploy on git push. A push only records the commit; someone has to run `vercel --prod --yes` to actually ship it. If you skip this, you'll think something shipped when it didn't." },
+          { type: "callout", kind: "danger", title: "A push to main ships IGY live", text: "IGY auto-deploys from git: a commit pushed to main goes to production on its own, usually within about a minute. A push to main IS a live release, so don't push to main unless you mean to ship. Running `vercel --prod --yes` still works as a manual deploy; if you use it, confirm afterward which deployment holds the itsgodyo.com production alias." },
         ],
       },
       {
