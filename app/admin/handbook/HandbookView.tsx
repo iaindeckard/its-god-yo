@@ -4,12 +4,12 @@ import React, { useMemo, useState, useEffect, useRef } from "react";
 import type { Block, CalloutKind, Entry, Part } from "./content";
 
 // IGY brand accents. Blue is primary; gold is the reserved accent (kept to a few
-// parts so it stays special, same restraint USN uses with its gold).
+// parts so it stays special).
 const BLUE = "#378ADD"; // vivid brand blue — decorative accent BARS/fills only (>=4.8:1 as a graphic on the navy)
 const GOLD = "#FFDC52";
 // Brand blue is only ~4.8:1 on the navy: acceptable for bars, but not comfortable
 // for small TEXT. Text accents use the site's on-dark blue (~7:1), matching the
-// public dark pages (legal / iotnbo / sponsors). All pairs WCAG AA audited.
+// public dark pages (legal / iotnbo / cornerstone-partners). All pairs WCAG AA audited.
 const BLUE_TEXT = "#7ea8e0";
 type Accent = "blue" | "gold";
 const PART_ACCENT: Record<string, Accent> = {
@@ -144,7 +144,7 @@ export default function HandbookView({ parts, hiddenCount, updated, jobRole }: {
         <p style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.28em", color: BLUE_TEXT, margin: "0 0 6px" }}>IGY Employee Manual</p>
         <h1 style={{ margin: 0 }}>How IGY Actually Works</h1>
         <p className="muted" style={{ maxWidth: 640, marginTop: 8, lineHeight: 1.6 }}>
-          Every plan, program, flag, and admin screen — written so a brand-new teammate can help a real customer and know exactly what to do. You&rsquo;re viewing as <strong style={{ color: "var(--igy-admin-text, #e7edf6)" }}>{jobRole || "staff"}</strong>.
+          Every plan, program, flag, and admin screen, written so a brand-new teammate can help a real customer and know exactly what to do. You&rsquo;re viewing as <strong style={{ color: "var(--igy-admin-text, #e7edf6)" }}>{jobRole || "staff"}</strong>.
         </p>
         <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginTop: 10 }}>
           <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.12em", color: "var(--igy-on-dark-meta, #9fb0c9)" }}>Last updated {updated}</span>
@@ -163,7 +163,7 @@ export default function HandbookView({ parts, hiddenCount, updated, jobRole }: {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search the manual — a plan, a screen, a policy…"
+          placeholder="Search the manual: a plan, a screen, a policy…"
           aria-label="Search the employee manual"
           style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: `1px solid ${query ? BLUE : "rgba(255,255,255,0.14)"}`, borderRadius: 12, padding: "11px 14px", fontSize: 14, color: "var(--igy-admin-text, #e7edf6)", outline: "none" }}
         />

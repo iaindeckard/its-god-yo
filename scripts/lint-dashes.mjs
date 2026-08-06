@@ -57,7 +57,16 @@ const INTERNAL_ONLY = new Set([
   "app/api/cron/season-content-alarm/route.ts",
   "app/api/stripe/webhook/route.ts",
 ]);
+// Admin is internal and exempt by default, EXCEPT these files. The employee
+// handbook is staff-facing rendered copy that Iain brought into the dash policy
+// 2026-08-06 — it must hold to the same "no em/en-dash connector" standard as
+// customer copy. Add other admin files here as they're cleaned + enforced.
+const ENFORCED_ADMIN_FILES = new Set([
+  "app/admin/handbook/content.ts",
+  "app/admin/handbook/HandbookView.tsx",
+]);
 function customerFacing(rel) {
+  if (ENFORCED_ADMIN_FILES.has(rel)) return true; // handbook: enforced despite app/admin/
   if (rel.startsWith("app/admin/")) return false;
   if (INTERNAL_ONLY.has(rel)) return false;
   if (rel.startsWith("app/") || rel.startsWith("components/")) return true;

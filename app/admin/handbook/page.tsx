@@ -7,8 +7,8 @@ export const dynamic = "force-dynamic"; // identity/permissions resolve per-requ
 
 // Each admin-screen entry inherits the permission that gates the real screen it
 // documents (via relatedRoute). Everything else — the whole rest of the manual —
-// is open to every staff member. Mirrors USN's /admin/handbook role-gating, but
-// resolved ONCE here on the server (getEffectivePermissions) rather than per-RPC
+// is open to every staff member. Role-gating is resolved ONCE here on the server
+// (getEffectivePermissions) rather than per-RPC
 // on the client: the client view only ever receives the entries this viewer may
 // see, so search / TOC / quick-jump all inherently respect the gating.
 const ROUTE_PERMISSION: Record<string, string> = {
@@ -20,7 +20,6 @@ const ROUTE_PERMISSION: Record<string, string> = {
   "/admin/referrals": "billing.promo_codes.view",
   "/admin/dashboard": "analytics.dashboard.view",
   "/admin/donation-fund": "finance.donation_fund.view",
-  "/admin/sponsors": "marketing.sponsors.view",
   "/admin/consent-thresholds": "admin.consent_thresholds.manage",
 };
 

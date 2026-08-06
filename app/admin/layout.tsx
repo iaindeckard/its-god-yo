@@ -1,5 +1,4 @@
 import Link from "next/link";
-import BubbleMark from "@/components/BubbleMark";
 import Wordmark from "@/components/Wordmark";
 import { getCurrentStaff, getEffectivePermissions } from "@/lib/rbac";
 
@@ -29,8 +28,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <div className="admin-shell">
       <aside className="admin-side">
+        {/* Locked-spec wordmark: "It's God, Yo" + the bubble-and-bang mark AS the
+            "!" (Wordmark renders the BubbleMark for us). No separate leading
+            BubbleMark — that produced a redundant second bubble that made the
+            wordmark's own "!" read as a repeat rather than the terminal mark. */}
         <Link href="/admin" className="brand" style={{ textDecoration: "none" }}>
-          <BubbleMark variant="light" size={30} />
           <Wordmark tone="brass" />
         </Link>
         <div style={{ fontSize: 12, color: "var(--igy-on-dark-meta)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Admin</div>
