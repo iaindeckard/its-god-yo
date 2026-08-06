@@ -12,6 +12,7 @@ const NAV = [
   { href: "/admin/review", label: "Review queue", need: "content.queue.view" },
   { href: "/admin/season-review", label: "Season Review", need: "content.queue.view" },
   { href: "/admin/theme-tags", label: "Theme tags", need: "content.theme_tags.view" },
+  { href: "/admin/pronoun-review", label: "Pronoun corrections", need: "content.queue.view" },
   { href: "/admin/dashboard", label: "KPI dashboard", need: "analytics.dashboard.view" },
   { href: "/admin/donation-fund", label: "Donation Fund", need: "finance.donation_fund.view" },
   { href: "/admin/bounty", label: "Error bounty", need: "finance.bounty.view" },
