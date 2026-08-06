@@ -69,6 +69,23 @@ export async function cancelSubscriptionForSignup(
 }
 
 /**
+ * Cancel a Stripe subscription by id directly, with no pending_signups row to
+ * update (e.g. a chargeback on a subscription we can't tie back to a local
+ * signup). Idempotent: an already-canceled/nonexistent sub is treated as success.
+ * The reason is logged for the audit trail (there is no canceled_reason column).
+ */
+export async function cancelStripeSubscriptionById(subId: string, reason: string): Promise<{ canceled: boolean }> {
+  const stripe = getStripe();
+  try {
+    await stripe.subscriptions.cancel(subId);
+  } catch (e) {
+    if (!isAlreadyGone(e)) throw e;
+  }
+  console.log(`[cancelSubscription] direct sub=${subId} reason=${reason}`);
+  return { canceled: true };
+}
+
+/**
  * Family teardown: cancel the whole base subscription ONLY when no teen can still
  * be (or become) an active recipient. Counts family_teen consent rows that are
  * either 'confirmed' (active) OR 'pending_confirmation' (invited, hasn't texted

@@ -5,6 +5,8 @@ import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { onRefereePaidConversion, onRefereePaymentReversed, type OwnerKind } from "@/lib/referral";
 import { markConvertedByPromotionCodeId } from "@/lib/outreach/leads";
 import { upsertSubscriptionPayment, tsIso, type PaymentCapture } from "@/lib/subscriptionPayments";
+import { cancelSubscriptionForSignup, cancelStripeSubscriptionById } from "@/lib/cancelSubscription";
+import { sendOpsAlert } from "@/lib/opsAlert";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +19,8 @@ export const dynamic = "force-dynamic";
  *
  * Handled: trial_will_end (reminder window), invoice.paid (first real charge /
  * renewal), invoice.payment_failed (dunning), invoice.payment_action_required
- * (off-session SCA at trial end), subscription updated/deleted.
+ * (off-session SCA at trial end), subscription updated/deleted, charge.refunded,
+ * charge.dispute.created, charge.dispute.closed.
  *
  * Referral hooks: on the referee's FIRST real charge (invoice.paid with
  * amount_paid > 0 AND billing_reason 'subscription_cycle' — NOT the $0
@@ -25,6 +28,15 @@ export const dynamic = "force-dynamic";
  * onRefereePaidConversion (give/get a month + propagation); on charge.refunded /
  * charge.dispute.created we fire onRefereePaymentReversed (clawback). Both no-op
  * when the payment isn't tied to a referral, and are idempotent under retries.
+ *
+ * Disputes vs refunds: a chargeback is NOT a voluntary refund. charge.dispute.created
+ * CANCELS the subscription (the customer repudiated the charge) to the same
+ * 'canceled' end-state a refund reaches, but tags it as a chargeback (distinct
+ * cancel reason + a kind='dispute' ledger row, never aliased into a refund) and
+ * emails ops. charge.dispute.closed with a WON outcome does NOT auto-reinstate the
+ * subscription (reinstatement has real re-billing implications) — it flags a human
+ * for review instead. The won-back settlement lands on the ledger via the reconcile
+ * cron, not here.
  */
 export async function POST(req: Request) {
   const stripe = getStripe();
@@ -143,6 +155,57 @@ export async function POST(req: Request) {
     } catch (e) {
       console.error(`[stripe-webhook] subscription_payments capture failed (${label}) — swallowed to protect handler:`, e);
     }
+  };
+
+  // Ops-alert wrapper: high-signal notifications (a chargeback opened / won) must
+  // never break the handler if Resend is down, so failures are logged, not thrown.
+  const safeAlert = async (label: string, args: { subject: string; text: string }) => {
+    try {
+      await sendOpsAlert(args);
+    } catch (e) {
+      console.error(`[stripe-webhook] ops alert failed (${label}):`, e);
+    }
+  };
+
+  // A dispute carries a charge, not a subscription. Resolve the subscription the
+  // disputed charge belongs to via its invoice (charge -> invoice -> subscription).
+  // Returns null if it can't be tied to a subscription (e.g. a one-off charge).
+  const resolveSubIdForDispute = async (dispute: Stripe.Dispute): Promise<string | null> => {
+    const chargeId = idOf((dispute as unknown as { charge?: unknown }).charge);
+    if (!chargeId) return null;
+    try {
+      const ch = await stripe.charges.retrieve(chargeId, { expand: ["invoice"] });
+      const inv = (ch as unknown as { invoice?: Stripe.Invoice | string | null }).invoice;
+      if (!inv) return null;
+      const full = typeof inv === "string" ? await stripe.invoices.retrieve(inv) : inv;
+      return invSubId(full);
+    } catch (e) {
+      console.error(`[stripe-webhook] could not resolve subscription for dispute=${dispute.id}:`, e);
+      return null;
+    }
+  };
+
+  // Cancel the subscription a disputed charge belongs to, to the same 'canceled'
+  // end-state a refund reaches — but tagged as a CHARGEBACK, never aliased into a
+  // refund. Uses the local signup's cancel path when we have one (cancels Stripe +
+  // flips pending_signups.status), else cancels the Stripe sub directly so billing
+  // still stops. Main-path (not swallowed): a failure -> 500 -> Stripe retries;
+  // every step is idempotent. Returns the resolved subscription id for logging.
+  const cancelSubscriptionForChargeback = async (dispute: Stripe.Dispute): Promise<string | null> => {
+    const subId = await resolveSubIdForDispute(dispute);
+    const reason = `chargeback:dispute:${dispute.id}`;
+    if (!subId) {
+      console.warn(`[stripe-webhook][ALERT] chargeback dispute=${dispute.id} — could not resolve a subscription to cancel; MANUAL REVIEW.`);
+      return null;
+    }
+    const { data: ps } = await admin.from("pending_signups").select("id").eq("stripe_subscription_id", subId).maybeSingle();
+    if (ps?.id) {
+      await cancelSubscriptionForSignup(ps.id, reason);
+    } else {
+      await cancelStripeSubscriptionById(subId, reason);
+      console.warn(`[stripe-webhook][ALERT] chargeback canceled sub=${subId} with no pending_signups row (dispute=${dispute.id}).`);
+    }
+    return subId;
   };
 
   // invoice.paid → the realized recurring charge. Expand its charge to the
@@ -283,12 +346,59 @@ export async function POST(req: Request) {
       }
       case "charge.dispute.created": {
         const dispute = event.data.object as Stripe.Dispute;
+        // Referral clawback (same action as a refund — a rewarded conversion was
+        // reversed, whichever way the money went back).
         await onRefereePaymentReversed({
           chargeId: idOf((dispute as unknown as { charge?: unknown }).charge) ?? undefined,
           paymentIntentId: idOf((dispute as unknown as { payment_intent?: unknown }).payment_intent) ?? undefined,
         });
-        // Ledger: record the dispute's own (negative) balance transaction(s).
+        // A chargeback means the customer repudiated the charge: CANCEL the sub to
+        // the same end-state a refund reaches, tagged as a chargeback (distinct
+        // reason). Main path — a failure returns 500 and Stripe retries.
+        const disputedSubId = await cancelSubscriptionForChargeback(dispute);
+        // Ledger: record the dispute's own (negative) balance transaction(s) as a
+        // kind='dispute' row — NEVER a kind='refund' row. Best-effort/decoupled.
         await safeCapture("charge.dispute.created", () => captureDispute(dispute));
+        // Notify: a chargeback is a fraud/dispute signal AND an auto-cancellation.
+        await safeAlert("chargeback-created", {
+          subject: "Chargeback received — subscription auto-canceled",
+          text:
+            `A chargeback (dispute) was opened, so the subscription was automatically canceled ` +
+            `(same end-state as a refund) and tagged as a chargeback in the ledger.\n\n` +
+            `Dispute: ${dispute.id}\n` +
+            `Charge: ${idOf((dispute as unknown as { charge?: unknown }).charge) ?? "unknown"}\n` +
+            `Amount: ${(dispute.amount ?? 0) / 100} ${String(dispute.currency ?? "").toUpperCase()}\n` +
+            `Reason: ${dispute.reason ?? "unknown"}\n` +
+            `Subscription: ${disputedSubId ?? "could not resolve — manual review"}\n\n` +
+            `If this dispute later closes in our favor you will get a separate manual-review alert. ` +
+            `Reinstatement is NOT automatic.`,
+        });
+        break;
+      }
+      case "charge.dispute.closed": {
+        const dispute = event.data.object as Stripe.Dispute;
+        const outcome = (dispute as unknown as { status?: string }).status ?? "unknown";
+        const subId = await resolveSubIdForDispute(dispute);
+        if (outcome === "won") {
+          // We won the dispute. Do NOT auto-reinstate: reinstating a canceled sub
+          // has real billing implications (re-bill? from when?). Flag a human.
+          console.warn(`[stripe-webhook][ALERT] dispute WON dispute=${dispute.id} sub=${subId ?? "?"} — subscription stays CANCELED; manual review for any reinstatement.`);
+          await safeAlert("dispute-won-review", {
+            subject: "Dispute WON — manual review (do NOT auto-reinstate)",
+            text:
+              `We won a dispute. The subscription was canceled when the dispute opened and was NOT ` +
+              `automatically reinstated (reinstating has re-billing implications).\n\n` +
+              `Dispute: ${dispute.id}\n` +
+              `Charge: ${idOf((dispute as unknown as { charge?: unknown }).charge) ?? "unknown"}\n` +
+              `Amount: ${(dispute.amount ?? 0) / 100} ${String(dispute.currency ?? "").toUpperCase()}\n` +
+              `Subscription: ${subId ?? "could not resolve"}\n\n` +
+              `Decide manually whether to re-subscribe this customer and from what date. ` +
+              `The won-back funds settle back onto the ledger via the reconcile cron.`,
+          });
+        } else {
+          // lost / warning_closed / other: the chargeback stands; sub already canceled.
+          console.log(`[stripe-webhook] dispute closed status=${outcome} dispute=${dispute.id} sub=${subId ?? "?"} — no reinstatement (sub already canceled).`);
+        }
         break;
       }
       default:
