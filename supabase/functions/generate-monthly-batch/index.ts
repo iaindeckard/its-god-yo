@@ -62,7 +62,12 @@ function smsSegments(s: string): number {
   if (g !== null) return g <= 160 ? 1 : Math.ceil(g / 153);
   return s.length <= 70 ? 1 : Math.ceil(s.length / 67);
 }
-function dmWrapForBudget(v: string): string { return `${NAME_ALLOWANCE}, a little note from Me today.\n\n${v}\n\nI've got you.`; }
+// Verse citation (LOCKED 2026-08-06): every send carries a parenthetical citation
+// appended to the verse paragraph, so it MUST be counted in the segment budget.
+// citationFromRef replicates lib/dmAddon.formatCitation (Psalms -> Psalm display
+// normalization only). Keep in sync with lib + generate-daily-verse.
+function citationFromRef(verseRef: string): string { return `(${verseRef.replace(/^Psalms /, "Psalm ")})`; }
+function dmWrapForBudget(v: string, citation: string): string { return `${NAME_ALLOWANCE}, a little note from Me today.\n\n${v} ${citation}\n\nI've got you.`; }
 function countSentences(s: string): number { return s.trim().split(/[.!?]+(?:\s|$)/).map((x) => x.trim()).filter(Boolean).length; }
 
 function buildPrompt(verseRef: string, verseText: string): string {
@@ -130,9 +135,9 @@ Respond with ONLY compact JSON, no prose, no code fences:
   } catch (_e) { return { faithful: false, added_claims: ["judge_error"], omitted_core: [], drift: false, divine_lc_pronouns: [] }; }
 }
 
-function evalFlags(label: "A" | "B", text: string, judge: Judgement): string[] {
+function evalFlags(label: "A" | "B", text: string, judge: Judgement, citation: string): string[] {
   const sentences = countSentences(text);
-  const segments = smsSegments(dmWrapForBudget(text));
+  const segments = smsSegments(dmWrapForBudget(text, citation));
   const flags: string[] = [];
   if (sentences < SENTENCE_MIN) flags.push(`${label}:too_short`);
   if (sentences > SENTENCE_MAX) flags.push(`${label}:too_long`);
@@ -152,10 +157,10 @@ function evalFlags(label: "A" | "B", text: string, judge: Judgement): string[] {
   return flags;
 }
 
-async function evaluate(anthropicKey: string, source: string, outA: string, outB: string) {
+async function evaluate(anthropicKey: string, source: string, outA: string, outB: string, citation: string) {
   const [jA, jB] = await Promise.all([judgeFidelity(anthropicKey, source, outA), judgeFidelity(anthropicKey, source, outB)]);
-  const flagsA = evalFlags("A", outA, jA);
-  const flagsB = evalFlags("B", outB, jB);
+  const flagsA = evalFlags("A", outA, jA, citation);
+  const flagsB = evalFlags("B", outB, jB, citation);
   const sim = similarity(outA, outB);
   // #1 auto-agree if >=1 output passes every gate (prefer A); #2 ai_disagreement informational.
   let status: "agreed" | "needs_review", finalTranslation: string | null = null, chosen: "A" | "B" | null = null, reasons: string[] = [];
@@ -233,7 +238,7 @@ Deno.serve(async (req: Request) => {
     const prompt = buildPrompt(verseRef, verseRow.text);
     try {
       const [outputA, outputB] = await Promise.all([callClaude(anthropicKey!, prompt), callOpenAI(openaiKey!, prompt)]);
-      const ev = await evaluate(anthropicKey!, verseRow.text, outputA, outputB);
+      const ev = await evaluate(anthropicKey!, verseRow.text, outputA, outputB, citationFromRef(verseRef));
       const { data: slot, error: slotErr } = await supa.from("daily_slots").upsert({
         scheduled_date: targetDate, theme_track: themeTrack, verse_ref: verseRef,
         status: ev.status, ai_output_a: outputA, ai_output_b: outputB, final_translation: ev.finalTranslation,

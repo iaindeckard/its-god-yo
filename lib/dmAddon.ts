@@ -25,16 +25,33 @@ import { DM_ADDON, baseIntervalForPlanKey, dmPriceForBaseInterval } from "./plan
 const DM_NICKNAMES = ["dm_addon_monthly", "dm_addon_annual"];
 
 /**
- * Compose the daily SMS body. Base = the verse text exactly as selected. When the
- * recipient has DM from Him on, the SAME text is wrapped in first-person framing.
+ * Format a verse citation for display (LOCKED policy 2026-08-06: every send
+ * carries a citation). Parenthetical, never an em/en-dash prefix (em-dash policy).
+ * Book-name normalization is DISPLAY ONLY -- the stored verse_ref keeps its plural
+ * "Psalms" form; a single-psalm reference is shown in the traditional singular
+ * "Psalm" style. "Psalms" is the ONLY book conventionally singularized this way
+ * (Proverbs, Romans, Lamentations, ... are always cited as stored). Replicated in
+ * generate-daily-verse / generate-monthly-batch for the budget calc -- keep in sync.
+ */
+export function formatCitation(verseRef: string): string {
+  return `(${verseRef.replace(/^Psalms /, "Psalm ")})`;
+}
+
+/**
+ * Compose the daily SMS body. Base = the verse text exactly as selected, with the
+ * mandatory citation appended at the END of the verse paragraph (before any DMFH
+ * closer, so it's unambiguous which paragraph is Scripture). When the recipient has
+ * DM from Him on, the SAME cited text is wrapped in first-person framing.
  * (Deterministic template for now; a richer generated framing could replace the
  * wrap later without changing the send pipeline.)
  */
 export function composeDailyMessage(
   verseText: string,
-  opts: { dm: boolean; firstName?: string | null; lang: "en" | "es"; opener?: string | null },
+  opts: { dm: boolean; firstName?: string | null; lang: "en" | "es"; opener?: string | null; verseRef?: string | null },
 ): string {
-  if (!opts.dm) return verseText;
+  // Mandatory verse citation at the end of the verse paragraph (LOCKED 2026-08-06).
+  const cited = opts.verseRef ? `${verseText} ${formatCitation(opts.verseRef)}` : verseText;
+  if (!opts.dm) return cited;
   const name = opts.firstName?.trim();
   // English DM with an inspirational opener that fit the 2-segment budget: the
   // opener REPLACES the standard greeting line (it IS the personalized lead-in).
@@ -42,16 +59,17 @@ export function composeDailyMessage(
   // passed by lib/dailySend after the fit-guard clears it; everything else falls
   // through to the standard wrap.
   if (opts.opener && opts.lang === "en") {
-    return `${opts.opener}\n\n${verseText}\n\nI've got you.`;
+    return `${opts.opener}\n\n${cited}\n\nI've got you.`;
   }
   // GSM-7-safe wrap (no emoji, straight apostrophe) so the DM-wrapped message can
   // stay within the 2-segment budget — see docs/VERSE-LENGTH-AND-FIDELITY-SPEC.md
   // (§1.3/§1.4). The generation-side segment check (generate-daily-verse /
-  // generate-monthly-batch) replicates THIS exact wrap — keep them in sync.
+  // generate-monthly-batch) replicates THIS exact wrap (citation included) — keep
+  // them in sync.
   if (opts.lang === "es") {
-    return `${name ? name + ", " : ""}algo de Mi parte hoy.\n\n${verseText}\n\nEstoy contigo.`;
+    return `${name ? name + ", " : ""}algo de Mi parte hoy.\n\n${cited}\n\nEstoy contigo.`;
   }
-  return `${name ? name + ", " : ""}a little note from Me today.\n\n${verseText}\n\nI've got you.`;
+  return `${name ? name + ", " : ""}a little note from Me today.\n\n${cited}\n\nI've got you.`;
 }
 
 interface DmSignup {

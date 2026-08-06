@@ -112,18 +112,18 @@ export async function runDailySend(opts: { dryRun?: boolean } = {}): Promise<Dai
   }
 
   // Per-run cache of the approved slot for a (localDate, track).
-  const slotCache = new Map<string, { id: string; en: string | null; es: string | null } | null>();
+  const slotCache = new Map<string, { id: string; en: string | null; es: string | null; verseRef: string | null } | null>();
   async function loadSlot(dateStr: string, track: string) {
     const key = `${dateStr}|${track}`;
     if (!slotCache.has(key)) {
       const { data } = await admin
         .from("daily_slots")
-        .select("id, final_translation, final_translation_es")
+        .select("id, final_translation, final_translation_es, verse_ref")
         .eq("scheduled_date", dateStr)
         .eq("theme_track", track)
         .eq("status", "approved")
         .maybeSingle();
-      slotCache.set(key, data ? { id: data.id, en: data.final_translation, es: data.final_translation_es } : null);
+      slotCache.set(key, data ? { id: data.id, en: data.final_translation, es: data.final_translation_es, verseRef: data.verse_ref } : null);
     }
     return slotCache.get(key)!;
   }
@@ -137,7 +137,7 @@ export async function runDailySend(opts: { dryRun?: boolean } = {}): Promise<Dai
     const lang = r.language === "es" ? "es" : "en";
     // Resolve this track's approved verse for the date. Pull the usable text for
     // the recipient's language, or a reason it isn't available.
-    const pick = (s: { id: string; en: string | null; es: string | null } | null): { text: string | null; reason: string | null } => {
+    const pick = (s: { id: string; en: string | null; es: string | null; verseRef: string | null } | null): { text: string | null; reason: string | null } => {
       if (!s) return { text: null, reason: "no_approved_slot" };
       if (lang === "es") {
         if (!SPANISH_ENABLED) return { text: null, reason: "spanish_disabled" };
@@ -171,7 +171,7 @@ export async function runDailySend(opts: { dryRun?: boolean } = {}): Promise<Dai
     // DM from Him: opted-in recipients get the SAME verse wrapped in first-person
     // framing; everyone else gets it verbatim. Never a different/second verse.
     const dmOn = dmBySignup.get(r.pending_signup_id) === true;
-    const body = text != null ? composeDailyMessage(text, { dm: dmOn, firstName: r.recipient_first_name, lang }) : null;
+    const body = text != null ? composeDailyMessage(text, { dm: dmOn, firstName: r.recipient_first_name, lang, verseRef: effectiveSlot?.verseRef ?? null }) : null;
 
     const base = { consent_id: r.consent_id, local_date: dateStr, track: r.theme_track, lang, tz, dm: dmOn, general_fallback: usedGeneralFallback };
 
@@ -211,7 +211,7 @@ export async function runDailySend(opts: { dryRun?: boolean } = {}): Promise<Dai
       try {
         const openerIdx = await peekOpenerIndex(r.consent_id);
         const opener = renderOpener(DM_OPENERS[openerIdx], r.recipient_first_name);
-        const withOpener = composeDailyMessage(text, { dm: true, firstName: r.recipient_first_name, lang, opener });
+        const withOpener = composeDailyMessage(text, { dm: true, firstName: r.recipient_first_name, lang, opener, verseRef: effectiveSlot?.verseRef ?? null });
         if (smsSegments(withOpener) <= 2) { sendBody = withOpener; openerUsed = true; }
       } catch (e) {
         console.error(`[daily-send] opener_select_failed consent=${r.consent_id}: ${e instanceof Error ? e.message : e}`);

@@ -77,10 +77,18 @@ function smsSegments(s: string): number {
   const units = s.length;
   return units <= 70 ? 1 : Math.ceil(units / 67);
 }
-function dmWrapForBudget(verseText: string, lang: "en" | "es"): string {
+// Verse citation (LOCKED 2026-08-06): every send carries a parenthetical citation
+// appended to the verse paragraph, so it MUST be counted in the segment budget.
+// citationFromRef replicates lib/dmAddon.formatCitation (Psalms -> Psalm display
+// normalization only; stored verse_ref unchanged). Keep in sync with lib.
+function citationFromRef(verseRef: string): string {
+  return `(${verseRef.replace(/^Psalms /, "Psalm ")})`;
+}
+function dmWrapForBudget(verseText: string, lang: "en" | "es", citation: string): string {
+  const cited = `${verseText} ${citation}`;
   return lang === "es"
-    ? `${NAME_ALLOWANCE}, algo de Mi parte hoy.\n\n${verseText}\n\nEstoy contigo.`
-    : `${NAME_ALLOWANCE}, a little note from Me today.\n\n${verseText}\n\nI've got you.`;
+    ? `${NAME_ALLOWANCE}, algo de Mi parte hoy.\n\n${cited}\n\nEstoy contigo.`
+    : `${NAME_ALLOWANCE}, a little note from Me today.\n\n${cited}\n\nI've got you.`;
 }
 function countSentences(s: string): number {
   return s.trim().split(/[.!?]+(?:\s|$)/).map((x) => x.trim()).filter(Boolean).length;
@@ -181,9 +189,9 @@ Respond with ONLY compact JSON, no prose, no code fences:
 }
 
 interface OutputEval { label: "A" | "B"; text: string; sentences: number; segments: number; judge: Judgement; flags: string[]; }
-function evalOne(label: "A" | "B", text: string, lang: "en" | "es", judge: Judgement): OutputEval {
+function evalOne(label: "A" | "B", text: string, lang: "en" | "es", judge: Judgement, citation: string): OutputEval {
   const sentences = countSentences(text);
-  const segments = smsSegments(dmWrapForBudget(text, lang));
+  const segments = smsSegments(dmWrapForBudget(text, lang, citation));
   const flags: string[] = [];
   if (sentences < SENTENCE_MIN) flags.push(`${label}:too_short`);
   if (sentences > SENTENCE_MAX) flags.push(`${label}:too_long`);
@@ -204,10 +212,10 @@ function evalOne(label: "A" | "B", text: string, lang: "en" | "es", judge: Judge
 }
 
 interface Evaluation { status: "agreed" | "needs_review"; finalTranslation: string | null; chosen: "A" | "B" | null; reasons: string[]; sim: number; evalA: OutputEval; evalB: OutputEval; }
-async function evaluate(anthropicKey: string, source: string, outA: string, outB: string, lang: "en" | "es"): Promise<Evaluation> {
+async function evaluate(anthropicKey: string, source: string, outA: string, outB: string, lang: "en" | "es", citation: string): Promise<Evaluation> {
   const [jA, jB] = await Promise.all([judgeFidelity(anthropicKey, source, outA, lang), judgeFidelity(anthropicKey, source, outB, lang)]);
-  const evalA = evalOne("A", outA, lang, jA);
-  const evalB = evalOne("B", outB, lang, jB);
+  const evalA = evalOne("A", outA, lang, jA, citation);
+  const evalB = evalOne("B", outB, lang, jB, citation);
   const sim = similarity(outA, outB);
   // #1: auto-agree if at least one output passes every gate; prefer A. The chosen
   // output is stored as final_translation so it can be auto-approved directly.
@@ -267,7 +275,7 @@ Deno.serve(async (req: Request) => {
     try { [outputA, outputB] = await Promise.all([callClaude(anthropicKey, prompt), callOpenAI(openaiKey, prompt)]); }
     catch (e) { return json(502, { error: "generation_failed", detail: String((e as Error)?.message ?? e) }); }
 
-    const ev = await evaluate(anthropicKey, esVerse.text, outputA, outputB, "es");
+    const ev = await evaluate(anthropicKey, esVerse.text, outputA, outputB, "es", citationFromRef(verseRef));
     const { data: updated, error: updErr } = await supa.from("daily_slots").update({
       ai_output_a_es: outputA, ai_output_b_es: outputB,
       final_translation_es: ev.finalTranslation,
@@ -308,7 +316,7 @@ Deno.serve(async (req: Request) => {
   try { [outputA, outputB] = await Promise.all([callClaude(anthropicKey, prompt), callOpenAI(openaiKey, prompt)]); }
   catch (e) { return json(502, { error: "generation_failed", detail: String((e as Error)?.message ?? e) }); }
 
-  const ev = await evaluate(anthropicKey, verseRow!.text, outputA, outputB, "en");
+  const ev = await evaluate(anthropicKey, verseRow!.text, outputA, outputB, "en", citationFromRef(verseRef));
   const { data: slot, error: slotErr } = await supa.from("daily_slots").upsert({
     scheduled_date: targetDate, theme_track: themeTrack, verse_ref: verseRef,
     status: ev.status, ai_output_a: outputA, ai_output_b: outputB, final_translation: ev.finalTranslation,
