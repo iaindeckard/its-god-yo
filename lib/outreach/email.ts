@@ -1,6 +1,7 @@
 import "server-only";
 import crypto from "crypto";
 import { OUTREACH } from "./config";
+import { SPANISH_ENABLED } from "../flags";
 import type { OutreachLead } from "./leads";
 
 /**
@@ -68,7 +69,7 @@ export function buildEmail(lead: OutreachLead): BuiltEmail {
   const text =
 `Hi ${org} team,
 
-I'm Iain, founder of It's God, Yo!, a daily Scripture text devotional built for teens, in English (KJV) and Spanish (Reina-Valera 1909). One verse a day, rewritten in their language, real slang they use today so they actually understand it. There's always a link back to the full KJV text too. And thanks to a proprietary system, the slang is never stale.
+I'm Iain, founder of It's God, Yo!, a daily Scripture text devotional built for teens, ${SPANISH_ENABLED ? "in English (KJV) and Spanish (Reina-Valera 1909)" : "in English (KJV)"}. One verse a day, rewritten in their language, real slang they use today so they actually understand it. There's always a link back to the full KJV text too. And thanks to a proprietary system, the slang is never stale.
 
 ${org} has an active youth ministry, and I thought this might be useful for the students you're already working with. You can see how it works and sign up at ${site}.
 
@@ -87,7 +88,7 @@ Unsubscribe (one click): ${link}`;
   const html =
 `<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:#1a1a1a;max-width:600px;margin:0 auto;">
   <p>Hi ${esc(org)} team,</p>
-  <p>I'm Iain, founder of <strong>It's God, Yo!</strong>, a daily Scripture text devotional built for teens, in English (KJV) and Spanish (Reina-Valera 1909). One verse a day, rewritten in their language, real slang they use today so they actually understand it. There's always a link back to the full KJV text too. And thanks to a proprietary system, the slang is never stale.</p>
+  <p>I'm Iain, founder of <strong>It's God, Yo!</strong>, a daily Scripture text devotional built for teens, ${SPANISH_ENABLED ? "in English (KJV) and Spanish (Reina-Valera 1909)" : "in English (KJV)"}. One verse a day, rewritten in their language, real slang they use today so they actually understand it. There's always a link back to the full KJV text too. And thanks to a proprietary system, the slang is never stale.</p>
   <p>${esc(org)} has an active youth ministry, and I thought this might be useful for the students you're already working with. You can see how it works and sign up at <a href="${site}" style="color:#00ABBC;">${esc(site.replace(/^https?:\/\//, ""))}</a>.</p>
   <p>No pressure here. Share it if it's a fit, ignore it if it's not. If you'd rather not hear from us again, the link below removes ${esc(org)} for good.</p>
   <p style="margin-bottom:2px;">Thanks for helping us get the Word of God to young people every day.</p>
@@ -128,7 +129,7 @@ export function buildFollowupEmail(lead: OutreachLead, promoCode: string): Built
   const text =
 `Hi ${org} team,
 
-I reached out a few weeks back about It's God, Yo!, our daily Scripture text for teens (English KJV and Spanish Reina-Valera 1909, rewritten into the slang they actually read). No worries if it slipped by.
+I reached out a few weeks back about It's God, Yo!, our daily Scripture text for teens (${SPANISH_ENABLED ? "English KJV and Spanish Reina-Valera 1909" : "English KJV"}, rewritten into the slang they actually read). No worries if it slipped by.
 
 If it might be a fit for the students at ${org}, here's a code for 10% off any plan, on us:
 
@@ -149,7 +150,7 @@ Unsubscribe (one click): ${link}`;
   const html =
 `<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:#1a1a1a;max-width:600px;margin:0 auto;">
   <p>Hi ${esc(org)} team,</p>
-  <p>I reached out a few weeks back about <strong>It's God, Yo!</strong>, our daily Scripture text for teens (English KJV and Spanish Reina-Valera 1909, rewritten into the slang they actually read). No worries if it slipped by.</p>
+  <p>I reached out a few weeks back about <strong>It's God, Yo!</strong>, our daily Scripture text for teens (${SPANISH_ENABLED ? "English KJV and Spanish Reina-Valera 1909" : "English KJV"}, rewritten into the slang they actually read). No worries if it slipped by.</p>
   <p>If it might be a fit for the students at ${esc(org)}, here's a code for <strong>10% off</strong> any plan, on us:</p>
   <p style="background:#f4f7f7;border:1px solid #d7e2e2;border-radius:8px;padding:12px 16px;font-size:16px;">
     <strong>${esc(promoCode)}</strong> gets you 10% off at <a href="${site}" style="color:#00ABBC;">${esc(site.replace(/^https?:\/\//, ""))}</a>
