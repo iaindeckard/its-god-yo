@@ -18,6 +18,7 @@ const NAV = [
   { href: "/admin/sponsors", label: "Sponsors", need: "marketing.sponsors.view" },
   { href: "/admin/cornerstone", label: "Cornerstone Partners", need: "partners.view" },
   { href: "/admin/consent-thresholds", label: "Consent thresholds", need: "admin.consent_thresholds.manage" },
+  { href: "/admin/roles", label: "Roles & staff", need: "admin.roles.manage" },
 ];
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
