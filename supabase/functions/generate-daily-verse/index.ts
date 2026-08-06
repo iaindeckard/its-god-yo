@@ -47,6 +47,18 @@ const NAME_ALLOWANCE = "XXXXXXXXXXXXXXX"; // 15-char stand-in; real firstName un
 // keeps them GSM-7). Any output containing one is flagged (never auto-approved).
 const AI_TELLS = /[—–‘’“”…]/;
 
+// House style (locked 2026-08-06, same tier as the em-dash policy): titles/names
+// referring to God must be capitalized in all customer-facing content, including
+// AI paraphrases. God/Jesus/Christ/Lord are unambiguous proper nouns, so a
+// lowercase occurrence is catchable by regex (word-boundary, case-SENSITIVE so
+// only the lowercase forms match, never the correct "God"/"Jesus"). Flag ONLY
+// (never auto-fix) -> routes to needs_review under reason code
+// 'divine_capitalization'. Lowercase PRONOUNS (he/him/his) are handled by the
+// fidelity judge instead, since their antecedent needs LLM judgment. "gods" is
+// included; a false-gods use (legitimately lowercase) simply gets a human look.
+// KEEP IN SYNC with generate-monthly-batch.
+const DIVINE_NOUN_LOWERCASE = /\b(god|gods|jesus|christ|lord)\b/;
+
 // ---- GSM-7 vs UCS-2 SMS segment math (mirrors Twilio's encoding rules) ----
 const GSM7_BASIC = "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ\x1bÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà";
 const GSM7_EXT = "^{}\\[~]|€";
@@ -128,7 +140,7 @@ async function callOpenAI(apiKey: string, prompt: string): Promise<string> {
   return text.trim();
 }
 
-interface Judgement { faithful: boolean; added_claims: string[]; omitted_core: string[]; drift: boolean; }
+interface Judgement { faithful: boolean; added_claims: string[]; omitted_core: string[]; drift: boolean; divine_lc_pronouns: string[]; }
 
 // Fidelity judge (softened for casual style, strict on real drift + divine-title
 // flattening). Fail-closed: any error/unparseable -> unfaithful (routes to review).
@@ -144,24 +156,27 @@ Mark it UNFAITHFUL only when it clearly:
 
 Give the paraphrase the benefit of the doubt on style and emphasis; flag ONLY real drift in meaning.
 
+SEPARATELY, check ONE capitalization rule (this does NOT affect the fidelity verdict above): our house style capitalizes pronouns that refer to God -- "He", "Him", "His", "Himself". In the PARAPHRASE, list every lowercase "he", "him", "his", or "himself" whose antecedent in THIS verse is clearly God, Jesus, or the Lord. This needs judgment: if a "he/him/his" refers to a human figure (a king, a disciple, a person in the story), do NOT list it. If none, return [].
+
 Source (${lang === "es" ? "Reina-Valera 1909" : "KJV"}): "${source}"
 Paraphrase: "${rendering}"
 
 Respond with ONLY compact JSON, no prose, no code fences:
-{"faithful": true|false, "added_claims": ["..."], "omitted_core": ["..."], "drift": true|false}`;
+{"faithful": true|false, "added_claims": ["..."], "omitted_core": ["..."], "drift": true|false, "divine_lc_pronouns": ["..."]}`;
   try {
     const raw = await callClaude(apiKey, prompt, 0);
     const m = raw.match(/\{[\s\S]*\}/);
-    if (!m) return { faithful: false, added_claims: ["judge_unparseable"], omitted_core: [], drift: false };
+    if (!m) return { faithful: false, added_claims: ["judge_unparseable"], omitted_core: [], drift: false, divine_lc_pronouns: [] };
     const p = JSON.parse(m[0]);
     return {
       faithful: p.faithful === true,
       added_claims: Array.isArray(p.added_claims) ? p.added_claims.map(String) : [],
       omitted_core: Array.isArray(p.omitted_core) ? p.omitted_core.map(String) : [],
       drift: p.drift === true,
+      divine_lc_pronouns: Array.isArray(p.divine_lc_pronouns) ? p.divine_lc_pronouns.map(String) : [],
     };
   } catch (_e) {
-    return { faithful: false, added_claims: ["judge_error"], omitted_core: [], drift: false };
+    return { faithful: false, added_claims: ["judge_error"], omitted_core: [], drift: false, divine_lc_pronouns: [] };
   }
 }
 
@@ -174,6 +189,12 @@ function evalOne(label: "A" | "B", text: string, lang: "en" | "es", judge: Judge
   if (sentences > SENTENCE_MAX) flags.push(`${label}:too_long`);
   if (segments > SEGMENT_MAX) flags.push(`${label}:exceeds_sms_budget(${segments}seg)`);
   if (AI_TELLS.test(text)) flags.push(`${label}:ai_tells`);
+  // Divine-reference capitalization (house style, locked 2026-08-06). Regex catches
+  // lowercase proper nouns; the fidelity judge catches lowercase pronouns referring
+  // to God. Either -> flag for human review under 'divine_capitalization', never auto-fix.
+  const divineNoun = text.match(DIVINE_NOUN_LOWERCASE);
+  if (divineNoun) flags.push(`${label}:divine_capitalization(noun:${divineNoun[0]})`);
+  if (judge.divine_lc_pronouns.length > 0) flags.push(`${label}:divine_capitalization(pronoun:${judge.divine_lc_pronouns.join(",")})`);
   const fidelityBad = !judge.faithful || judge.added_claims.length > 0 || judge.omitted_core.length > 0 || judge.drift;
   if (fidelityBad) {
     const detail = [...judge.added_claims.map((c) => `added:${c}`), ...judge.omitted_core.map((c) => `omitted:${c}`), judge.drift ? "drift" : ""].filter(Boolean).join("; ");

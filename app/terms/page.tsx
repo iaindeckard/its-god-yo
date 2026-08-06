@@ -83,6 +83,13 @@ export default function TermsPage() {
         IGY&rsquo;s daily messages are casual paraphrases of scripture generated with the assistance of artificial intelligence and reviewed through a combination of automated and human moderation. Human review is best-effort and not exhaustive; despite our efforts, an occasional message may contain an error or wording we would not have chosen. Any harm caused by something our moderation missed is unintentional. If you encounter a message that seems inaccurate or inappropriate, please tell us at <a href="mailto:support@itsgodyo.com">support@itsgodyo.com</a> so we can correct it.
       </p>
 
+      {/* ⚠️ DRAFT — §9c is pending attorney review (added 2026-08-06); wording per
+          the LOCKED capitalization-clause spec. Noindex per the draft convention above. */}
+      <h2>9c. Capitalization of Divine References</h2>
+      <p>
+        It is our intentional editorial practice to capitalize pronouns and titles referring to God, including &ldquo;He,&rdquo; &ldquo;Him,&rdquo; &ldquo;His,&rdquo; &ldquo;God,&rdquo; &ldquo;Lord,&rdquo; &ldquo;Jesus,&rdquo; and &ldquo;Christ,&rdquo; throughout our content, including messages produced with the assistance of automated translation tools. We review content before it is sent, but this process is not infallible, and an occasional message may not follow this style due to human or automated error. Any such instance is unintentional, reflects no change in meaning, and is not a statement of doctrine. If you notice an instance where this style was not followed, please let us know at <a href="mailto:support@itsgodyo.com">support@itsgodyo.com</a> so we can correct it.
+      </p>
+
       <h2>10. Limitation of liability</h2>
       <p>
         To the maximum extent permitted by law, Deckard Enterprise International, LLC&rsquo;s total liability arising from or relating to this service is limited to the amount you paid us in the twelve months preceding the claim. We are not liable for indirect, incidental, or consequential damages.
