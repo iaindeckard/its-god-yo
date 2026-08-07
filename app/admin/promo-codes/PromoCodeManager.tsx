@@ -63,6 +63,18 @@ export default function PromoCodeManager({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // Existing-codes table filters (client-side only — no refetch). Defaults keep
+  // current behavior: show everything, search empty.
+  const [showInactive, setShowInactive] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const q = searchQuery.trim().toLowerCase();
+  const visibleCodes = codes.filter((c) => {
+    if (!showInactive && !c.active) return false;
+    if (!q) return true;
+    return c.code.toLowerCase().includes(q) || (c.internal_label ?? "").toLowerCase().includes(q);
+  });
+
   // form state
   const [label, setLabel] = useState("");
   const [discountType, setDiscountType] = useState<"percent" | "amount">("percent");
@@ -294,6 +306,28 @@ export default function PromoCodeManager({
       )}
 
       <h2 style={{ margin: "8px 0 12px" }}>Existing codes</h2>
+
+      {/* Client-side filters over the already-fetched codes (no refetch). */}
+      <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", marginBottom: 12 }}>
+        <input
+          type="search"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search code or label…"
+          aria-label="Search codes by code or label"
+          style={{ flex: "1 1 240px", maxWidth: 320 }}
+        />
+        <label className="check-line" style={{ margin: 0, whiteSpace: "nowrap" }}>
+          <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
+          Show inactive codes
+        </label>
+        {(q || !showInactive) && (
+          <span className="muted" style={{ fontSize: 13 }}>
+            {visibleCodes.length} of {codes.length} shown
+          </span>
+        )}
+      </div>
+
       <div className="sim-scroll">
         <table className="table">
           <thead>
@@ -307,7 +341,10 @@ export default function PromoCodeManager({
             {codes.length === 0 && (
               <tr><td colSpan={canDeactivate ? 10 : 9} className="muted">No promo codes yet.</td></tr>
             )}
-            {codes.map((c) => (
+            {codes.length > 0 && visibleCodes.length === 0 && (
+              <tr><td colSpan={canDeactivate ? 10 : 9} className="muted">No codes match the current filters.</td></tr>
+            )}
+            {visibleCodes.map((c) => (
               <tr key={c.id}>
                 <td style={{ maxWidth: 170 }}>{c.internal_label ?? c.note ?? "N/A"}</td>
                 <td className="mono">{c.code}</td>
