@@ -1,9 +1,10 @@
 import "server-only";
 import { getSupabaseAdmin } from "../supabaseAdmin";
 import { OUTREACH, isGeneralAddress } from "./config";
+import type { SizeBucket } from "./campaigns";
 
 export type LeadStatus =
-  | "active" | "converted" | "unsubscribed" | "bounced_hard" | "needs_review" | "aged_out";
+  | "active" | "converted" | "unsubscribed" | "bounced_hard" | "needs_review" | "aged_out" | "staged";
 
 export interface OutreachLead {
   id: string;
@@ -22,21 +23,78 @@ export interface OutreachLead {
   promo_promotion_code_id: string | null;
   send_count: number;
   last_sent_at: string | null;
+  // Campaign / geo / size (Phase 1). Null on legacy (global-cron) leads.
+  campaign_id: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  geocoded_at: string | null;
+  estimated_attendance: number | null;
+  attendance_source_url: string | null;
+  size_bucket: SizeBucket;
 }
 
 const TABLE = "igy_outreach_leads";
 
+/** Optional scoping for a send. When campaignId is given the send targets ONLY
+ *  that campaign's active leads (isolated per-campaign send), optionally narrowed
+ *  to specific size buckets. Omitted => today's behavior (all active leads). */
+export interface SendScope {
+  campaignId?: string;
+  sizeBuckets?: string[];
+}
+
 /** Active leads eligible for a send (spec §1: status='active' is the ONLY gate —
- *  converted/unsubscribed/bounced/aged_out/needs_review are all excluded). */
-export async function fetchActiveLeads(): Promise<OutreachLead[]> {
+ *  converted/unsubscribed/bounced/aged_out/needs_review/staged are all excluded).
+ *  An optional scope isolates the send to one campaign (+ size buckets). */
+export async function fetchActiveLeads(scope?: SendScope): Promise<OutreachLead[]> {
+  const admin = getSupabaseAdmin();
+  let q = admin.from(TABLE).select("*").eq("status", "active");
+  if (scope?.campaignId) q = q.eq("campaign_id", scope.campaignId);
+  if (scope?.sizeBuckets && scope.sizeBuckets.length) q = q.in("size_bucket", scope.sizeBuckets);
+  const { data, error } = await q.order("first_found_at", { ascending: true });
+  if (error) throw new Error(`fetch_active_failed: ${error.message}`);
+  return (data ?? []) as OutreachLead[];
+}
+
+/** All leads in a campaign, any status — for the admin campaign detail view. */
+export async function fetchCampaignLeads(campaignId: string): Promise<OutreachLead[]> {
   const admin = getSupabaseAdmin();
   const { data, error } = await admin
     .from(TABLE)
     .select("*")
-    .eq("status", "active")
-    .order("first_found_at", { ascending: true });
-  if (error) throw new Error(`fetch_active_failed: ${error.message}`);
+    .eq("campaign_id", campaignId)
+    .order("size_bucket", { ascending: true })
+    .order("org_name", { ascending: true });
+  if (error) throw new Error(`fetch_campaign_leads_failed: ${error.message}`);
   return (data ?? []) as OutreachLead[];
+}
+
+/**
+ * Promote a size-filtered subset of a campaign's STAGED leads into the send
+ * pipeline (staged -> active). This is the gate the spec requires: nothing in a
+ * campaign sends until it is promoted here. Either promote specific ids, or all
+ * staged leads in the given size buckets (buckets win if both are passed empty).
+ * Only rows currently 'staged' in this campaign move — never a suppressed/
+ * converted/already-active row. Returns the number promoted.
+ */
+export async function promoteLeads(
+  campaignId: string,
+  opts: { sizeBuckets?: string[]; ids?: string[] },
+): Promise<number> {
+  const admin = getSupabaseAdmin();
+  let q = admin
+    .from(TABLE)
+    .update({ status: "active", updated_at: new Date().toISOString() })
+    .eq("campaign_id", campaignId)
+    .eq("status", "staged");
+  if (opts.ids && opts.ids.length) {
+    q = q.in("id", opts.ids);
+  } else if (opts.sizeBuckets && opts.sizeBuckets.length) {
+    q = q.in("size_bucket", opts.sizeBuckets);
+  }
+  const { data, error } = await q.select("id");
+  if (error) throw new Error(`promote_leads_failed: ${error.message}`);
+  return (data ?? []).length;
 }
 
 /** Record a successful send: stamp last_sent_at, bump send_count, and persist the
@@ -134,6 +192,14 @@ export interface DiscoveredLead {
   youth_ministry_signal?: string | null;
   source_urls?: string[];
   discovery_confidence?: "high" | "medium" | "low";
+  // Attendance-based sizing (from the discovery pass; null/unknown when a public
+  // figure isn't found — never guessed).
+  estimated_attendance?: number | null;
+  attendance_source_url?: string | null;
+  // Enriched by runCampaignDiscovery before insert (geocode + radius membership).
+  latitude?: number | null;
+  longitude?: number | null;
+  size_bucket?: SizeBucket;
 }
 
 /**
@@ -147,7 +213,10 @@ export interface DiscoveredLead {
  * case), lands in needs_review instead of active, held out of sends until a
  * human confirms it (spec §3).
  */
-export async function insertDiscovered(leads: DiscoveredLead[]): Promise<{ inserted: number; skipped: number }> {
+export async function insertDiscovered(
+  leads: DiscoveredLead[],
+  campaignId: string | null = null,
+): Promise<{ inserted: number; skipped: number }> {
   const admin = getSupabaseAdmin();
   let inserted = 0;
   let skipped = 0;
@@ -155,6 +224,11 @@ export async function insertDiscovered(leads: DiscoveredLead[]): Promise<{ inser
     const email = l.contact_email?.trim().toLowerCase();
     if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { skipped++; continue; }
     const weak = l.discovery_confidence === "low" || !isGeneralAddress(email);
+    // Campaign leads are born 'staged' (NOT send-eligible) regardless of
+    // confidence — they only enter the send pipeline when an admin promotes a
+    // size-filtered subset. Legacy/global-cron leads keep the original
+    // active-vs-needs_review routing.
+    const status = campaignId ? "staged" : weak ? "needs_review" : "active";
     const row = {
       org_name: l.org_name?.trim(),
       city: l.city ?? null,
@@ -166,7 +240,14 @@ export async function insertDiscovered(leads: DiscoveredLead[]): Promise<{ inser
       youth_ministry_signal: l.youth_ministry_signal ?? null,
       source_urls: l.source_urls ?? [],
       discovery_confidence: l.discovery_confidence ?? null,
-      status: weak ? "needs_review" : "active",
+      status,
+      campaign_id: campaignId,
+      latitude: l.latitude ?? null,
+      longitude: l.longitude ?? null,
+      geocoded_at: l.latitude != null && l.longitude != null ? new Date().toISOString() : null,
+      estimated_attendance: l.estimated_attendance ?? null,
+      attendance_source_url: l.attendance_source_url ?? null,
+      size_bucket: l.size_bucket ?? "unknown",
     };
     if (!row.org_name) { skipped++; continue; }
     // Anti-resurrection: if this org (by email, case-insensitive) is already

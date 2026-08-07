@@ -1,8 +1,9 @@
 import "server-only";
 import { OUTREACH, sendGate, sendAllowlist } from "./config";
-import { fetchActiveLeads, recordSend, type OutreachLead } from "./leads";
+import { fetchActiveLeads, recordSend, type OutreachLead, type SendScope } from "./leads";
 import { buildEmail, buildFollowupEmail, sendViaResend } from "./email";
 import { createPromoCode } from "../promoCodes";
+import { updateCampaign } from "./campaigns";
 
 /**
  * Two-touch outreach sequence (Iain, 2026-08-05):
@@ -78,17 +79,33 @@ export interface SendReport {
   generated_at: string;
 }
 
+export interface RunSendOptions {
+  /** Isolate the send to ONE campaign's active leads (per-campaign "send now"). */
+  campaignId?: string;
+  /** Narrow further to specific size buckets within the campaign. */
+  sizeBuckets?: string[];
+  /** Force dry-run even when the gate is open (safe preview). */
+  forceDry?: boolean;
+}
+
 /**
  * Run the outreach send. DRY-RUN unless the send gate is fully open (copy + legal
  * + master switch, see config.sendGate). In dry-run nothing is minted and nothing
  * is sent — it renders exactly who would receive which touch. Touch selection
  * (email 1 vs the 30-day email 2) is applied in BOTH modes.
+ *
+ * An optional scope isolates the send to a single campaign (+ size buckets) so a
+ * promoted subset can be fired as its own deliberate push, separate from the
+ * company-wide active-lead cycle. The scope controls WHO and WHEN only — the send
+ * gate + allowlist still authoritatively govern WHETHER anything goes out live.
  */
-export async function runSend(forceDry = false): Promise<SendReport> {
+export async function runSend(opts: RunSendOptions = {}): Promise<SendReport> {
+  const { campaignId, sizeBuckets, forceDry = false } = opts;
   const gate = sendGate();
   const live = gate.live && !forceDry;
   const allowlist = sendAllowlist();
-  const leads = await fetchActiveLeads();
+  const scope: SendScope | undefined = campaignId ? { campaignId, sizeBuckets } : undefined;
+  const leads = await fetchActiveLeads(scope);
 
   const report: SendReport = {
     mode: live ? "live" : "dry_run",
@@ -169,6 +186,11 @@ export async function runSend(forceDry = false): Promise<SendReport> {
         send_count_after: lead.send_count, error: e instanceof Error ? e.message : String(e),
       });
     }
+  }
+
+  // A live per-campaign send that actually mailed marks the campaign 'sending'.
+  if (campaignId && live && report.sent > 0) {
+    await updateCampaign(campaignId, { status: "sending" }).catch(() => {});
   }
 
   return report;
