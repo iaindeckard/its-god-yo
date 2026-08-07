@@ -17,6 +17,7 @@ const NAV = [
   { href: "/admin/donation-fund", label: "Donation Fund", need: "finance.donation_fund.view" },
   { href: "/admin/bounty", label: "Error bounty", need: "finance.bounty.view" },
   { href: "/admin/sponsors", label: "Sponsors", need: "marketing.sponsors.view" },
+  { href: "/admin/outreach", label: "Outreach campaigns", need: "marketing.outreach.view" },
   { href: "/admin/cornerstone", label: "Cornerstone Partners", need: "partners.view" },
   { href: "/admin/consent-thresholds", label: "Consent thresholds", need: "admin.consent_thresholds.manage" },
   { href: "/admin/roles", label: "Roles & staff", need: "admin.roles.manage" },

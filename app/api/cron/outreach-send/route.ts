@@ -24,7 +24,7 @@ export async function GET(req: Request) {
 
   const forceDry = new URL(req.url).searchParams.get("dry") === "1";
   try {
-    const report = await runSend(forceDry);
+    const report = await runSend({ forceDry });
     return NextResponse.json({ ok: true, report });
   } catch (e) {
     console.error("[outreach-send] failed:", e);
