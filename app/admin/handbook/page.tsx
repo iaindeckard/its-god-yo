@@ -21,6 +21,12 @@ const ROUTE_PERMISSION: Record<string, string> = {
   "/admin/dashboard": "analytics.dashboard.view",
   "/admin/donation-fund": "finance.donation_fund.view",
   "/admin/consent-thresholds": "admin.consent_thresholds.manage",
+  "/admin/outreach": "marketing.outreach.view",
+  "/admin/roles": "admin.roles.manage",
+  "/admin/pronoun-review": "content.queue.view",
+  "/admin/sponsors": "marketing.sponsors.view",
+  "/admin/season-review": "content.queue.view",
+  "/admin/action-items": "finance.action_items.view",
 };
 
 function requirementFor(entry: Entry): string | null {
