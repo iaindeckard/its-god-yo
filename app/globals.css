@@ -371,3 +371,72 @@ h1, h2, h3 { line-height: 1.12; letter-spacing: -0.02em; margin: 0 0 0.4em; }
 .depth-cell input[type="range"] { flex: 1; accent-color: var(--igy-blue); }
 .depth-val { font-weight: 700; font-variant-numeric: tabular-nums; min-width: 40px; text-align: right; }
 .sim-total td { border-top: 2px solid var(--igy-line); background: var(--igy-bg-alt); font-size: 15px; }
+
+/* ================= KPI dashboard redesign ================= */
+.range-toggle { display: inline-flex; background: var(--igy-bg-alt); border: 1px solid var(--igy-line); border-radius: var(--radius-pill); padding: 2px; }
+.range-pill { font-size: 12px; font-weight: 700; padding: 5px 12px; border-radius: var(--radius-pill); color: var(--igy-slate); }
+.range-pill:hover { text-decoration: none; color: var(--igy-ink); }
+.range-pill.on { background: #fff; color: var(--igy-blue-dark); box-shadow: var(--shadow-card); }
+.demo-pill { font-size: 12px; font-weight: 700; padding: 5px 12px; border-radius: var(--radius-pill); border: 1px dashed var(--igy-line); color: var(--igy-slate); }
+.demo-pill:hover { text-decoration: none; border-color: var(--igy-blue); color: var(--igy-blue); }
+.demo-pill.on { background: #fff6e6; border-color: #f0c674; color: #8a5a00; border-style: solid; }
+
+/* At-a-glance strip */
+.stat-strip { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--space-3); margin-bottom: var(--space-4); }
+.stat-tile { text-align: left; background: #fff; border: 1px solid var(--igy-line); border-radius: var(--radius-md); padding: 12px 14px; box-shadow: var(--shadow-card); cursor: pointer; transition: border-color .12s, box-shadow .12s; display: flex; flex-direction: column; gap: 2px; }
+.stat-tile:hover { border-color: var(--igy-blue); }
+.stat-tile.active { border-color: var(--igy-blue); box-shadow: 0 0 0 2px var(--igy-blue-tint); }
+.stat-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.stat-label { font-size: 11px; color: var(--igy-slate); font-weight: 600; line-height: 1.2; }
+.stat-value { font-size: 22px; font-weight: 800; color: var(--igy-ink); line-height: 1.1; margin: 2px 0 4px; }
+.stat-hint { font-size: 10px; color: var(--igy-slate); opacity: .7; }
+@media (max-width: 1100px) { .stat-strip { grid-template-columns: repeat(4, 1fr); } }
+@media (max-width: 640px) { .stat-strip { grid-template-columns: repeat(2, 1fr); } }
+
+/* Card grid */
+.dash-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-4); margin-bottom: var(--space-4); }
+.dash-card { background: #fff; border: 1px solid var(--igy-line); border-radius: var(--radius-md); padding: 16px 18px; box-shadow: var(--shadow-card); min-width: 0; grid-column: span 1; }
+.dash-card.span-1 { grid-column: span 1; } .dash-card.span-2 { grid-column: span 2; }
+.dash-card.span-3 { grid-column: span 3; } .dash-card.span-4 { grid-column: span 4; }
+.dash-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+.dash-card-title { font-size: 14px; font-weight: 700; color: var(--igy-ink); }
+.dash-card-sub { font-size: 12px; color: var(--igy-slate); margin-top: 2px; }
+.dash-card-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.dash-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--igy-slate); cursor: pointer; }
+@media (max-width: 1100px) { .dash-grid { grid-template-columns: repeat(2, 1fr); } .dash-card.span-3, .dash-card.span-4 { grid-column: span 2; } }
+@media (max-width: 640px) { .dash-grid { grid-template-columns: 1fr; } .dash-card { grid-column: span 1 !important; } }
+
+/* Runway bars */
+.runway-rows { display: flex; flex-direction: column; gap: 8px; }
+.runway-row { display: grid; grid-template-columns: 150px 1fr 54px; align-items: center; gap: 12px; }
+.runway-label { font-size: 13px; color: var(--igy-ink); }
+.runway-bar { height: 12px; background: var(--igy-bg-alt); border-radius: 6px; overflow: hidden; }
+.runway-bar span { display: block; height: 100%; border-radius: 6px; }
+.runway-days { font-size: 12px; font-weight: 700; text-align: right; }
+
+/* Promo impact tiles */
+.promo-impact { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-3); margin-bottom: 8px; }
+.impact-tile { background: var(--igy-bg-alt); border: 1px solid var(--igy-line); border-top: 3px solid var(--igy-blue); border-radius: var(--radius-sm); padding: 10px 12px; }
+.impact-label { font-size: 11px; color: var(--igy-slate); font-weight: 600; }
+.impact-value { font-size: 20px; font-weight: 800; color: var(--igy-ink); line-height: 1.1; margin: 2px 0; }
+.impact-sub { font-size: 11px; color: var(--igy-slate); }
+@media (max-width: 900px) { .promo-impact { grid-template-columns: repeat(2, 1fr); } }
+
+/* Promo table */
+.dash-scroll { overflow-x: auto; }
+.promo-table { width: 100%; }
+.promo-table td, .promo-table th { white-space: nowrap; }
+.promo-table tbody tr:hover { background: var(--igy-blue-tint); }
+.promo-sublabel { font-size: 11px; color: var(--igy-slate); font-family: var(--font-sans, inherit); }
+.sort-pick { font-size: 11px; font-weight: 700; color: var(--igy-slate); background: transparent; border: none; padding: 2px 6px; border-radius: var(--radius-pill); cursor: pointer; }
+.sort-pick:hover { background: var(--igy-bg-alt); color: var(--igy-ink); }
+.sort-pick.on { background: var(--igy-blue-tint); color: var(--igy-blue-dark); }
+
+/* Modal */
+.dash-modal-backdrop { position: fixed; inset: 0; background: rgba(20,33,61,.42); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 50; }
+.dash-modal { background: #fff; border-radius: var(--radius-md); box-shadow: 0 20px 60px rgba(20,33,61,.3); width: min(720px, 100%); max-height: 88vh; overflow: auto; padding: 20px; }
+.dash-modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.dash-x { background: transparent; border: none; font-size: 16px; color: var(--igy-slate); cursor: pointer; padding: 4px 8px; border-radius: var(--radius-xs); }
+.dash-x:hover { background: var(--igy-bg-alt); color: var(--igy-ink); }
+.dash-modal .dash-grid { grid-template-columns: repeat(2, 1fr); margin-bottom: 0; }
+.dash-modal .dash-card.span-2 { grid-column: span 2; }
