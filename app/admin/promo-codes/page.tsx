@@ -2,6 +2,7 @@ import { can } from "@/lib/rbac";
 import Forbidden from "@/components/Forbidden";
 import { listPromoCodes } from "@/lib/promoCodes";
 import { TIERS } from "@/lib/tiers";
+import { REQUIRED_ADDON_OPTIONS } from "@/lib/requiredAddons";
 import PromoCodeManager from "./PromoCodeManager";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +22,8 @@ export default async function PromoCodesPage() {
   // Tier data for the applicable-tiers selector (label only) and the ARR
   // simulator (annual value + pre-launch expected-redemption defaults).
   const tierOptions = TIERS.map((t) => ({ key: t.key, label: t.label }));
+  // Add-on options for the "requires these add-ons" selector (label only).
+  const addonOptions = REQUIRED_ADDON_OPTIONS.map((a) => ({ key: a.id, label: a.label }));
   const simTiers = TIERS.map((t) => ({
     key: t.key,
     label: t.label,
@@ -36,6 +39,7 @@ export default async function PromoCodesPage() {
       canEdit={canEdit}
       canViewRevenue={canViewRevenue}
       tierOptions={tierOptions}
+      addonOptions={addonOptions}
       simTiers={simTiers}
     />
   );

@@ -3,6 +3,7 @@ import { requirePermission } from "@/lib/rbac";
 import { apiError } from "@/lib/apiError";
 import { listPromoCodes, createPromoCode } from "@/lib/promoCodes";
 import { TIER_KEYS } from "@/lib/tiers";
+import { REQUIRED_ADDON_IDS } from "@/lib/requiredAddons";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +43,10 @@ export async function POST(req: Request) {
       ? body.allowedTiers.filter((t: unknown) => typeof t === "string" && TIER_KEYS.includes(t))
       : [];
 
+    const requiredAddons = Array.isArray(body.requiredAddons)
+      ? body.requiredAddons.filter((a: unknown) => typeof a === "string" && REQUIRED_ADDON_IDS.includes(a))
+      : [];
+
     const startsAt = body.startsAt ? Math.floor(new Date(body.startsAt).getTime() / 1000) : null;
     const expiresAt = body.expiresAt ? Math.floor(new Date(body.expiresAt).getTime() / 1000) : null;
     if (startsAt && expiresAt && startsAt >= expiresAt) {
@@ -70,6 +75,7 @@ export async function POST(req: Request) {
       requiresAttestation,
       attestationText,
       allowedTiers,
+      requiredAddons,
     });
     return NextResponse.json({ promo_code: created });
   } catch (e) {

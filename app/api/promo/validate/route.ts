@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { findUsablePromoCode } from "@/lib/promoCodes";
+import { unmetRequiredAddons } from "@/lib/requiredAddons";
 
 export const dynamic = "force-dynamic";
 
@@ -16,11 +17,28 @@ export async function POST(req: Request) {
   // dates are actually enforced here, not merely displayed. Optional for
   // backwards compatibility; when omitted, tier restrictions are not applied.
   const planKey = typeof body.plan_key === "string" ? body.plan_key : undefined;
+  // Current add-on selection, so a code that requires an add-on (e.g. DM from Him)
+  // is reported as such HERE rather than silently discovered at submit. Extend the
+  // selection shape as new required-able add-ons land (lib/requiredAddons).
+  const selection = { dmAddon: body.dm_addon === true };
   if (!code) return NextResponse.json({ valid: false, error: "empty_code" }, { status: 400 });
 
   try {
     const pc = await findUsablePromoCode(code, planKey);
     if (!pc) return NextResponse.json({ valid: false });
+    // Required-add-on gate: a distinct, actionable reason (not a generic "invalid")
+    // so the signup flow can prompt the customer to add the missing add-on.
+    const unmet = unmetRequiredAddons(pc.required_addons, selection);
+    if (unmet.length > 0) {
+      const labels = unmet.map((o) => o.label);
+      return NextResponse.json({
+        valid: false,
+        reason: "requires_addons",
+        required_addons: pc.required_addons,
+        required_addons_labels: labels,
+        message: `This code requires ${labels.join(" and ")}.`,
+      });
+    }
     return NextResponse.json({
       valid: true,
       promotion_code_id: pc.id,

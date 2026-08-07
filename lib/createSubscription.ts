@@ -2,7 +2,7 @@ import "server-only";
 import type Stripe from "stripe";
 import { getStripe } from "./stripe";
 import { getSupabaseAdmin } from "./supabaseAdmin";
-import { promoAttestationSatisfied } from "./promoCodes";
+import { promoAttestationSatisfied, promoRequiredAddonsSatisfied } from "./promoCodes";
 import { baseIntervalForPlanKey, dmPriceForBaseInterval } from "./plans";
 
 /**
@@ -85,12 +85,22 @@ export async function createSubscriptionForPendingSignup(pendingSignupId: string
   // referrals now reward via a customer-balance credit at conversion (lib/referral.ts).
   const discounts: Stripe.SubscriptionCreateParams.Discount[] = [];
   if (ps.promo_promotion_code_id) {
-    // Affinity attestation gate: an attestation-required code is only honored
-    // when the signup recorded a confirmed attestation (spec: affinity codes).
-    if (await promoAttestationSatisfied(ps.promo_promotion_code_id, ps.promo_attestation_confirmed)) {
+    // Two independent policy gates, both must pass for the discount to apply:
+    //  1. Affinity attestation — an attestation-required code is only honored when
+    //     the signup recorded a confirmed attestation (spec: affinity codes).
+    //  2. Required add-ons — a code that requires an add-on (e.g. DM from Him) only
+    //     applies when that add-on is part of this purchase (lib/requiredAddons).
+    const addonSelection = { dmAddon: !!ps.dm_addon };
+    const [attestOk, addonsOk] = await Promise.all([
+      promoAttestationSatisfied(ps.promo_promotion_code_id, ps.promo_attestation_confirmed),
+      promoRequiredAddonsSatisfied(ps.promo_promotion_code_id, addonSelection),
+    ]);
+    if (attestOk && addonsOk) {
       discounts.push({ promotion_code: ps.promo_promotion_code_id });
-    } else {
+    } else if (!attestOk) {
       console.warn(`[createSubscription] promo ${ps.promo_code} requires attestation but signup ${ps.id} has none — discount NOT applied`);
+    } else {
+      console.warn(`[createSubscription] promo ${ps.promo_code} requires an add-on not selected on signup ${ps.id} — discount NOT applied`);
     }
   }
 
