@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import CampaignMap, { type CampaignMapChange, type MapLead } from "./CampaignMap";
 
 // Local view types (mirroring the server models; kept local so this client
@@ -170,7 +171,10 @@ export default function OutreachManager({
     <div>
       <div className="admin-head">
         <h1>Outreach campaigns</h1>
-        <p className="muted">Geographic-scoped church discovery, size segmentation, and isolated per-campaign sends.</p>
+        <p className="muted">
+          Geographic-scoped church discovery, size segmentation, and isolated per-campaign sends.{" "}
+          <Link href="/admin/outreach/performance">View performance →</Link>
+        </p>
       </div>
 
       {error && <div className="card" style={{ borderColor: "#c0392b", color: "#c0392b" }}>{error}</div>}
