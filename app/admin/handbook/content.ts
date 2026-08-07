@@ -13,9 +13,10 @@
 //
 // Locked sections (do not add to / do not invent): Part 6 (Policies & Escalation)
 // and Part 7 (Common Questions) are reproduced as-written per Iain's direction
-// 2026-08-02. Do NOT document the Holy Season add-ons (Christmastide/Advent/
-// Eastertide/Lent) — spec'd but unbuilt; documenting them would repeat the exact
-// failure mode Part 7 warns against.
+// 2026-08-02. The Holy Season add-ons (Christmastide/Advent/Eastertide/Lent) are
+// now BUILT but flag-gated OFF (SEASONS_ENABLED=false): document the internal
+// /admin/season-review screen and the built-but-dormant status, but do NOT present
+// seasons as a live customer offering until the flag flips.
 
 export type Block =
   | { type: "prose"; text: string }
@@ -48,7 +49,7 @@ export interface Part {
   entries: Entry[];
 }
 
-export const HANDBOOK_UPDATED = "August 3, 2026";
+export const HANDBOOK_UPDATED = "August 7, 2026";
 
 export const PARTS: Part[] = [
   // ------------------------------------------------------------------ START HERE
@@ -235,8 +236,8 @@ export const PARTS: Part[] = [
         id: "purchases-enabled",
         title: "PURCHASES_ENABLED: the billing kill-switch",
         blocks: [
-          { type: "prose", text: "PURCHASES_ENABLED is the master flag gating all live billing. Anyone touching pricing, Stripe, or the signup flow should check its current state before assuming anything is chargeable to a real customer." },
-          { type: "callout", kind: "warning", title: "Current value: false (verified 2026-08-03)", text: "PURCHASES_ENABLED is currently false. While false, /signup shows a “coming soon” notice and /api/setup-intent refuses to create a SetupIntent, so no card can be entered and no one can be charged." },
+          { type: "prose", text: "PURCHASES_ENABLED is the master flag gating all live billing. Anyone touching pricing, Stripe, or the signup flow should check its current state before assuming anything about what a real customer can be charged." },
+          { type: "callout", kind: "warning", title: "Current value: true (live since 2026-08-04)", text: "PURCHASES_ENABLED is currently true. IGY is live: /signup runs the real purchase flow and /api/setup-intent creates SetupIntents, so real cards can be entered and real customers can be charged. If it is ever flipped back to false, /signup shows a “coming soon” notice and no one can be charged. Always check the current value before assuming either state." },
         ],
       },
     ],
@@ -250,6 +251,39 @@ export const PARTS: Part[] = [
     blurb: "Every internal /admin screen, what it does, and the permission it checks. You only see the write-ups your role can access.",
     entries: [
       {
+        id: "admin-home",
+        title: "The admin home (your action-first landing)",
+        address: "/admin",
+        blocks: [
+          { type: "prose", text: "When you sign in, /admin is built around what needs a human right now, not a wall of links. Everything on it is permission-gated and degrades quietly, so you only see the parts your role can act on." },
+          { type: "subheading", text: "What's on it" },
+          { type: "list", items: [
+            "Active incidents banner: shows only when there's an unresolved operational alert (for example a Twilio health problem). If it's there, read it.",
+            "“Needs your attention”: the priority work queue, most-urgent first (billing disputes and failed billing, then content review, Cornerstone, error bounty, pronoun review, theme tags, and outreach). Queues with nothing waiting are hidden.",
+            "Inline review: the top few flagged verse slots can be approved or rejected right on the home page.",
+            "Inline resolve: open action items (next section) can be resolved in place.",
+            "“At a glance”: a small status strip, not charts, with subscribers awaiting their SMS reply, today's sends (delivered and failed), the nearest-to-empty content track, and MRR (MRR only if your role can see revenue).",
+            "Quick links: the de-emphasized nav to every other screen your role can reach.",
+          ] },
+          { type: "callout", kind: "info", title: "Role-gated, top to bottom", text: "Each block checks its own permission. If a queue or metric is missing from your home page, it's limited to another role, not broken." },
+        ],
+      },
+      {
+        id: "admin-action-items",
+        title: "Action items (billing & disputes)",
+        address: "/admin (Needs your attention)",
+        relatedRoute: "/admin/action-items",
+        blocks: [
+          { type: "prose", text: "Action items are operational to-dos raised automatically by the Stripe webhook and worked from the admin home. There is no separate screen: they surface in “Needs your attention” and are resolved in place. Two kinds exist today." },
+          { type: "list", items: [
+            "Failed billing: a subscription charge failed (a trial-end or renewal attempt). It clears itself if a later charge for that same subscription succeeds, so you only act on ones that stay open.",
+            "Dispute review: a chargeback that IGY won, which needs a human decision on whether to reinstate the subscriber. It won't reinstate on its own.",
+          ] },
+          { type: "prose", text: "Resolving one is a single click on the home page, and it records who resolved it. Items are de-duplicated, so the same failed charge or dispute never stacks up more than once." },
+          { type: "callout", kind: "info", title: "Permission: finance.action_items.view", text: "Seeing and resolving action items requires finance.action_items.view. Currently super_admin only." },
+        ],
+      },
+      {
         id: "admin-cornerstone",
         title: "Cornerstone Partners",
         address: "/admin/cornerstone",
@@ -261,6 +295,8 @@ export const PARTS: Part[] = [
             "Manage partner records, locked-in pricing, and program config (partners.manage).",
             "Recover a church's tokenized status link if they lose it (resend-link recovery).",
           ] },
+          { type: "subheading", text: "Group enrollment and roster" },
+          { type: "prose", text: "Each partner church can get a shareable enrollment link and short code that a minister hands to their teens. A teen who signs up through it self-enrolls with their own info, and the resulting subscription is attributed to that church; billing is unchanged, each teen still bills individually. From here you can show a church's code and its joined count, and rotate, pause, or resume the link. There is also an optional first-names-only roster a church can paste in to track who has and hasn't joined yet; it holds no contact information and never sends anything." },
           { type: "callout", kind: "info", title: "Permission: partners.view", text: "Viewing this screen requires partners.view. Approving/declining requires partners.review; editing records/pricing/config requires partners.manage. All three are currently super_admin only." },
         ],
       },
@@ -277,6 +313,7 @@ export const PARTS: Part[] = [
             "Reject/edit a translation, or reject a verse entirely to trigger re-selection (content.queue.reject_translation / reject_verse).",
             "Super admins can force-resolve a stuck or escalated slot (content.queue.force_resolve).",
           ] },
+          { type: "prose", text: "The main queue shows exceptions only: the days where the AI flagged something or disagreed with itself. A companion view at /admin/review/batch shows every slot for a track and date window, including the days the exceptions queue never lists, so you can approve a whole upcoming batch day by day." },
           { type: "callout", kind: "info", title: "Permission: content.queue.view", text: "Open to content_reviewer and super_admin." },
         ],
       },
@@ -315,12 +352,27 @@ export const PARTS: Part[] = [
         address: "/admin/promo-codes",
         relatedRoute: "/admin/promo-codes",
         blocks: [
-          { type: "prose", text: "Create and manage Stripe-native discount codes (including the affinity codes in Part 3)." },
+          { type: "prose", text: "Create and manage Stripe-native discount codes (including the affinity codes in Part 3). Each code is a real Stripe coupon plus promotion code; the IGY-specific rules live in its metadata." },
+          { type: "subheading", text: "What you can set on a code" },
           { type: "list", items: [
-            "View promo codes (billing.promo_codes.view).",
-            "Create, edit, and deactivate codes (billing.promo_codes.create / edit / deactivate).",
+            "Percent off or a fixed dollar amount off.",
+            "Duration: once, forever, or repeating for N months.",
+            "A total redemption cap and a per-customer cap.",
+            "An active-from date and an expiry date.",
+            "Which plan tiers it applies to (none selected means all tiers).",
+            "First-time-customers-only.",
+            "An attestation the buyer must confirm at signup (used by the affinity codes).",
+            "A required add-on: a code can require the DM from Him add-on, so the discount only applies when the buyer includes it. Enforced at subscription creation.",
           ] },
-          { type: "callout", kind: "info", title: "Permission: billing.promo_codes.view (super_admin)", text: "All promo-code permissions are currently super_admin only." },
+          { type: "subheading", text: "Managing existing codes" },
+          { type: "list", items: [
+            "Search by code or internal label.",
+            "Show or hide inactive codes (shown by default).",
+            "Each row shows the discount, window, redemptions, its rules as small pills, and status.",
+            "Deactivate soft-disables a code in Stripe; it is never hard-deleted, and the discount math can't be edited after creation.",
+          ] },
+          { type: "prose", text: "Staff who can see revenue also get an ARR Impact Simulator here for modeling a code's effect." },
+          { type: "callout", kind: "info", title: "Permission: billing.promo_codes.view (super_admin)", text: "All promo-code permissions are currently super_admin only. Creating, editing, and deactivating each check their own permission." },
         ],
       },
       {
@@ -339,8 +391,16 @@ export const PARTS: Part[] = [
         address: "/admin/dashboard",
         relatedRoute: "/admin/dashboard",
         blocks: [
-          { type: "prose", text: "Subscriber, MRR, funnel, and backlog metrics for the business." },
-          { type: "callout", kind: "info", title: "Permission: analytics.dashboard.view (super_admin)", text: "Revenue/ARR-impact figures are further gated by analytics.revenue.view." },
+          { type: "prose", text: "The business metrics view: subscribers, revenue, funnel, delivery, and content health. It is a first-pass dashboard meant to be adjusted freely." },
+          { type: "list", items: [
+            "A 7, 30, or 90 day range toggle across the whole page.",
+            "A demo-data toggle: with real figures near zero pre-launch, this fills the charts with clearly-labeled illustrative numbers (nothing is written to the database).",
+            "A strip of at-a-glance tiles (MRR, net revenue, active subscribers, ARPU, new signups, churn, delivery), each expanding to a fuller trend.",
+            "Charts for revenue (net and gross, with a click-through to a by-plan and by-source breakdown), MRR and ARR, signups, acquisition source, the signup-to-active funnel, churn, plan and focus-track mix, a delivery heatmap, daily delivery, and SMS spend.",
+            "A content-runway card per track, and a reserved-donation-fund card for staff who can see revenue.",
+            "A promo-code performance panel: revenue and conversions per code, sortable, with a click-through per code.",
+          ] },
+          { type: "callout", kind: "info", title: "Permission: analytics.dashboard.view (super_admin)", text: "Revenue and ARR-impact figures are further gated by analytics.revenue.view." },
         ],
       },
       {
@@ -365,6 +425,83 @@ export const PARTS: Part[] = [
         blocks: [
           { type: "prose", text: "Per-country age-consent rules. Until a country's threshold is attorney-confirmed here, the age-consent gate fails closed for that country (see Part 2)." },
           { type: "callout", kind: "danger", title: "Permission: admin.consent_thresholds.manage (super_admin)", text: "This screen controls a legal-safety gate. Only change a country's threshold on confirmed legal guidance, never to unblock a specific signup." },
+        ],
+      },
+      {
+        id: "admin-outreach",
+        title: "Outreach Campaigns",
+        address: "/admin/outreach",
+        relatedRoute: "/admin/outreach",
+        blocks: [
+          { type: "prose", text: "The outreach system finds churches and youth organizations to invite, organized as named, geographic campaigns you can track over time. It is how IGY does targeted cold outreach, and it is gated behind its own approvals so nothing goes out by accident." },
+          { type: "subheading", text: "Creating a campaign" },
+          { type: "prose", text: "A campaign is a place plus a radius. On a map of North America you pick a center (click it, drag the pin, or search a place name) and set a radius, then save it with a name. That saved campaign is what performance rolls up to." },
+          { type: "subheading", text: "Discovery" },
+          { type: "prose", text: "Running discovery searches public sources for churches within the campaign's radius, using only publicly posted general contact emails and youth-ministry signals. Each lead is placed on the map and, where a public attendance figure exists, sized. A lead with no findable attendance is marked “unknown,” never guessed." },
+          { type: "list", items: [
+            "Size buckets: small (under 100), medium (100 to 499), large (500 to 1,999), mega (2,000 and up), and unknown.",
+            "Discovered leads land “staged”: found, but NOT yet in the send pipeline.",
+          ] },
+          { type: "subheading", text: "Promoting leads to send" },
+          { type: "prose", text: "You choose which staged leads become active, by size bucket (for example, promote only the mega churches in a campaign). Only promoted (active) leads can ever receive an email. This is the deliberate gate between “found” and “contacted.”" },
+          { type: "subheading", text: "Sending" },
+          { type: "prose", text: "A campaign can be sent as its own deliberate push, separate from the company-wide send, so its results trace cleanly to that campaign. Every send is still governed by the same outreach approvals (copy approved, legal approved, and the live master switch) plus an optional address allowlist, and a dry-run preview shows exactly who would receive what before anything real goes out." },
+          { type: "subheading", text: "Per-campaign offer" },
+          { type: "prose", text: "Each campaign can carry its own discount and message variant, so you can tell a weak region apart from a weak offer. The discount is a number that flows into both the promo code and the wording (“15% off”); the message copy itself is fixed in code and approved, so a campaign can only pick an approved variant, never write its own." },
+          { type: "subheading", text: "Performance leaderboard" },
+          { type: "prose", text: "/admin/outreach/performance is a compact, rates-first table (not a chart wall): per campaign and per size bucket it shows contacted, redeemed, conversion rate, the offer, net revenue, and first-charge revenue. It answers where to focus next and whether church size actually predicts conversion." },
+          { type: "callout", kind: "info", title: "Permission: marketing.outreach.view", text: "Viewing requires marketing.outreach.view; creating campaigns, promoting leads, and sending require marketing.outreach.manage. Currently super_admin only." },
+        ],
+      },
+      {
+        id: "admin-roles",
+        title: "Roles & staff",
+        address: "/admin/roles",
+        relatedRoute: "/admin/roles",
+        blocks: [
+          { type: "prose", text: "Where staff accounts and what each role can do are managed. Changes take effect immediately, with no redeploy, because permissions are read live on every request." },
+          { type: "list", items: [
+            "Roles & permissions tab: create a role and turn individual permissions on or off in a grid grouped by category.",
+            "Staff tab: onboard a person by email and role; if they don't have a login yet, an account is created and they sign in by magic link at /admin/login.",
+          ] },
+          { type: "callout", kind: "warning", title: "super_admin is locked", text: "The super_admin role always has every permission and cannot be edited here. That guard is deliberate: because access is data-driven, it stops anyone from accidentally locking every admin out." },
+          { type: "callout", kind: "info", title: "Permission: admin.roles.manage", text: "Managing roles and staff requires admin.roles.manage. Currently super_admin only." },
+        ],
+      },
+      {
+        id: "admin-pronoun-review",
+        title: "Divine-pronoun corrections",
+        address: "/admin/pronoun-review",
+        relatedRoute: "/admin/pronoun-review",
+        blocks: [
+          { type: "prose", text: "A focused review queue for one thing: verses where the fidelity check flagged a lowercase divine pronoun (he, him, his) that may refer to God. The correction is proposed automatically, but nothing changes until a person approves it." },
+          { type: "list", items: [
+            "Each row shows the current live verse and the proposed version, with only the changed words highlighted.",
+            "Approving writes the correction to the live verse and clears the flag; rejecting leaves the verse as-is.",
+          ] },
+          { type: "callout", kind: "info", title: "Permission: content.queue.view", text: "Open to content_reviewer and super_admin; approving requires content.queue.approve." },
+        ],
+      },
+      {
+        id: "admin-sponsors",
+        title: "Sponsors",
+        address: "/admin/sponsors",
+        relatedRoute: "/admin/sponsors",
+        blocks: [
+          { type: "prose", text: "The internal console for the Sponsor Program: add and edit sponsors (name, logo, contact, amount, dates, vetting notes). New sponsors start as pending review." },
+          { type: "callout", kind: "warning", title: "Program is paused (off for now, not gone)", text: "The Sponsor Program was deprioritized 2026-08-01 in favor of Cornerstone (zero sponsors and zero inquiries to date). SPONSORS_ENABLED is false, so every public sponsor surface is hidden and both /sponsors and /sponsor-inquiry return 404. This admin screen and all sponsor data are intentionally kept so the program can be switched back on. Don't tell anyone sponsorship is currently available." },
+          { type: "callout", kind: "info", title: "Permission: marketing.sponsors.view", text: "Viewing requires marketing.sponsors.view; editing requires marketing.sponsors.manage. Currently super_admin only." },
+        ],
+      },
+      {
+        id: "admin-season-review",
+        title: "Season Review",
+        address: "/admin/season-review",
+        relatedRoute: "/admin/season-review",
+        blocks: [
+          { type: "prose", text: "The review console for Holy Season content (Christmastide, Advent, Eastertide, Lent). It is separate from the daily Review Queue: seasonal content is approved as a batch, day by day, and a season can only bill once every day in its batch is approved." },
+          { type: "callout", kind: "warning", title: "Built, but dormant", text: "The Holy Season add-ons are fully built but flag-gated off (SEASONS_ENABLED is false): the billing and send paths no-op and nothing is offered to customers. This screen lets reviewers get seasonal batches ready ahead of any future go-live. Do not tell customers seasons are available; they are not live." },
+          { type: "callout", kind: "info", title: "Permission: content.queue.view", text: "Open to content_reviewer and super_admin; approving requires content.queue.approve." },
         ],
       },
     ],
@@ -434,7 +571,7 @@ export const PARTS: Part[] = [
             ["IGY", "“It's God, Yo!”, the product this manual covers."],
             ["Cornerstone Partner", "A church recognized under the Cornerstone Partner Program; has a permanent partner number."],
             ["DM from Him", "The personalized-framing add-on to the daily verse."],
-            ["PURCHASES_ENABLED", "Flag gating whether IGY can actually bill anyone (currently false)."],
+            ["PURCHASES_ENABLED", "Flag gating whether IGY can actually bill anyone (currently true; IGY is live)."],
             ["CORNERSTONE_ENABLED", "Flag gating the Cornerstone program's public surfaces (currently true)."],
           ] },
         ],
