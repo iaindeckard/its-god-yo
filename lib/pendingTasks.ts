@@ -77,6 +77,21 @@ export const QUEUES: PendingQueue[] = [
     count: (db) => headCount(db, "igy_error_reports", (q) => q.eq("status", "pending")),
   },
   {
+    key: "failed_billing",
+    label: "Failed billing",
+    need: "finance.action_items.view",
+    // Resolved inline on the /admin landing page (no dedicated screen).
+    navHref: null,
+    count: (db) => headCount(db, "igy_action_items", (q) => q.eq("kind", "failed_billing").eq("status", "open")),
+  },
+  {
+    key: "dispute_review",
+    label: "Disputes to review",
+    need: "finance.action_items.view",
+    navHref: null,
+    count: (db) => headCount(db, "igy_action_items", (q) => q.eq("kind", "dispute_review").eq("status", "open")),
+  },
+  {
     key: "outreach",
     label: "Outreach leads",
     // Outreach has no admin screen yet — it is included so the centralized count is

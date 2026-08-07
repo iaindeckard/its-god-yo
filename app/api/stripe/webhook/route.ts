@@ -7,6 +7,7 @@ import { markConvertedByPromotionCodeId } from "@/lib/outreach/leads";
 import { upsertSubscriptionPayment, tsIso, type PaymentCapture } from "@/lib/subscriptionPayments";
 import { cancelSubscriptionForSignup, cancelStripeSubscriptionById } from "@/lib/cancelSubscription";
 import { sendOpsAlert } from "@/lib/opsAlert";
+import { recordActionItem, resolveOpenByDedupe } from "@/lib/actionItems";
 
 export const dynamic = "force-dynamic";
 
@@ -298,7 +299,10 @@ export async function POST(req: Request) {
       }
       case "invoice.paid": {
         const inv = event.data.object as Stripe.Invoice;
-        await setStatusBySub(invSubId(inv), "active");
+        const paidSubId = invSubId(inv);
+        await setStatusBySub(paidSubId, "active");
+        // Dunning recovered: clear any open failed-billing item for this sub.
+        if (paidSubId) await resolveOpenByDedupe(`failed_billing:${paidSubId}`);
         // Row-level realized-charge ledger (launch blocker + settled-currency
         // capture). Runs for every real charge, independent of referral gating.
         await safeCapture("invoice.paid", () => capturePaidInvoice(inv));
@@ -314,7 +318,32 @@ export async function POST(req: Request) {
         break;
       }
       case "invoice.payment_failed": {
-        await setStatusBySub(invSubId(event.data.object as Stripe.Invoice), "past_due");
+        const inv = event.data.object as Stripe.Invoice;
+        const subId = invSubId(inv);
+        await setStatusBySub(subId, "past_due");
+        // Persist a failed-billing action item (deduped per subscription) so a real
+        // dunning failure surfaces on the admin landing page, not just in logs.
+        if (subId) {
+          const { data: ps } = await admin
+            .from("pending_signups")
+            .select("id, purchaser_email")
+            .eq("stripe_subscription_id", subId)
+            .maybeSingle();
+          const amountDue = (inv as unknown as { amount_due?: number }).amount_due ?? null;
+          const attempt = (inv as unknown as { attempt_count?: number }).attempt_count ?? null;
+          const email = (ps as { purchaser_email?: string } | null)?.purchaser_email ?? "unknown";
+          await recordActionItem({
+            kind: "failed_billing",
+            dedupeKey: `failed_billing:${subId}`,
+            title: `Payment failed — ${email}`,
+            detail: `Invoice ${inv.id ?? "?"} failed${attempt ? ` (attempt ${attempt})` : ""}. Subscription is past_due; dunning will retry. Resolve once recovered or the customer is contacted.`,
+            pendingSignupId: (ps as { id?: string } | null)?.id ?? null,
+            stripeCustomerId: idOf((inv as unknown as { customer?: unknown }).customer),
+            stripeSubscriptionId: subId,
+            amountCents: amountDue,
+            currency: (inv as unknown as { currency?: string }).currency ?? null,
+          });
+        }
         break;
       }
       case "invoice.payment_action_required": {
@@ -394,6 +423,20 @@ export async function POST(req: Request) {
               `Subscription: ${subId ?? "could not resolve"}\n\n` +
               `Decide manually whether to re-subscribe this customer and from what date. ` +
               `The won-back funds settle back onto the ledger via the reconcile cron.`,
+          });
+          // Persist a dispute-review action item (deduped per dispute) so the
+          // manual reinstatement decision is tracked on the landing page, not just
+          // emailed once.
+          await recordActionItem({
+            kind: "dispute_review",
+            dedupeKey: `dispute_review:${dispute.id}`,
+            title: `Dispute won — reinstatement decision`,
+            detail: `We won dispute ${dispute.id}. The subscription (${subId ?? "unresolved"}) was canceled when the dispute opened and was NOT auto-reinstated. Decide whether to re-subscribe and from what date, then resolve.`,
+            stripeDisputeId: dispute.id,
+            stripeChargeId: idOf((dispute as unknown as { charge?: unknown }).charge),
+            stripeSubscriptionId: subId,
+            amountCents: dispute.amount ?? null,
+            currency: String(dispute.currency ?? "") || null,
           });
         } else {
           // lost / warning_closed / other: the chargeback stands; sub already canceled.
