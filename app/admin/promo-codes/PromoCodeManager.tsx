@@ -8,6 +8,8 @@ interface TierOption {
   key: string;
   label: string;
 }
+// Add-on options share the {key,label} shape with tiers.
+type AddonOption = TierOption;
 
 function discountLabel(c: PromoCodeView): string {
   if (c.percent_off != null) return `${c.percent_off}% off`;
@@ -33,6 +35,9 @@ function tiersLabel(c: PromoCodeView, tierOptions: TierOption[]): string {
     .map((k) => tierOptions.find((t) => t.key === k)?.label ?? k)
     .join(", ");
 }
+function addonsLabel(c: PromoCodeView, addonOptions: AddonOption[]): string[] {
+  return c.required_addons.map((k) => addonOptions.find((a) => a.key === k)?.label ?? k);
+}
 
 export default function PromoCodeManager({
   initialCodes,
@@ -41,6 +46,7 @@ export default function PromoCodeManager({
   canEdit,
   canViewRevenue,
   tierOptions,
+  addonOptions,
   simTiers,
 }: {
   initialCodes: PromoCodeView[];
@@ -49,6 +55,7 @@ export default function PromoCodeManager({
   canEdit: boolean;
   canViewRevenue: boolean;
   tierOptions: TierOption[];
+  addonOptions: AddonOption[];
   simTiers: SimTier[];
 }) {
   const [codes, setCodes] = useState<PromoCodeView[]>(initialCodes);
@@ -69,6 +76,7 @@ export default function PromoCodeManager({
   const [startsAt, setStartsAt] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
   const [allowedTiers, setAllowedTiers] = useState<string[]>([]);
+  const [requiredAddons, setRequiredAddons] = useState<string[]>([]);
   const [requiresAttestation, setRequiresAttestation] = useState(false);
   const [attestationText, setAttestationText] = useState("");
   const [note, setNote] = useState("");
@@ -76,10 +84,13 @@ export default function PromoCodeManager({
   function toggleTier(key: string) {
     setAllowedTiers((cur) => (cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key]));
   }
+  function toggleAddon(key: string) {
+    setRequiredAddons((cur) => (cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key]));
+  }
 
   function resetForm() {
     setLabel(""); setValue(""); setCode(""); setMaxRedemptions(""); setMaxPerCustomer("1");
-    setFirstTimeOnly(true); setStartsAt(""); setExpiresAt(""); setAllowedTiers([]);
+    setFirstTimeOnly(true); setStartsAt(""); setExpiresAt(""); setAllowedTiers([]); setRequiredAddons([]);
     setRequiresAttestation(false); setAttestationText(""); setNote("");
   }
 
@@ -103,6 +114,7 @@ export default function PromoCodeManager({
           startsAt: startsAt || undefined,
           expiresAt: expiresAt || undefined,
           allowedTiers,
+          requiredAddons,
           requiresAttestation,
           attestationText: requiresAttestation ? attestationText : undefined,
           note: note || undefined,
@@ -223,6 +235,24 @@ export default function PromoCodeManager({
             </div>
           </div>
 
+          {addonOptions.length > 0 && (
+            <div className="field">
+              <label>Requires these add-ons (none selected = no add-on required)</label>
+              <div className="tier-checks">
+                {addonOptions.map((a) => (
+                  <label key={a.key} className={`tier-chip ${requiredAddons.includes(a.key) ? "on" : ""}`}>
+                    <input type="checkbox" checked={requiredAddons.includes(a.key)} onChange={() => toggleAddon(a.key)} />
+                    {a.label}
+                  </label>
+                ))}
+              </div>
+              <p className="hint" style={{ marginTop: 6 }}>
+                The discount only applies when the buyer includes the selected add-on(s) at checkout — enforced at
+                subscription creation, so it can never be redeemed without them.
+              </p>
+            </div>
+          )}
+
           <label className="check-line">
             <input type="checkbox" checked={firstTimeOnly} onChange={(e) => setFirstTimeOnly(e.target.checked)} />
             First-time customers only (Stripe restriction — the closest native primitive to one-per-customer)
@@ -291,6 +321,9 @@ export default function PromoCodeManager({
                     {c.requires_attestation && <span className="pill">attest</span>}
                     {c.first_time_only && <span className="pill">first-time</span>}
                     {c.max_per_customer != null && <span className="pill">≤{c.max_per_customer}/cust</span>}
+                    {addonsLabel(c, addonOptions).map((label) => (
+                      <span key={label} className="pill">requires {label}</span>
+                    ))}
                   </div>
                 </td>
                 <td>{c.active ? <span className="pill pill-on">active</span> : <span className="pill pill-off">inactive</span>}</td>

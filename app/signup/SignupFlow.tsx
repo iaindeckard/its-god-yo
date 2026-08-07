@@ -174,6 +174,10 @@ export default function SignupFlow({
   const [promoInput, setPromoInput] = useState("");
   const [promoBusy, setPromoBusy] = useState(false);
   const [promoError, setPromoError] = useState<string | null>(null);
+  // A code that's otherwise valid but requires an add-on (e.g. DM from Him) that
+  // isn't selected. Distinct from promoError (invalid/expired) so we can prompt the
+  // customer to add the add-on rather than saying the code is bad.
+  const [promoAddonMsg, setPromoAddonMsg] = useState<string | null>(null);
   const [promo, setPromo] = useState<{
     promotion_code_id: string; code: string; percent_off: number | null; amount_off: number | null; currency: string | null;
     requires_attestation: boolean; attestation_text: string | null;
@@ -237,24 +241,29 @@ export default function SignupFlow({
     setTeenFirstName(""); setPurchaserEmail(""); setTeenPhone(""); setPrimaryAttest(false);
     setPurchaserFirstName(""); setPurchaserLastName(""); setPurchaserSalutation([]);
     setDmEnabled(false); setStripeIds(null); setReferralApplied(false); setReferralInput(""); setReferralError(null);
-    setPromo(null); setPromoInput(""); setPromoError(null); setPromoAttest(false);
+    setPromo(null); setPromoInput(""); setPromoError(null); setPromoAddonMsg(null); setPromoAttest(false);
     setTeenBirthYear(""); setTeenGate(null); setTeenEnhancedAck(false);
   }
 
-  async function applyPromo() {
+  async function runPromoValidation(rawCode: string) {
+    const code = rawCode.trim();
+    if (!code) return;
     if (referralApplied) { setPromo(null); setPromoError(s.referralExclusive); return; } // referral ⊕ promo
     setPromoError(null);
+    setPromoAddonMsg(null);
     setPromoBusy(true);
     try {
       const res = await fetch("/api/promo/validate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // pass the selected plan so the server enforces any tier restriction on the code
-        body: JSON.stringify({ code: promoInput.trim(), plan_key: resolved?.key }),
+        // pass the selected plan (tier restriction) AND the current add-on selection
+        // (required-add-on restriction) so the server enforces both here, not at submit.
+        body: JSON.stringify({ code, plan_key: resolved?.key, dm_addon: dmEnabled }),
       });
       const data = await res.json();
       if (data.valid) {
         setPromoAttest(false); // a freshly-applied code must be re-attested
+        setPromoAddonMsg(null);
         setPromo({
           promotion_code_id: data.promotion_code_id,
           code: data.code,
@@ -264,6 +273,11 @@ export default function SignupFlow({
           requires_attestation: data.requires_attestation === true,
           attestation_text: data.attestation_text ?? null,
         });
+      } else if (data.reason === "requires_addons") {
+        // Otherwise-valid code, but a required add-on isn't selected — tell the
+        // customer exactly what to add instead of calling the code invalid.
+        setPromo(null);
+        setPromoAddonMsg(data.message || s.promoRequiresAddon);
       } else {
         setPromo(null);
         setPromoError(s.promoInvalid);
@@ -274,6 +288,20 @@ export default function SignupFlow({
       setPromoBusy(false);
     }
   }
+
+  function applyPromo() {
+    void runPromoValidation(promoInput);
+  }
+
+  // Re-validate an applied/blocked code when the add-on selection changes (e.g. the
+  // customer turns DM from Him on/off): a code requiring the add-on reactivates when
+  // it's added and drops with a clear message when it's removed — never a surprise
+  // at submit. Only fires when there's a code in play, so it's a no-op for most flows.
+  useEffect(() => {
+    const activeCode = promo?.code ?? (promoAddonMsg ? promoInput : null);
+    if (activeCode) void runPromoValidation(activeCode);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dmEnabled]);
 
   async function applyReferral() {
     setReferralError(null);
@@ -825,7 +853,7 @@ export default function SignupFlow({
                 <div style={{ display: "flex", gap: 8 }}>
                   <input
                     value={promoInput}
-                    onChange={(e) => { setPromoInput(e.target.value.toUpperCase()); setPromo(null); setPromoError(null); setPromoAttest(false); }}
+                    onChange={(e) => { setPromoInput(e.target.value.toUpperCase()); setPromo(null); setPromoError(null); setPromoAddonMsg(null); setPromoAttest(false); }}
                     placeholder={s.promoFieldPlaceholder}
                     style={{ flex: 1 }}
                   />
@@ -835,7 +863,8 @@ export default function SignupFlow({
                 </div>
                 {promo && <p className="hint" style={{ color: "var(--igy-blue)" }}>✓ {s.promoApplied}: {promoLabel}</p>}
                 {promoError && <p className="hint" style={{ color: "var(--igy-error-text)" }}>{promoError}</p>}
-                {!promo && !promoError && <p className="hint">{s.promoFieldHint}</p>}
+                {promoAddonMsg && <p className="hint" style={{ color: "var(--igy-error-text)" }}>{promoAddonMsg}</p>}
+                {!promo && !promoError && !promoAddonMsg && <p className="hint">{s.promoFieldHint}</p>}
 
                 {/* Affinity-code attestation — required before this discount can be
                     used. The exact statement comes from the promo code (Stripe

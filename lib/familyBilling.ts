@@ -3,7 +3,7 @@ import type Stripe from "stripe";
 import { getStripe } from "./stripe";
 import { getSupabaseAdmin } from "./supabaseAdmin";
 import { PLANS, FAMILY_EXTRA_TEEN, FAMILY_BASE_TEENS } from "./plans";
-import { promoAttestationSatisfied } from "./promoCodes";
+import { promoAttestationSatisfied, promoRequiredAddonsSatisfied } from "./promoCodes";
 import { reconcileDmAddon } from "./dmAddon";
 
 /**
@@ -36,11 +36,18 @@ export async function createFamilyBaseSubscription(pendingSignupId: string): Pro
   // referrals now reward via a customer-balance credit at conversion (lib/referral.ts).
   const discounts: Stripe.SubscriptionCreateParams.Discount[] = [];
   if (ps.promo_promotion_code_id) {
-    // Affinity attestation gate — same rule as lib/createSubscription.ts.
-    if (await promoAttestationSatisfied(ps.promo_promotion_code_id, ps.promo_attestation_confirmed)) {
+    // Attestation + required-add-on gates — same rules as lib/createSubscription.ts.
+    const addonSelection = { dmAddon: !!ps.dm_addon };
+    const [attestOk, addonsOk] = await Promise.all([
+      promoAttestationSatisfied(ps.promo_promotion_code_id, ps.promo_attestation_confirmed),
+      promoRequiredAddonsSatisfied(ps.promo_promotion_code_id, addonSelection),
+    ]);
+    if (attestOk && addonsOk) {
       discounts.push({ promotion_code: ps.promo_promotion_code_id });
-    } else {
+    } else if (!attestOk) {
       console.warn(`[familyBilling] promo ${ps.promo_code} requires attestation but signup ${ps.id} has none — discount NOT applied`);
+    } else {
+      console.warn(`[familyBilling] promo ${ps.promo_code} requires an add-on not selected on signup ${ps.id} — discount NOT applied`);
     }
   }
 

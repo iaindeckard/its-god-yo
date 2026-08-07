@@ -2,6 +2,12 @@ import "server-only";
 import type Stripe from "stripe";
 import { getStripe } from "./stripe";
 import { TIER_KEYS, tierForPlanKey } from "./tiers";
+import {
+  type AddonSelection,
+  parseRequiredAddons,
+  REQUIRED_ADDON_IDS,
+  unmetRequiredAddons,
+} from "./requiredAddons";
 
 /**
  * Stripe-native promo codes. We deliberately use Stripe's Coupon +
@@ -43,6 +49,7 @@ export interface PromoCodeView {
   attestation_text: string | null;
   starts_at: number | null; // unix seconds — app-enforced (Stripe has no coupon start)
   allowed_tiers: string[]; // empty => applies to every tier
+  required_addons: string[]; // add-on ids that must be selected to redeem (empty => none); see lib/requiredAddons
 }
 
 function parseTiers(raw: string | undefined | null): string[] {
@@ -78,6 +85,7 @@ function toView(pc: Stripe.PromotionCode): PromoCodeView {
     attestation_text: m.attestation_text || null,
     starts_at: m.starts_at ? Number(m.starts_at) : null,
     allowed_tiers: parseTiers(m.allowed_tiers),
+    required_addons: parseRequiredAddons(m.required_addons),
   };
 }
 
@@ -105,6 +113,7 @@ export interface CreatePromoInput {
   attestationText?: string;
   startsAt?: number | null; // unix seconds — app-enforced start
   allowedTiers?: string[]; // empty/omitted => all tiers
+  requiredAddons?: string[]; // add-on ids that must be selected to redeem; empty/omitted => none
 }
 
 /** Build the metadata bag shared by the coupon and the promotion code. */
@@ -120,6 +129,8 @@ function buildMetadata(input: CreatePromoInput): Stripe.MetadataParam {
   if (input.startsAt) meta.starts_at = String(input.startsAt);
   const tiers = (input.allowedTiers ?? []).filter((t) => TIER_KEYS.includes(t));
   if (tiers.length) meta.allowed_tiers = tiers.join(",");
+  const addons = (input.requiredAddons ?? []).filter((a) => REQUIRED_ADDON_IDS.includes(a));
+  if (addons.length) meta.required_addons = addons.join(",");
   return meta;
 }
 
@@ -205,6 +216,31 @@ export async function promoAttestationSatisfied(
   const view = await getPromoViewById(promotionCodeId);
   if (view?.requires_attestation && !attestationConfirmed) return false;
   return true;
+}
+
+/**
+ * Required-add-on gate (general, registry-driven — lib/requiredAddons). The
+ * authoritative server-side check, applied at subscription-creation time in
+ * lib/createSubscription.ts + lib/familyBilling.ts alongside the attestation gate:
+ * a code that requires an add-on (e.g. DM from Him) only keeps its discount when
+ * that add-on is actually part of the purchase.
+ *
+ * Returns true (apply the discount) UNLESS we can positively confirm the code
+ * requires an add-on that the selection is missing. Codes with no required add-ons
+ * always pass (no regression to existing codes); a transient Stripe read failure
+ * fails OPEN for the discount — same posture as the attestation gate (a policy
+ * control, not a security boundary; silently dropping a legitimate discount on a
+ * blip is the worse failure). The client-side validator prevents a customer from
+ * reaching checkout in the unmet state; this is the fail-closed backstop.
+ */
+export async function promoRequiredAddonsSatisfied(
+  promotionCodeId: string | null | undefined,
+  selection: AddonSelection,
+): Promise<boolean> {
+  if (!promotionCodeId) return false; // nothing to apply
+  const view = await getPromoViewById(promotionCodeId);
+  if (!view) return true; // read blip → fail open (parity with attestation)
+  return unmetRequiredAddons(view.required_addons, selection).length === 0;
 }
 
 /** True if a code with these allowed tiers applies to the given checkout plan. */

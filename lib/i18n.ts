@@ -131,6 +131,7 @@ export const t = {
     promoFieldHint: "A discount from us, separate from a referral code.",
     promoApplied: "Promo applied",
     promoInvalid: "That promo code isn't valid or has expired.",
+    promoRequiresAddon: "This code requires an add-on that isn't selected.",
 
     wPayTitle: "Save a payment method",
     wPaySub:
@@ -260,6 +261,7 @@ export const t = {
     promoFieldHint: "Un descuento de nuestra parte, distinto de un código de referido.",
     promoApplied: "Promo aplicado",
     promoInvalid: "Ese código promocional no es válido o expiró.",
+    promoRequiresAddon: "Este código requiere un complemento que no está seleccionado.",
 
     wPayTitle: "Guarda un método de pago",
     wPaySub:
