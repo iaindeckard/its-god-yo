@@ -3,7 +3,8 @@ import { OUTREACH, sendGate, sendAllowlist } from "./config";
 import { fetchActiveLeads, recordSend, type OutreachLead, type SendScope } from "./leads";
 import { buildEmail, buildFollowupEmail, sendViaResend } from "./email";
 import { createPromoCode } from "../promoCodes";
-import { updateCampaign } from "./campaigns";
+import { updateCampaign, listCampaigns } from "./campaigns";
+import { resolveVariant, clampDiscountPercent, type MessageVariant } from "./templates";
 
 /**
  * Two-touch outreach sequence (Iain, 2026-08-05):
@@ -22,9 +23,17 @@ function codeSlug(org: string): string {
   return org.toUpperCase().replace(/[^A-Z0-9]+/g, "").slice(0, 16) || "CHURCH";
 }
 
-/** Mint (or reuse) this lead's one-time 10%-off Stripe promo code, at email 2.
- *  Reuses lib/promoCodes so the coupon/PromotionCode plumbing matches the app. */
-async function ensurePromoCode(lead: OutreachLead): Promise<{ code: string; promotionCodeId: string }> {
+/** Per-lead resolved offer: the campaign's discount + message variant, or the
+ *  default (10% / 'default') for legacy/global-cron leads with no campaign. */
+interface Offer { discountPercent: number; variant: MessageVariant }
+const DEFAULT_OFFER: Offer = { discountPercent: 10, variant: "default" };
+
+/** Mint (or reuse) this lead's one-time Stripe promo code at email 2, at the
+ *  campaign's discount percent (default 10). Reuses lib/promoCodes so the coupon/
+ *  PromotionCode plumbing matches the app. Note: a code minted earlier keeps its
+ *  original percent (Stripe coupons are immutable) — only later leads pick up a
+ *  changed campaign discount. */
+async function ensurePromoCode(lead: OutreachLead, discountPercent: number): Promise<{ code: string; promotionCodeId: string }> {
   if (lead.promo_code && lead.promo_promotion_code_id) {
     return { code: lead.promo_code, promotionCodeId: lead.promo_promotion_code_id };
   }
@@ -32,7 +41,7 @@ async function ensurePromoCode(lead: OutreachLead): Promise<{ code: string; prom
   const view = await createPromoCode({
     code,
     discountType: "percent",
-    value: 10,
+    value: clampDiscountPercent(discountPercent),
     duration: "once",
     maxRedemptions: 1,
     internalLabel: `outreach:${lead.id}`,
@@ -107,6 +116,13 @@ export async function runSend(opts: RunSendOptions = {}): Promise<SendReport> {
   const scope: SendScope | undefined = campaignId ? { campaignId, sizeBuckets } : undefined;
   const leads = await fetchActiveLeads(scope);
 
+  // Per-campaign offer resolution (Phase 4a): map campaign_id -> {discount, variant}.
+  // A lead with no campaign (legacy/global cron) uses DEFAULT_OFFER (10% / default).
+  const offers = new Map<string, Offer>(
+    (await listCampaigns()).map((c) => [c.id, { discountPercent: clampDiscountPercent(c.discount_percent), variant: resolveVariant(c.message_variant) }]),
+  );
+  const offerFor = (lead: OutreachLead): Offer => (lead.campaign_id ? offers.get(lead.campaign_id) ?? DEFAULT_OFFER : DEFAULT_OFFER);
+
   const report: SendReport = {
     mode: live ? "live" : "dry_run",
     gate_reasons: gate.reasons,
@@ -144,13 +160,18 @@ export async function runSend(opts: RunSendOptions = {}): Promise<SendReport> {
       continue;
     }
 
+    const offer = offerFor(lead);
+
     if (!live) {
       // Dry run: render, mint nothing, send nothing. Email 2 shows the code that
-      // WOULD be minted/reused so the preview is faithful.
+      // WOULD be minted/reused so the preview is faithful — with the campaign's
+      // discount + variant applied exactly as a live send would.
       const previewCode = touch === 2
         ? (lead.promo_code ?? `${OUTREACH.promoPrefix}-${codeSlug(lead.org_name)}-${lead.id.slice(0, 6).toUpperCase()}`)
         : "";
-      const preview = touch === 2 ? buildFollowupEmail(lead, previewCode) : buildEmail(lead);
+      const preview = touch === 2
+        ? buildFollowupEmail(lead, previewCode, offer.discountPercent, offer.variant)
+        : buildEmail(lead, offer.variant);
       report.would_send++;
       report.items.push({
         lead_id: lead.id, org_name: lead.org_name, to: lead.contact_email,
@@ -160,15 +181,16 @@ export async function runSend(opts: RunSendOptions = {}): Promise<SendReport> {
       continue;
     }
 
-    // Live send. Touch 1 is code-free; touch 2 mints/attaches the 10%-off code.
+    // Live send. Touch 1 is code-free; touch 2 mints/attaches the code at the
+    // campaign's discount, with the campaign's message variant.
     try {
       let promo: { code: string; promotionCodeId: string } | null = null;
       let email;
       if (touch === 1) {
-        email = buildEmail(lead);
+        email = buildEmail(lead, offer.variant);
       } else {
-        promo = await ensurePromoCode(lead);
-        email = buildFollowupEmail(lead, promo.code);
+        promo = await ensurePromoCode(lead, offer.discountPercent);
+        email = buildFollowupEmail(lead, promo.code, offer.discountPercent, offer.variant);
       }
       await sendViaResend(email);
       await recordSend(lead.id, lead.send_count, promo);

@@ -3,6 +3,7 @@ import { requirePermission } from "@/lib/rbac";
 import { apiError } from "@/lib/apiError";
 import { getCampaign, updateCampaign, type CampaignPatch, type CampaignStatus } from "@/lib/outreach/campaigns";
 import { fetchCampaignLeads } from "@/lib/outreach/leads";
+import { clampDiscountPercent, isApprovedVariant } from "@/lib/outreach/templates";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +40,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (body.center_lat !== undefined) patch.center_lat = body.center_lat === null ? null : Number(body.center_lat);
     if (body.center_lng !== undefined) patch.center_lng = body.center_lng === null ? null : Number(body.center_lng);
     if (typeof body.center_label === "string") patch.center_label = body.center_label.trim();
+    // Offer (Phase 4a): discount is clamped to a valid Stripe percent; the message
+    // variant must be an APPROVED key (free text is rejected, never stored) so a
+    // campaign can never carry unreviewed copy.
+    if (body.discount_percent !== undefined) patch.discount_percent = clampDiscountPercent(Number(body.discount_percent));
+    if (body.message_variant !== undefined) {
+      if (!isApprovedVariant(body.message_variant)) return NextResponse.json({ error: "unknown message_variant" }, { status: 400 });
+      patch.message_variant = body.message_variant;
+    }
     return NextResponse.json({ campaign: await updateCampaign(id, patch) });
   } catch (e) {
     return apiError(e);

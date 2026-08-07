@@ -18,7 +18,15 @@ interface Campaign {
   center_lat: number | null; center_lng: number | null;
   radius_miles: number; size_filter: string[] | null;
   status: string; created_at: string;
+  discount_percent: number; message_variant: string | null;
 }
+
+// Approved message variants (mirror of lib/outreach/templates.ts, which is
+// server-only). Adding a new variant is a reviewed change in BOTH places + the
+// approved copy in email.ts — a campaign can only pick from this fixed set.
+const MESSAGE_VARIANTS: { key: string; label: string }[] = [
+  { key: "default", label: "Default (approved)" },
+];
 interface Lead {
   id: string; org_name: string; city: string | null; state: string | null;
   contact_email: string; website: string | null; status: string;
@@ -56,6 +64,7 @@ export default function OutreachManager({
   const [createName, setCreateName] = useState("");
   const [createDraft, setCreateDraft] = useState<CampaignMapChange | null>(null);
   const [detailDraft, setDetailDraft] = useState<CampaignMapChange | null>(null);
+  const [offerDraft, setOfferDraft] = useState<{ discount_percent: string; message_variant: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -66,11 +75,13 @@ export default function OutreachManager({
   }
 
   async function openCampaign(c: Campaign) {
-    setSelected(c); setLeads([]); setReport(null); setViewBucket("all"); setPromoteSel(new Set()); setDetailDraft(null);
+    setSelected(c); setLeads([]); setReport(null); setViewBucket("all"); setPromoteSel(new Set()); setDetailDraft(null); setOfferDraft(null);
     const res = await fetch(`/api/admin/outreach/campaigns/${c.id}`);
     const data = await res.json();
-    if (res.ok) { setSelected(data.campaign); setLeads(data.leads); }
-    else setError(data.error || "failed to load campaign");
+    if (res.ok) {
+      setSelected(data.campaign); setLeads(data.leads);
+      setOfferDraft({ discount_percent: String(data.campaign.discount_percent ?? 10), message_variant: data.campaign.message_variant ?? "default" });
+    } else setError(data.error || "failed to load campaign");
   }
 
   async function createCampaign() {
@@ -113,6 +124,21 @@ export default function OutreachManager({
       setDetailDraft(null);
       await refreshCampaigns();
       await openCampaign(data.campaign);
+    } catch (e) { setError(e instanceof Error ? e.message : "save failed"); }
+    finally { setBusy(null); }
+  }
+
+  async function saveOffer() {
+    if (!selected || !offerDraft) return;
+    setError(null); setBusy("save-offer");
+    try {
+      const res = await fetch(`/api/admin/outreach/campaigns/${selected.id}`, {
+        method: "PATCH", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ discount_percent: Number(offerDraft.discount_percent), message_variant: offerDraft.message_variant }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "save failed");
+      await openCampaign(selected);
     } catch (e) { setError(e instanceof Error ? e.message : "save failed"); }
     finally { setBusy(null); }
   }
@@ -244,6 +270,30 @@ export default function OutreachManager({
                     {busy === "send-dry" ? "Previewing…" : "Preview send (dry-run)"}</button>
                   <button className="btn btn-ghost" disabled={!!busy} onClick={() => send(true)} style={{ borderColor: "#c0392b", color: "#c0392b" }}>
                     {busy === "send-live" ? "Sending…" : "Send live"}</button>
+                </div>
+              )}
+
+              {/* Offer (Phase 4a): per-campaign discount + message variant */}
+              {canManage && offerDraft && (
+                <div style={{ margin: "10px 0", padding: "10px 12px", background: "#fff8ec", borderRadius: 8 }}>
+                  <strong style={{ fontSize: 13 }}>Offer</strong>
+                  <div className="row" style={{ gap: 12, margin: "8px 0", alignItems: "flex-end", flexWrap: "wrap" }}>
+                    <div className="field" style={{ margin: 0 }}>
+                      <label>Discount %</label>
+                      <input type="number" min={1} max={100} style={{ width: 90 }} value={offerDraft.discount_percent}
+                        onChange={(e) => setOfferDraft((o) => o && { ...o, discount_percent: e.target.value })} />
+                    </div>
+                    <div className="field" style={{ margin: 0 }}>
+                      <label>Message variant</label>
+                      <select value={offerDraft.message_variant}
+                        onChange={(e) => setOfferDraft((o) => o && { ...o, message_variant: e.target.value })}>
+                        {MESSAGE_VARIANTS.map((v) => <option key={v.key} value={v.key}>{v.label}</option>)}
+                      </select>
+                    </div>
+                    <button className="btn btn-primary" disabled={busy === "save-offer"} onClick={saveOffer}>
+                      {busy === "save-offer" ? "Saving…" : "Save offer"}</button>
+                  </div>
+                  <p className="hint" style={{ margin: 0 }}>The discount templates only the numeral into the approved copy (&ldquo;{offerDraft.discount_percent || "N"}% off&rdquo;). New copy variants require copy + legal approval.</p>
                 </div>
               )}
 
