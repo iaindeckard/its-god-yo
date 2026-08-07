@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import CampaignMap, { type CampaignMapChange, type MapLead } from "./CampaignMap";
 
 // Local view types (mirroring the server models; kept local so this client
 // component never imports the server-only lib modules).
@@ -23,6 +24,7 @@ interface Lead {
   discovery_confidence: string | null; size_bucket: SizeBucket;
   estimated_attendance: number | null; attendance_source_url: string | null;
   send_count: number; last_sent_at: string | null; promo_code: string | null;
+  latitude: number | null; longitude: number | null;
 }
 interface SendItem { org_name: string; to: string; outcome: string; touch: number | null; promo_code: string; subject: string; }
 interface SendReport {
@@ -38,6 +40,9 @@ const statusPill = (s: string) =>
   : s === "needs_review" ? "pill pill-warn"
   : "pill pill-off";
 
+const toMapLeads = (ls: Lead[]): MapLead[] =>
+  ls.map((l) => ({ id: l.id, org_name: l.org_name, status: l.status, latitude: l.latitude, longitude: l.longitude, size_bucket: l.size_bucket }));
+
 export default function OutreachManager({
   initialCampaigns, canManage,
 }: { initialCampaigns: Campaign[]; canManage: boolean }) {
@@ -47,7 +52,9 @@ export default function OutreachManager({
   const [viewBucket, setViewBucket] = useState<"all" | SizeBucket>("all");
   const [promoteSel, setPromoteSel] = useState<Set<SizeBucket>>(new Set());
   const [report, setReport] = useState<SendReport | null>(null);
-  const [form, setForm] = useState({ name: "", center_label: "", radius_miles: "50" });
+  const [createName, setCreateName] = useState("");
+  const [createDraft, setCreateDraft] = useState<CampaignMapChange | null>(null);
+  const [detailDraft, setDetailDraft] = useState<CampaignMapChange | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -58,7 +65,7 @@ export default function OutreachManager({
   }
 
   async function openCampaign(c: Campaign) {
-    setSelected(c); setLeads([]); setReport(null); setViewBucket("all"); setPromoteSel(new Set());
+    setSelected(c); setLeads([]); setReport(null); setViewBucket("all"); setPromoteSel(new Set()); setDetailDraft(null);
     const res = await fetch(`/api/admin/outreach/campaigns/${c.id}`);
     const data = await res.json();
     if (res.ok) { setSelected(data.campaign); setLeads(data.leads); }
@@ -66,20 +73,46 @@ export default function OutreachManager({
   }
 
   async function createCampaign() {
-    setError(null); setBusy("create");
+    setError(null);
+    if (!createName.trim()) { setError("Name is required."); return; }
+    if (!createDraft) { setError("Pick a center on the map (click, drag, or search)."); return; }
+    setBusy("create");
     try {
       const res = await fetch("/api/admin/outreach/campaigns", {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          name: form.name, center_label: form.center_label, radius_miles: Number(form.radius_miles),
+          name: createName,
+          center_label: createDraft.center_label || createName,
+          center_lat: createDraft.center_lat, center_lng: createDraft.center_lng,
+          radius_miles: createDraft.radius_miles,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "create failed");
-      setForm({ name: "", center_label: "", radius_miles: "50" });
+      setCreateName(""); setCreateDraft(null);
       await refreshCampaigns();
       await openCampaign(data.campaign);
     } catch (e) { setError(e instanceof Error ? e.message : "create failed"); }
+    finally { setBusy(null); }
+  }
+
+  async function saveCenter() {
+    if (!selected || !detailDraft) return;
+    setError(null); setBusy("save-center");
+    try {
+      const res = await fetch(`/api/admin/outreach/campaigns/${selected.id}`, {
+        method: "PATCH", headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          center_lat: detailDraft.center_lat, center_lng: detailDraft.center_lng,
+          radius_miles: detailDraft.radius_miles, center_label: detailDraft.center_label,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "save failed");
+      setDetailDraft(null);
+      await refreshCampaigns();
+      await openCampaign(data.campaign);
+    } catch (e) { setError(e instanceof Error ? e.message : "save failed"); }
     finally { setBusy(null); }
   }
 
@@ -140,22 +173,24 @@ export default function OutreachManager({
         <p className="muted">Geographic-scoped church discovery, size segmentation, and isolated per-campaign sends.</p>
       </div>
 
-      {error && <div className="card" style={{ borderColor: "var(--igy-danger, #c0392b)", color: "#c0392b" }}>{error}</div>}
+      {error && <div className="card" style={{ borderColor: "#c0392b", color: "#c0392b" }}>{error}</div>}
 
       {/* Create */}
       {canManage && (
         <div className="card">
-          <div className="row">
-            <div className="field"><label>Name</label>
-              <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Dallas Metro 50mi" /></div>
-            <div className="field"><label>Center (place)</label>
-              <input value={form.center_label} onChange={(e) => setForm((f) => ({ ...f, center_label: e.target.value }))} placeholder="Dallas, TX" /></div>
-            <div className="field"><label>Radius (miles)</label>
-              <input type="number" min={1} value={form.radius_miles} onChange={(e) => setForm((f) => ({ ...f, radius_miles: e.target.value }))} style={{ width: 110 }} /></div>
+          <h3>New campaign</h3>
+          <div className="field" style={{ maxWidth: 360 }}>
+            <label>Name</label>
+            <input value={createName} onChange={(e) => setCreateName(e.target.value)} placeholder="Dallas Metro 50mi" />
+          </div>
+          <div style={{ marginTop: 10 }}>
+            <CampaignMap editable initialRadiusMiles={50} onChange={setCreateDraft} />
+          </div>
+          <div style={{ marginTop: 10 }}>
             <button className="btn btn-primary" disabled={busy === "create"} onClick={createCampaign}>
               {busy === "create" ? "Creating…" : "Create campaign"}</button>
+            <span className="hint" style={{ marginLeft: 10 }}>Click the map, drag the pin, or search a place to set the center; the slider sets the radius.</span>
           </div>
-          <p className="hint">The center is geocoded on create (keyless Nominatim). Phase 2 adds the interactive map picker.</p>
         </div>
       )}
 
@@ -174,12 +209,27 @@ export default function OutreachManager({
 
         {/* Detail */}
         <div className="card" style={{ flex: "1 1 520px" }}>
-          {!selected && <p className="muted">Select a campaign to view its leads.</p>}
+          {!selected && <p className="muted">Select a campaign to view its map and leads.</p>}
           {selected && (
             <>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
                 <h3 style={{ margin: 0 }}>{selected.name}</h3>
                 <span className="muted">{selected.center_label} · {Number(selected.radius_miles)}mi · {leads.length} leads</span>
+              </div>
+
+              {/* Map: campaign radius + discovered leads by size */}
+              <div style={{ margin: "12px 0" }}>
+                <CampaignMap
+                  editable={canManage}
+                  initialCenter={selected.center_lat != null && selected.center_lng != null ? { lat: selected.center_lat, lng: selected.center_lng } : null}
+                  initialRadiusMiles={Number(selected.radius_miles)}
+                  leads={toMapLeads(leads)}
+                  onChange={canManage ? setDetailDraft : undefined}
+                />
+                {canManage && detailDraft && (
+                  <button className="btn btn-primary" style={{ marginTop: 8 }} disabled={busy === "save-center"} onClick={saveCenter}>
+                    {busy === "save-center" ? "Saving…" : "Save center / radius"}</button>
+                )}
               </div>
 
               {canManage && (
@@ -195,7 +245,7 @@ export default function OutreachManager({
 
               {/* Promote */}
               {canManage && (
-                <div style={{ margin: "10px 0", padding: "10px 12px", background: "var(--igy-panel, #f6faff)", borderRadius: 8 }}>
+                <div style={{ margin: "10px 0", padding: "10px 12px", background: "#f6faff", borderRadius: 8 }}>
                   <strong style={{ fontSize: 13 }}>Promote staged leads → active (enters send pipeline)</strong>
                   <div style={{ display: "flex", gap: 12, flexWrap: "wrap", margin: "8px 0" }}>
                     {BUCKETS.map((b) => {
@@ -203,7 +253,7 @@ export default function OutreachManager({
                       return (
                         <label key={b} style={{ fontSize: 13, opacity: n ? 1 : 0.4 }}>
                           <input type="checkbox" disabled={!n} checked={promoteSel.has(b)}
-                            onChange={(e) => setPromoteSel((s) => { const n2 = new Set(s); e.target.checked ? n2.add(b) : n2.delete(b); return n2; })} />
+                            onChange={(e) => setPromoteSel((s) => { const n2 = new Set(s); if (e.target.checked) n2.add(b); else n2.delete(b); return n2; })} />
                           {" "}{BUCKET_LABEL[b]} ({n} staged)
                         </label>
                       );

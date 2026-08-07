@@ -36,6 +36,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
     if (body.size_filter === null || Array.isArray(body.size_filter)) patch.size_filter = body.size_filter;
     if (body.radius_miles !== undefined) patch.radius_miles = Number(body.radius_miles);
+    if (body.center_lat !== undefined) patch.center_lat = body.center_lat === null ? null : Number(body.center_lat);
+    if (body.center_lng !== undefined) patch.center_lng = body.center_lng === null ? null : Number(body.center_lng);
+    if (typeof body.center_label === "string") patch.center_label = body.center_label.trim();
     return NextResponse.json({ campaign: await updateCampaign(id, patch) });
   } catch (e) {
     return apiError(e);

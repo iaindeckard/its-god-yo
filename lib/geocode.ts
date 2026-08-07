@@ -15,6 +15,7 @@ import "server-only";
  */
 
 const NOMINATIM = (process.env.GEOCODER_BASE_URL || "https://nominatim.openstreetmap.org/search").replace(/\/$/, "");
+const NOMINATIM_REVERSE = (process.env.GEOCODER_REVERSE_URL || "https://nominatim.openstreetmap.org/reverse").replace(/\/$/, "");
 const USER_AGENT = "ItsGodYo-Cornerstone/1.0 (hello@itsgodyo.com)"; // required by Nominatim policy
 const TIMEOUT_MS = 6000;
 
@@ -49,6 +50,38 @@ export async function geocodeAddress(parts: AddressParts): Promise<LatLng | null
     return { lat, lng };
   } catch (e) {
     console.error(`[geocode] failed for "${q}":`, e instanceof Error ? e.message : e);
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Reverse geocode: coordinates -> a compact human label ("City, State"), used by
+ * the outreach campaign map when the center pin is dragged. Same best-effort
+ * contract as geocodeAddress: any failure returns null (the caller keeps whatever
+ * label it had). Builds "City, State" from address parts when present, else falls
+ * back to Nominatim's display_name.
+ */
+export async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  const url = `${NOMINATIM_REVERSE}?format=jsonv2&addressdetails=1&zoom=12&lat=${encodeURIComponent(String(lat))}&lon=${encodeURIComponent(String(lng))}`;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  try {
+    const res = await fetch(url, { headers: { "User-Agent": USER_AGENT, Accept: "application/json" }, signal: ctrl.signal });
+    if (!res.ok) { console.error(`[reverse-geocode] ${res.status} for ${lat},${lng}`); return null; }
+    const body = (await res.json().catch(() => null)) as
+      | { display_name?: string; address?: Record<string, string> }
+      | null;
+    if (!body) return null;
+    const a = body.address ?? {};
+    const city = a.city || a.town || a.village || a.hamlet || a.county || null;
+    const state = a.state || a.region || null;
+    const compact = [city, state].filter(Boolean).join(", ");
+    return compact || body.display_name || null;
+  } catch (e) {
+    console.error(`[reverse-geocode] failed for ${lat},${lng}:`, e instanceof Error ? e.message : e);
     return null;
   } finally {
     clearTimeout(timer);

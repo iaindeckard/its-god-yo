@@ -29,12 +29,16 @@ export async function POST(req: Request) {
     if (!Number.isFinite(radiusMiles) || radiusMiles <= 0) {
       return NextResponse.json({ error: "radius_miles must be a positive number" }, { status: 400 });
     }
+    const centerLat = body.center_lat != null ? Number(body.center_lat) : null;
+    const centerLng = body.center_lng != null ? Number(body.center_lng) : null;
     const campaign = await createCampaign({
       name,
       centerLabel,
       radiusMiles,
       sizeFilter: Array.isArray(body.size_filter) ? body.size_filter : null,
       createdBy: staff?.userId ?? null,
+      centerLat: Number.isFinite(centerLat as number) ? centerLat : null,
+      centerLng: Number.isFinite(centerLng as number) ? centerLng : null,
     });
     return NextResponse.json({ campaign });
   } catch (e) {
