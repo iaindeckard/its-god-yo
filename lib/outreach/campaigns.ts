@@ -65,16 +65,23 @@ export interface CreateCampaignInput {
   radiusMiles: number;
   sizeFilter?: string[] | null;
   createdBy?: string | null;
+  // When the map picker already resolved coordinates, pass them to skip the
+  // server-side geocode. Omit (Phase 1 / text-only create) to geocode centerLabel.
+  centerLat?: number | null;
+  centerLng?: number | null;
 }
 
 /**
- * Create a campaign, geocoding its center label on the way in (best-effort — a
- * geocode miss leaves center_lat/lng null and never blocks creation; the center
- * can be re-geocoded later, and Phase 2's map picker will set coords directly).
+ * Create a campaign. When explicit center coordinates are supplied (the Phase 2
+ * map picker), they are used directly. Otherwise the center label is geocoded
+ * best-effort — a miss leaves center_lat/lng null and never blocks creation.
  */
 export async function createCampaign(input: CreateCampaignInput): Promise<Campaign> {
   const admin = getSupabaseAdmin();
-  const center = await geocodeAddress({ address: input.centerLabel, country: "United States" });
+  const hasCoords = input.centerLat != null && input.centerLng != null;
+  const center = hasCoords
+    ? { lat: input.centerLat as number, lng: input.centerLng as number }
+    : await geocodeAddress({ address: input.centerLabel, country: "United States" });
   const row = {
     name: input.name.trim(),
     center_label: input.centerLabel.trim(),
@@ -107,6 +114,7 @@ export interface CampaignPatch {
   status?: CampaignStatus;
   size_filter?: string[] | null;
   radius_miles?: number;
+  center_label?: string;
   center_lat?: number | null;
   center_lng?: number | null;
   discount_percent?: number;
