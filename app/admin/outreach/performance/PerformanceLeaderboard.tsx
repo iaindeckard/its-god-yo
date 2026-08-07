@@ -10,21 +10,22 @@ const BUCKETS: SizeBucket[] = ["small", "medium", "large", "mega", "unknown"];
 
 interface CampaignPerformance {
   campaign_id: string; name: string; region: string; radius_miles: number;
-  size_filter: string[] | null; status: string;
+  size_filter: string[] | null; status: string; discount_percent: number; message_variant: string | null;
   total_leads: number; contacted: number; offer_sent: number; redeemed: number;
-  revenue_cents: number; conversion_pct: number | null; redeemed_of_offered_pct: number | null;
+  revenue_cents: number; net_revenue_cents: number; conversion_pct: number | null; redeemed_of_offered_pct: number | null;
 }
 interface CampaignSizePerformance {
   campaign_id: string; name: string; region: string; size_bucket: SizeBucket;
   contacted: number; offer_sent: number; redeemed: number;
-  revenue_cents: number; conversion_pct: number | null;
+  revenue_cents: number; net_revenue_cents: number; conversion_pct: number | null;
 }
 
 const num = (v: unknown): number | null => (v == null ? null : Number(v));
 const usd = (c: unknown) => "$" + (Number(c ?? 0) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const pct = (v: unknown) => (v == null ? "—" : `${Number(v)}%`);
+const offerLabel = (c: CampaignPerformance) => `${Number(c.discount_percent)}% · ${c.message_variant ?? "default"}`;
 
-type SortKey = "name" | "region" | "contacted" | "offer_sent" | "redeemed" | "conversion_pct" | "redeemed_of_offered_pct" | "revenue_cents";
+type SortKey = "name" | "region" | "contacted" | "offer_sent" | "redeemed" | "conversion_pct" | "redeemed_of_offered_pct" | "net_revenue_cents" | "revenue_cents";
 
 // Nulls always sort last; numeric compare for numbers, locale for strings; ties
 // broken by contacted desc so a rate tie surfaces the higher-volume campaign.
@@ -92,8 +93,8 @@ export default function PerformanceLeaderboard({
               {BUCKETS.map((b) => <option key={b} value={b}>{b} — across campaigns</option>)}
             </select>
           </div>
-          <p className="hint" style={{ margin: 0, maxWidth: 520 }}>
-            <strong>Conv %</strong> = redeemed ÷ contacted. <strong>Rd/offered %</strong> = redeemed ÷ churches sent the coded email. Revenue = first charge only. Global-cron leads (no campaign) are excluded.
+          <p className="hint" style={{ margin: 0, maxWidth: 560 }}>
+            <strong>Conv %</strong> = redeemed ÷ contacted. <strong>Rd/offered %</strong> = redeemed ÷ churches sent the coded email. <strong>Net revenue</strong> = realized net (after Stripe fees, refunds &amp; chargebacks, incl. renewals); <strong>First charge</strong> = initial charge only. <strong>Offer</strong> = the campaign&rsquo;s discount · message variant. Global-cron leads (no campaign) are excluded.
           </p>
         </div>
 
@@ -106,12 +107,14 @@ export default function PerformanceLeaderboard({
                   {th("Campaign", "name", false)}
                   {th("Region", "region", false)}
                   <th style={{ textAlign: "left" }}>Size filter</th>
+                  <th style={{ textAlign: "left" }}>Offer</th>
                   {th("Contacted", "contacted")}
                   {th("Offer sent", "offer_sent")}
                   {th("Redeemed", "redeemed")}
                   {th("Conv %", "conversion_pct")}
                   {th("Rd/offered %", "redeemed_of_offered_pct")}
-                  {th("Revenue", "revenue_cents")}
+                  {th("Net revenue", "net_revenue_cents")}
+                  {th("First charge", "revenue_cents")}
                 </tr>
               ) : (
                 <tr>
@@ -122,13 +125,14 @@ export default function PerformanceLeaderboard({
                   {th("Offer sent", "offer_sent")}
                   {th("Redeemed", "redeemed")}
                   {th("Conv %", "conversion_pct")}
-                  {th("Revenue", "revenue_cents")}
+                  {th("Net revenue", "net_revenue_cents")}
+                  {th("First charge", "revenue_cents")}
                 </tr>
               )}
             </thead>
             <tbody>
               {sizeFilter === "all" && campaignRows.length === 0 && (
-                <tr><td colSpan={10} className="muted">No campaigns yet.</td></tr>
+                <tr><td colSpan={12} className="muted">No campaigns yet.</td></tr>
               )}
               {sizeFilter === "all" && campaignRows.map((c, i) => {
                 const isOpen = expanded.has(c.campaign_id);
@@ -146,24 +150,27 @@ export default function PerformanceLeaderboard({
                       <td>{c.size_filter && c.size_filter.length
                         ? c.size_filter.map((b) => <span key={b} className="pill" style={{ marginRight: 4 }}>{b}</span>)
                         : <span className="muted">—</span>}</td>
+                      <td className="mono" style={{ whiteSpace: "nowrap" }}>{offerLabel(c)}</td>
                       <td style={{ textAlign: "right" }} className="mono">{c.contacted}</td>
                       <td style={{ textAlign: "right" }} className="mono">{c.offer_sent}</td>
                       <td style={{ textAlign: "right" }} className="mono">{c.redeemed}</td>
                       <td style={{ textAlign: "right", fontWeight: 700 }} className="mono">{pct(c.conversion_pct)}</td>
                       <td style={{ textAlign: "right" }} className="mono muted">{pct(c.redeemed_of_offered_pct)}</td>
-                      <td style={{ textAlign: "right" }} className="mono">{usd(c.revenue_cents)}</td>
+                      <td style={{ textAlign: "right", fontWeight: 700 }} className="mono">{usd(c.net_revenue_cents)}</td>
+                      <td style={{ textAlign: "right" }} className="mono muted">{usd(c.revenue_cents)}</td>
                     </tr>
                     {isOpen && subRows(c.campaign_id).map((s) => (
                       <tr key={c.campaign_id + s.size_bucket} style={{ background: "#f6faff" }}>
                         <td></td>
                         <td style={{ paddingLeft: 28 }} className="muted">↳ {s.size_bucket}</td>
-                        <td></td><td></td>
+                        <td></td><td></td><td></td>
                         <td style={{ textAlign: "right" }} className="mono">{s.contacted}</td>
                         <td style={{ textAlign: "right" }} className="mono">{s.offer_sent}</td>
                         <td style={{ textAlign: "right" }} className="mono">{s.redeemed}</td>
                         <td style={{ textAlign: "right" }} className="mono">{pct(s.conversion_pct)}</td>
                         <td></td>
-                        <td style={{ textAlign: "right" }} className="mono">{usd(s.revenue_cents)}</td>
+                        <td style={{ textAlign: "right", fontWeight: 700 }} className="mono">{usd(s.net_revenue_cents)}</td>
+                        <td style={{ textAlign: "right" }} className="mono muted">{usd(s.revenue_cents)}</td>
                       </tr>
                     ))}
                   </Fragment>
@@ -171,7 +178,7 @@ export default function PerformanceLeaderboard({
               })}
 
               {sizeFilter !== "all" && bucketRows.length === 0 && (
-                <tr><td colSpan={8} className="muted">No {sizeFilter} leads in any campaign yet.</td></tr>
+                <tr><td colSpan={9} className="muted">No {sizeFilter} leads in any campaign yet.</td></tr>
               )}
               {sizeFilter !== "all" && bucketRows.map((s, i) => (
                 <tr key={s.campaign_id + s.size_bucket}>
@@ -182,7 +189,8 @@ export default function PerformanceLeaderboard({
                   <td style={{ textAlign: "right" }} className="mono">{s.offer_sent}</td>
                   <td style={{ textAlign: "right" }} className="mono">{s.redeemed}</td>
                   <td style={{ textAlign: "right", fontWeight: 700 }} className="mono">{pct(s.conversion_pct)}</td>
-                  <td style={{ textAlign: "right" }} className="mono">{usd(s.revenue_cents)}</td>
+                  <td style={{ textAlign: "right", fontWeight: 700 }} className="mono">{usd(s.net_revenue_cents)}</td>
+                  <td style={{ textAlign: "right" }} className="mono muted">{usd(s.revenue_cents)}</td>
                 </tr>
               ))}
             </tbody>

@@ -16,11 +16,14 @@ export interface CampaignPerformance {
   radius_miles: number;
   size_filter: string[] | null;
   status: string;
+  discount_percent: number;                // the campaign's offer (Phase 4a), for the Offer column
+  message_variant: string | null;
   total_leads: number;
   contacted: number;
   offer_sent: number;
   redeemed: number;
-  revenue_cents: number;
+  revenue_cents: number;                   // FIRST CHARGE (secondary)
+  net_revenue_cents: number;               // realized net incl. renewals, net of fees/refunds/chargebacks (headline)
   conversion_pct: number | null;          // redeemed / contacted (null when contacted = 0)
   redeemed_of_offered_pct: number | null; // redeemed / offer_sent (null when offer_sent = 0)
 }
@@ -34,6 +37,7 @@ export interface CampaignSizePerformance {
   offer_sent: number;
   redeemed: number;
   revenue_cents: number;
+  net_revenue_cents: number;
   conversion_pct: number | null;
 }
 
