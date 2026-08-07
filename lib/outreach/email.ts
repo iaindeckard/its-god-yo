@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { OUTREACH } from "./config";
 import { SPANISH_ENABLED } from "../flags";
 import type { OutreachLead } from "./leads";
+import { resolveVariant, clampDiscountPercent, type MessageVariant } from "./templates";
 
 /**
  * One-click unsubscribe token. HMAC over the lead id so the public unsubscribe
@@ -59,7 +60,11 @@ function sourceNote(lead: OutreachLead): string {
  * one-click List-Unsubscribe (RFC 8058) + a visible link, the required physical
  * mailing address, and Reply-To to a monitored human inbox.
  */
-export function buildEmail(lead: OutreachLead): BuiltEmail {
+export function buildEmail(lead: OutreachLead, variant: MessageVariant = "default"): BuiltEmail {
+  // Guardrail: only an approved variant KEY is honored; copy is code-resident.
+  // The intro (email 1) is code-free and identical across the sole 'default'
+  // variant today — when a second approved variant ships, branch on `v` here.
+  const v = resolveVariant(variant); void v;
   const org = lead.org_name;
   const link = unsubUrl(lead.id);
   const site = OUTREACH.appUrl;
@@ -119,7 +124,19 @@ Unsubscribe (one click): ${link}`;
  * email 1 (From/Reply-To, physical address, one-click unsubscribe). This is the
  * final touch: the copy says so, and the send logic stops after it.
  */
-export function buildFollowupEmail(lead: OutreachLead, promoCode: string): BuiltEmail {
+export function buildFollowupEmail(
+  lead: OutreachLead,
+  promoCode: string,
+  discountPercent = 10,
+  variant: MessageVariant = "default",
+): BuiltEmail {
+  // Guardrail: only an approved variant KEY is honored (copy is code-resident);
+  // and the ONLY campaign-configurable value that reaches the copy is the discount
+  // NUMBER, substituted for the numeral in "{pct}% off" below — every surrounding
+  // word is fixed. Changing the number never opens the rest of the approved copy
+  // to editing; a new variant/copy is a reviewed code change.
+  const v = resolveVariant(variant); void v;
+  const pct = clampDiscountPercent(discountPercent);
   const org = lead.org_name;
   const link = unsubUrl(lead.id);
   const site = OUTREACH.appUrl;
@@ -131,9 +148,9 @@ export function buildFollowupEmail(lead: OutreachLead, promoCode: string): Built
 
 I reached out a few weeks back about It's God, Yo!, our daily Scripture text for teens (${SPANISH_ENABLED ? "English KJV and Spanish Reina-Valera 1909" : "English KJV"}, rewritten into the slang they actually read). No worries if it slipped by.
 
-If it might be a fit for the students at ${org}, here's a code for 10% off any plan, on us:
+If it might be a fit for the students at ${org}, here's a code for ${pct}% off any plan, on us:
 
-${promoCode} gets you 10% off at ${site}
+${promoCode} gets you ${pct}% off at ${site}
 
 Same as before: share it if it helps, ignore it if it's not for you. This is the last you'll hear from us unless you reach out. The link below removes ${org} for good.
 
@@ -151,9 +168,9 @@ Unsubscribe (one click): ${link}`;
 `<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:#1a1a1a;max-width:600px;margin:0 auto;">
   <p>Hi ${esc(org)} team,</p>
   <p>I reached out a few weeks back about <strong>It's God, Yo!</strong>, our daily Scripture text for teens (${SPANISH_ENABLED ? "English KJV and Spanish Reina-Valera 1909" : "English KJV"}, rewritten into the slang they actually read). No worries if it slipped by.</p>
-  <p>If it might be a fit for the students at ${esc(org)}, here's a code for <strong>10% off</strong> any plan, on us:</p>
+  <p>If it might be a fit for the students at ${esc(org)}, here's a code for <strong>${pct}% off</strong> any plan, on us:</p>
   <p style="background:#f4f7f7;border:1px solid #d7e2e2;border-radius:8px;padding:12px 16px;font-size:16px;">
-    <strong>${esc(promoCode)}</strong> gets you 10% off at <a href="${site}" style="color:#00ABBC;">${esc(site.replace(/^https?:\/\//, ""))}</a>
+    <strong>${esc(promoCode)}</strong> gets you ${pct}% off at <a href="${site}" style="color:#00ABBC;">${esc(site.replace(/^https?:\/\//, ""))}</a>
   </p>
   <p>Same as before: share it if it helps, ignore it if it's not for you. This is the last you'll hear from us unless you reach out. The link below removes ${esc(org)} for good.</p>
   <p style="margin-bottom:2px;">Thanks for everything you pour into young people.</p>
