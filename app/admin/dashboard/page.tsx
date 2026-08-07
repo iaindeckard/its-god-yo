@@ -1,118 +1,70 @@
+import Link from "next/link";
 import { can } from "@/lib/rbac";
 import Forbidden from "@/components/Forbidden";
-import { getDashboardData } from "@/lib/dashboard";
+import { getDashboardMetrics, RANGES, type RangeKey } from "@/lib/dashboardMetrics";
+import DashboardClient from "./DashboardClient";
+import { usdFull } from "./charts/theme";
 
 export const dynamic = "force-dynamic";
 
-const usd = (cents: number) => `$${(cents / 100).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+function parseRange(v: string | undefined): RangeKey {
+  return v === "7d" || v === "90d" ? v : "30d";
+}
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ range?: string; demo?: string }> }) {
   if (!(await can("analytics.dashboard.view"))) return <Forbidden permission="analytics.dashboard.view" />;
-  const [d, canViewRevenue] = await Promise.all([getDashboardData(), can("analytics.revenue.view")]);
+  const sp = await searchParams;
+  const range = parseRange(sp.range);
+  const demo = sp.demo === "1";
+  const [m, canViewRevenue] = await Promise.all([getDashboardMetrics(range, { demo }), can("analytics.revenue.view")]);
+
+  const qp = (r: RangeKey) => `?range=${r}${demo ? "&demo=1" : ""}`;
 
   return (
     <>
       <div className="admin-head">
         <h1>KPI dashboard</h1>
-        <span className="dev-badge">first-pass — adjust widgets freely</span>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <span className="dev-badge">first-pass — adjust widgets freely</span>
+          <div className="range-toggle" role="group" aria-label="Time range">
+            {RANGES.map((r) => (
+              <Link key={r.key} href={qp(r.key)} className={`range-pill${range === r.key ? " on" : ""}`} scroll={false}>{r.label}</Link>
+            ))}
+          </div>
+          <Link href={demo ? `?range=${range}` : `?range=${range}&demo=1`} scroll={false} className={`demo-pill${demo ? " on" : ""}`}>
+            {demo ? "Demo data ✓" : "Demo data"}
+          </Link>
+        </div>
       </div>
-      <p className="muted" style={{ marginTop: -12, marginBottom: 20 }}>
-        Live figures from the real tables + Stripe. Most are legitimately near-zero today (delayed billing means no
-        active subscriptions yet) — that&rsquo;s the accurate current picture, not placeholder data.
-      </p>
 
-      <div className="kpi-grid">
-        {/* Active subscribers */}
-        <div className="kpi k-span2">
-          <div className="k-label">Active subscribers</div>
-          <div className="k-value">{d.activeSubscribers.total}</div>
-          {d.stripeError ? (
-            <div className="k-sub" style={{ color: "var(--igy-error-text)" }}>Stripe: {d.stripeError}</div>
-          ) : d.activeSubscribers.byTier.length ? (
-            <ul className="breakdown">
-              {d.activeSubscribers.byTier.map((t) => (
-                <li key={t.label}><span>{t.label}</span><span>{t.count}</span></li>
-              ))}
-            </ul>
-          ) : (
-            <div className="k-sub">No active subscriptions yet.</div>
-          )}
+      {demo ? (
+        <div className="admin-note" style={{ background: "#fff6e6", borderColor: "#f0c674", color: "#8a5a00" }}>
+          <strong>Demo data</strong> — illustrative figures generated in memory to preview the design. Nothing here is real or written to the database. Turn off &ldquo;Demo data&rdquo; to see live figures.
         </div>
+      ) : (
+        <p className="muted" style={{ marginTop: -12, marginBottom: 20 }}>
+          Live figures from the real tables + Stripe. Most are legitimately near-zero today (delayed billing, near-empty
+          tables at launch) — that&rsquo;s the accurate current picture, not placeholder data. Use{" "}
+          <Link href={`?range=${range}&demo=1`} scroll={false}>Demo data</Link> to preview the design populated.
+        </p>
+      )}
 
-        {/* MRR / ARR */}
-        <div className="kpi">
-          <div className="k-label">MRR (est.)</div>
-          <div className="k-value">{usd(d.mrrCents)}</div>
-          <div className="k-sub">from active Stripe subscriptions</div>
-        </div>
-        <div className="kpi">
-          <div className="k-label">ARR (est.)</div>
-          <div className="k-value">{usd(d.arrCents)}</div>
-          <div className="k-sub">MRR × 12</div>
-        </div>
+      {m.stripeError && <div className="error">Stripe: {m.stripeError}</div>}
 
-        {/* Reserved donation fund — financial, gated behind analytics.revenue.view */}
-        {canViewRevenue && d.donationFund && (
-          <div className="kpi k-span2">
-            <div className="k-label">Reserved donation fund</div>
-            <div className="k-value">{usd(d.donationFund.availableCents)}</div>
-            <div className="k-sub">
-              available to disburse · {usd(d.donationFund.accruedCents)} accrued − {usd(d.donationFund.disbursedCents)} donated
-              {d.donationFund.lastCloseDate ? ` · last close ${d.donationFund.lastCloseDate}` : " · no close yet"}
-              {" · "}
-              <a href="/admin/donation-fund">manage</a>
+      <DashboardClient m={m} canViewRevenue={canViewRevenue} />
+
+      {canViewRevenue && m.donationFund && (
+        <div className="dash-grid" style={{ marginTop: "var(--space-4)" }}>
+          <div className="dash-card span-4">
+            <div className="dash-card-title">Reserved donation fund</div>
+            <div style={{ fontSize: 26, fontWeight: 800, color: "var(--igy-ink)", marginTop: 4 }}>{usdFull(m.donationFund.availableCents)}</div>
+            <div className="dash-card-sub" style={{ marginTop: 4 }}>
+              available to disburse · {usdFull(m.donationFund.accruedCents)} accrued − {usdFull(m.donationFund.disbursedCents)} donated
+              {m.donationFund.lastCloseDate ? ` · last close ${m.donationFund.lastCloseDate}` : " · no close yet"} · <Link href="/admin/donation-fund">manage</Link>
             </div>
           </div>
-        )}
-
-        {/* Pending signups awaiting SMS */}
-        <div className="kpi">
-          <div className="k-label">Awaiting SMS confirmation</div>
-          <div className="k-value">{d.pendingAwaitingConfirmation}</div>
-          <div className="k-sub">pending_signups “stuck” on a reply</div>
         </div>
-
-        {/* Review backlog */}
-        <div className="kpi">
-          <div className="k-label">Review backlog</div>
-          <div className="k-value">{d.reviewBacklog.en + d.reviewBacklog.es}</div>
-          <div className="k-sub">{d.reviewBacklog.en} EN · {d.reviewBacklog.es} ES flagged</div>
-        </div>
-
-        {/* Referral usage */}
-        <div className="kpi">
-          <div className="k-label">Referral redemptions</div>
-          <div className="k-value">{d.referralRedemptions}</div>
-          <div className="k-sub">signups w/ referral applied</div>
-        </div>
-
-        {/* Consent funnel */}
-        <div className="kpi k-span2">
-          <div className="k-label">Consent funnel</div>
-          <ul className="breakdown" style={{ marginTop: 8 }}>
-            {d.consentFunnel.map((f) => (
-              <li key={f.status}><span>{f.status.replace(/_/g, " ")}</span><span>{f.count}</span></li>
-            ))}
-          </ul>
-        </div>
-
-        {/* Promo usage */}
-        <div className="kpi k-span2">
-          <div className="k-label">Promo code usage</div>
-          {d.promoUsage.length === 0 ? (
-            <div className="k-sub" style={{ marginTop: 8 }}>No promo codes.</div>
-          ) : (
-            <ul className="breakdown" style={{ marginTop: 8 }}>
-              {d.promoUsage.map((p) => (
-                <li key={p.code}>
-                  <span className="mono">{p.code} {p.active ? "" : "(inactive)"}</span>
-                  <span>{p.times_redeemed} redeemed</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </div>
+      )}
     </>
   );
 }
