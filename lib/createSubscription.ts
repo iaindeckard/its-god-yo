@@ -157,9 +157,22 @@ export async function createSubscriptionForPendingSignup(pendingSignupId: string
     { idempotencyKey: `igy_sub_${ps.id}` }, // retries never double-create
   );
 
+  // Best-effort: capture the exact expected first charge (base + add-on, POST promo
+  // discount) from Stripe's upcoming invoice, for POTENTIAL-revenue valuation in the
+  // cause-promotion tracker. This is the only signal we store; REALIZED revenue is
+  // always driven off actual settled payments, never this. Must NEVER block or fail
+  // the signup — a null just means that trial contributes 0 to potential.
+  let expectedFirstChargeCents: number | null = null;
+  try {
+    const upcoming = await stripe.invoices.retrieveUpcoming({ customer: ps.stripe_customer_id, subscription: sub.id });
+    if (typeof upcoming?.total === "number") expectedFirstChargeCents = upcoming.total;
+  } catch (e) {
+    console.warn(`[createSubscription] expected_first_charge capture failed for ${ps.id}: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
   await admin
     .from("pending_signups")
-    .update({ stripe_subscription_id: sub.id, subscription_created_at: new Date().toISOString(), status: "subscription_created" })
+    .update({ stripe_subscription_id: sub.id, subscription_created_at: new Date().toISOString(), status: "subscription_created", expected_first_charge_cents: expectedFirstChargeCents })
     .eq("id", ps.id);
 
   // The recipient(s) replied YES — move consent from pending to confirmed.

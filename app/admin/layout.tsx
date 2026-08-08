@@ -15,6 +15,7 @@ const NAV = [
   { href: "/admin/pronoun-review", label: "Pronoun corrections", need: "content.queue.view" },
   { href: "/admin/dashboard", label: "KPI dashboard", need: "analytics.dashboard.view" },
   { href: "/admin/donation-fund", label: "Donation Fund", need: "finance.donation_fund.view" },
+  { href: "/admin/cause-promotions", label: "Cause Promotions", need: "analytics.revenue.view" },
   { href: "/admin/bounty", label: "Error bounty", need: "finance.bounty.view" },
   { href: "/admin/sponsors", label: "Sponsors", need: "marketing.sponsors.view" },
   { href: "/admin/outreach", label: "Outreach campaigns", need: "marketing.outreach.view" },
