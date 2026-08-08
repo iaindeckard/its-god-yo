@@ -42,7 +42,21 @@ interface ResendEvent {
     from?: EmailAddr;
     subject?: string;
     email_id?: string;
+    message_id?: string;
+    cc?: EmailAddr[] | EmailAddr;
+    bcc?: EmailAddr[] | EmailAddr;
+    // Resend's inbound payload reports the actual delivery recipient(s) (envelope /
+    // Received-header) here — for a Bcc'd message the header `to` is hello@ but
+    // `received_for` (and/or bcc) carries our capture@reply.itsgodyo.com address.
+    received_for?: EmailAddr[] | EmailAddr;
   };
+}
+
+/** All addresses in a to/cc/bcc/received_for value, normalized + lowercased. */
+function addrList(v: EmailAddr[] | EmailAddr | undefined | null): string[] {
+  if (!v) return [];
+  const arr = Array.isArray(v) ? v : [v];
+  return arr.map((x) => firstEmailAddr(x)).filter((s): s is string => !!s);
 }
 
 function recipients(data: ResendEvent["data"]): string[] {
@@ -95,8 +109,16 @@ const NON_REPLY_SUBJECT =
  */
 async function handleInboundReply(data: ResendEvent["data"]): Promise<boolean> {
   if (!data) return false;
-  const to = recipients(data);
-  const forUs = to.some((a) => a.endsWith(`@${CAPTURE_DOMAIN}`));
+  // Was this actually delivered to our capture subdomain? Check every recipient
+  // surface, not just the header `to`: a Bcc'd manual reply carries hello@ in `to`
+  // and capture@reply.itsgodyo.com only in `received_for`/`bcc`.
+  const rcpts = [
+    ...addrList(data.to),
+    ...addrList(data.cc),
+    ...addrList(data.bcc),
+    ...addrList(data.received_for),
+  ];
+  const forUs = rcpts.some((a) => a.endsWith(`@${CAPTURE_DOMAIN}`));
   if (!forUs) return false; // inbound to some other address we happen to receive — ignore
 
   const sender = firstEmailAddr(data.from);
@@ -121,6 +143,7 @@ async function handleInboundReply(data: ResendEvent["data"]): Promise<boolean> {
       lead_id: lead?.id ?? null,
       source: lead ? "outreach_lead" : "manual",
       resend_email_id: data.email_id ?? null,
+      message_id: data.message_id ?? null,
     },
   });
   return true;
