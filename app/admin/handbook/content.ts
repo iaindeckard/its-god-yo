@@ -418,6 +418,25 @@ export const PARTS: Part[] = [
         ],
       },
       {
+        id: "admin-cause-promotions",
+        title: "Cause Promotions",
+        address: "/admin/cause-promotions",
+        relatedRoute: "/admin/cause-promotions",
+        blocks: [
+          { type: "prose", text: "Tracks any promotion where certain subscriptions pledge a share of their net proceeds to a charity or cause. A rule (any combination of promo code, plan interval, and/or the DM-from-Him add-on, plus a date window) decides which subscriptions count. This generalizes the Camp Hardtner pledge; a promotion is just a row, so future causes reuse the same screen." },
+          { type: "subheading", text: "Two revenue figures, always kept separate" },
+          { type: "list", items: [
+            "Contributed so far (REALIZED): money actually collected. Driven off settled Stripe payments, so a trial that cancels before it is ever charged counts as zero. This is the only figure the pledged payout is computed against.",
+            "Pending if trials convert (POTENTIAL): the expected value of qualifying subscriptions still in their trial (signed up, not yet charged, not cancelled). It is a projection, never real money, and it expires to zero at the promotion's end date.",
+          ] },
+          { type: "callout", kind: "info", title: "Payout is only ever on realized", text: "The pledged payout percentage applies to realized (collected) revenue only, never to potential. We never commit a payout against money that has not actually been collected." },
+          { type: "subheading", text: "The window and phase" },
+          { type: "prose", text: "Each promotion has a start and end datetime. Membership freezes at the end: no new subscription can join the pool after the end date. But a subscription that joined in-window keeps adding to realized as its payments settle later (a late-December signup that converts in January still counts). Phase (scheduled / active / closed) is derived from the dates, so there is no manual off switch. The widget refreshes hourly and on demand." },
+          { type: "callout", kind: "info", title: "Customer-facing page is built but dark", text: "There is a tokenized, no-login customer page that would let a subscriber see their own contribution (realized and potential, clearly labeled). It stays fully off until BOTH the global flag and a promotion's own customer-facing toggle are enabled. Do not tell customers it exists until Iain turns it on for a specific promotion." },
+          { type: "callout", kind: "info", title: "Permission: analytics.revenue.view (super_admin)", text: "Viewing the tracker is gated on analytics.revenue.view, the same revenue tier as the KPI dashboard." },
+        ],
+      },
+      {
         id: "admin-consent-thresholds",
         title: "Consent Thresholds",
         address: "/admin/consent-thresholds",
