@@ -99,3 +99,27 @@ export async function requirePermission(permissionKey: string): Promise<Staff> {
     .from("staff_members").select("job_role").eq("user_id", user.id).maybeSingle();
   return { userId: user.id, jobRole: (sm?.job_role as string) ?? "" };
 }
+
+/**
+ * Require ANY ONE of several permissions (OR). Same semantics as requirePermission
+ * — UnauthorizedError (→401) with no session, ForbiddenError (→403) when
+ * authenticated but holding none of the keys — for endpoints that serve items
+ * governed by different permissions (e.g. the action-items resolve route handles
+ * both finance and outreach kinds). Uses has_permission (the authz source of truth)
+ * per key and returns on the first grant.
+ */
+export async function requireAnyPermission(permissionKeys: string[]): Promise<Staff> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new UnauthorizedError();
+  for (const key of permissionKeys) {
+    const { data: allowed } = await supabase.rpc("has_permission", { p_user_id: user.id, p_permission_key: key });
+    if (allowed === true) {
+      const { data: sm } = await getSupabaseAdmin()
+        .from("staff_members").select("job_role").eq("user_id", user.id).maybeSingle();
+      return { userId: user.id, jobRole: (sm?.job_role as string) ?? "" };
+    }
+  }
+  await reportAdminAccessFailure({ principal: user.id, permissionKey: permissionKeys.join("|") }).catch(() => {});
+  throw new ForbiddenError(permissionKeys[0]);
+}

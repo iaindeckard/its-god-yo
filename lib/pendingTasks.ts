@@ -92,6 +92,14 @@ export const QUEUES: PendingQueue[] = [
     count: (db) => headCount(db, "igy_action_items", (q) => q.eq("kind", "dispute_review").eq("status", "open")),
   },
   {
+    key: "outreach_reply",
+    label: "Outreach replies",
+    need: "outreach.replies.view",
+    // Resolved inline on the /admin landing page (no dedicated screen).
+    navHref: null,
+    count: (db) => headCount(db, "igy_action_items", (q) => q.eq("kind", "outreach_reply").eq("status", "open")),
+  },
+  {
     key: "outreach",
     label: "Outreach leads",
     // Outreach has no admin screen yet — it is included so the centralized count is

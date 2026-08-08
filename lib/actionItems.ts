@@ -12,8 +12,11 @@ import { getSupabaseAdmin } from "./supabaseAdmin";
  *                     for the same sub is paid.
  *  - dispute_review : a chargeback we WON — needs a manual reinstatement decision.
  *                     Deduped per dispute.
+ *  - outreach_reply : someone replied to our church outreach (manual or the agent's
+ *                     cold mail). A nudge to go read it in the inbox — no reply body
+ *                     is stored here. Deduped per sender while an item is open.
  */
-export type ActionItemKind = "failed_billing" | "dispute_review";
+export type ActionItemKind = "failed_billing" | "dispute_review" | "outreach_reply";
 
 export interface ActionItem {
   id: string;

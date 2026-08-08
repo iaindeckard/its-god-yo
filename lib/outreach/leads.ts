@@ -118,6 +118,26 @@ export async function recordSend(
   if (error) throw new Error(`record_send_failed: ${error.message}`);
 }
 
+/** Look up a lead by the address we emailed, to attribute an inbound reply to its
+ *  org. Case-insensitive exact match on contact_email. Returns just the id + name
+ *  (all the reply notification needs) or null when the reply is from someone we
+ *  don't have a lead for (e.g. a manual outreach recipient, or a reply from a
+ *  different address than we mailed) — the caller still flags it, just generically. */
+export async function findLeadByContactEmail(
+  email: string,
+): Promise<Pick<OutreachLead, "id" | "org_name"> | null> {
+  const clean = email.trim().toLowerCase();
+  if (!clean) return null;
+  const admin = getSupabaseAdmin();
+  const { data } = await admin
+    .from(TABLE)
+    .select("id, org_name")
+    .ilike("contact_email", clean)
+    .limit(1)
+    .maybeSingle();
+  return (data as Pick<OutreachLead, "id" | "org_name"> | null) ?? null;
+}
+
 /** §7.3 — age a lead out (sent 6x, never converted). Kept, not deleted. */
 export async function ageOut(id: string): Promise<void> {
   const admin = getSupabaseAdmin();

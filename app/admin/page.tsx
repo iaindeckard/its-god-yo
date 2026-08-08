@@ -22,7 +22,7 @@ const SECTIONS = [
 
 // Attention items, most-urgent first. Money/disputes and the send-gating review
 // queue rank above the slower content/partner queues.
-const PRIORITY = ["dispute_review", "failed_billing", "review", "cornerstone", "bounty", "pronoun_review", "theme_tags", "outreach"];
+const PRIORITY = ["outreach_reply", "dispute_review", "failed_billing", "review", "cornerstone", "bounty", "pronoun_review", "theme_tags", "outreach"];
 
 const usd = (cents: number | null) =>
   cents == null ? "—" : `$${(cents / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
@@ -34,12 +34,15 @@ export default async function AdminHome() {
 
   const canReviewView = perms.has("content.queue.view");
   const canFinance = perms.has("finance.action_items.view");
+  const canOutreachReplies = perms.has("outreach.replies.view");
 
   const [pending, incidents, glance, actionItems, reviewSlots] = await Promise.all([
     staff ? getPendingTaskCounts().catch(() => []) : Promise.resolve([]),
     staff ? getIncidents().catch(() => []) : Promise.resolve([]),
     staff ? getGlanceStats().catch(() => null) : Promise.resolve(null),
-    canFinance ? listOpenActionItems().catch(() => []) : Promise.resolve([]),
+    // Action items span kinds gated by different permissions; load if the operator
+    // can see any of them, then filter per-kind at render.
+    (canFinance || canOutreachReplies) ? listOpenActionItems().catch(() => []) : Promise.resolve([]),
     canReviewView ? getReviewQueue().catch(() => []) : Promise.resolve([]),
   ]);
 
@@ -92,7 +95,7 @@ export default async function AdminHome() {
                 {p!.key === "review" && (
                   <AttentionReview slots={reviewSlots.slice(0, 3)} totalCount={p!.count} perms={{ approve: reviewApprove, rejectVerse: reviewRejectVerse }} />
                 )}
-                {(p!.key === "failed_billing" || p!.key === "dispute_review") && (
+                {(p!.key === "failed_billing" || p!.key === "dispute_review" || p!.key === "outreach_reply") && (
                   <AttentionActionItems items={actionItems.filter((a) => a.kind === p!.key)} />
                 )}
               </div>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
-import { suppressByEmail } from "@/lib/outreach/leads";
+import { suppressByEmail, findLeadByContactEmail } from "@/lib/outreach/leads";
+import { recordActionItem } from "@/lib/actionItems";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,16 +30,100 @@ function verifySvix(secret: string, id: string, ts: string, body: string, sigHea
   });
 }
 
+type EmailAddr = string | { email?: string; address?: string; name?: string };
+
 interface ResendEvent {
   type?: string;
-  data?: { to?: string[] | string; email?: string; bounce?: { type?: string } };
+  data?: {
+    to?: EmailAddr[] | EmailAddr;
+    email?: string;
+    bounce?: { type?: string };
+    // email.received fields
+    from?: EmailAddr;
+    subject?: string;
+    email_id?: string;
+  };
 }
 
 function recipients(data: ResendEvent["data"]): string[] {
   if (!data) return [];
   const to = data.to ?? data.email;
-  if (Array.isArray(to)) return to;
-  return to ? [to] : [];
+  const list = Array.isArray(to) ? to : to ? [to] : [];
+  return list.map((a) => firstEmailAddr(a)).filter((s): s is string => !!s);
+}
+
+/** Pull a bare lowercased address out of the many shapes Resend may send
+ *  ("Name <a@b>", {email}, {address}, arrays). */
+function firstEmailAddr(v: EmailAddr | EmailAddr[] | undefined | null): string | null {
+  if (!v) return null;
+  if (Array.isArray(v)) {
+    for (const x of v) { const e = firstEmailAddr(x); if (e) return e; }
+    return null;
+  }
+  if (typeof v === "object") return firstEmailAddr(v.email ?? v.address ?? null);
+  const m = v.match(/<([^>]+)>/);
+  const raw = (m ? m[1] : v).trim().toLowerCase();
+  return raw.includes("@") ? raw : null;
+}
+
+/** Best-effort display name from a "from" value ("Name <a@b>" or {name}). */
+function fromName(v: EmailAddr | undefined): string | null {
+  if (!v) return null;
+  if (typeof v === "object") return v.name ?? null;
+  const m = v.match(/^\s*"?([^"<]+?)"?\s*</);
+  return m ? m[1].trim() : null;
+}
+
+/** Address (localpart@)domain of the Resend receiving subdomain that the M365 Bcc
+ *  rule and the outreach Reply-To point at. Only inbound delivered here is treated
+ *  as an outreach reply. */
+const CAPTURE_DOMAIN = (process.env.OUTREACH_REPLY_CAPTURE_DOMAIN || "reply.itsgodyo.com").toLowerCase();
+
+/** Subjects that are machine noise, not a human reply — don't nag on these. */
+const NON_REPLY_SUBJECT =
+  /^(auto(matic)?[ -]?reply|out of office|undeliverable|delivery status|mail delivery|read:|declined:|accepted:|canceled:)/i;
+
+/**
+ * Handle an inbound outreach reply (email.received). Scope §1: we only act when the
+ * mail was delivered to our capture subdomain (the M365 Bcc rule only copies genuine
+ * replies to hello@ there, and the agent's Reply-To routes there), and we skip
+ * autoresponders/bounces by subject + sender. We store NO body (§3) — just enough
+ * metadata to say "X replied, go read it," and surface it as an action item. Match
+ * the sender to a lead so the notification can name the org; unknown senders (manual
+ * outreach, or a reply from a different address) still get flagged generically.
+ * Best-effort: never throw, so a match miss can't wedge the webhook.
+ */
+async function handleInboundReply(data: ResendEvent["data"]): Promise<boolean> {
+  if (!data) return false;
+  const to = recipients(data);
+  const forUs = to.some((a) => a.endsWith(`@${CAPTURE_DOMAIN}`));
+  if (!forUs) return false; // inbound to some other address we happen to receive — ignore
+
+  const sender = firstEmailAddr(data.from);
+  if (!sender) return false;
+  const subject = (data.subject ?? "").trim();
+  if (NON_REPLY_SUBJECT.test(subject)) return false;
+  if (/^(mailer-daemon|postmaster|no-?reply|do-?not-?reply)@/i.test(sender)) return false;
+
+  const lead = await findLeadByContactEmail(sender).catch(() => null);
+  const who = lead?.org_name || fromName(data.from) || sender;
+  await recordActionItem({
+    kind: "outreach_reply",
+    // One open item per sender — repeated replies from the same person while it's
+    // still open collapse into the single "go read it" nudge.
+    dedupeKey: `outreach_reply:${sender}`,
+    title: `Reply from ${who}`,
+    detail: subject ? `Re: "${subject}". Go check your inbox.` : "A reply came in. Go check your inbox.",
+    metadata: {
+      from_email: sender,
+      from_name: fromName(data.from),
+      subject: subject || null,
+      lead_id: lead?.id ?? null,
+      source: lead ? "outreach_lead" : "manual",
+      resend_email_id: data.email_id ?? null,
+    },
+  });
+  return true;
 }
 
 export async function POST(req: Request) {
@@ -58,6 +143,7 @@ export async function POST(req: Request) {
 
   const emails = recipients(event.data);
   let suppressed = 0;
+  let replyFlagged = false;
   try {
     if (event.type === "email.bounced") {
       const bounceType = event.data?.bounce?.type ?? "";
@@ -67,11 +153,13 @@ export async function POST(req: Request) {
       }
     } else if (event.type === "email.complained") {
       for (const e of emails) suppressed += await suppressByEmail(e, "unsubscribed", "spam_complaint");
+    } else if (event.type === "email.received") {
+      replyFlagged = await handleInboundReply(event.data);
     }
   } catch (e) {
-    console.error("[resend-webhook] suppression error:", e);
+    console.error("[resend-webhook] handler error:", e);
     return NextResponse.json({ error: "handler_error" }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, type: event.type, suppressed });
+  return NextResponse.json({ ok: true, type: event.type, suppressed, replyFlagged });
 }
