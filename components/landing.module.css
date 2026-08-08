@@ -111,6 +111,19 @@
 .shareBtn:hover { background: rgba(55,138,221,0.25); }
 .shareCopied { font-size: 12px; color: #7ee0a0; margin-top: 8px; }
 
+/* Low-friction sample link under the gate choices — lets a brand-new visitor see
+   real content before picking parent/teen. */
+.gateSample { display: inline-block; margin-top: 22px; color: #7ea8e0; font-size: 13.5px; text-decoration: none; }
+.gateSample:hover { color: #cfe0f6; text-decoration: underline; }
+
+/* ---------- Sample teaser (real approved verses, homepage) ---------- */
+.sampleHeadline { font-size: clamp(20px, 2.6vw, 26px); font-weight: 700; letter-spacing: -0.01em; margin: 6px 0 6px; }
+.sampleSub { font-size: 14.5px; color: #a9bad6; line-height: 1.55; margin: 0 0 22px; max-width: 560px; }
+.sampleThread { display: flex; flex-direction: column; gap: 16px; max-width: 620px; }
+.sampleRow { display: flex; flex-direction: column; gap: 6px; }
+.sampleCite { font-size: 11.5px; color: #7686a0; padding-left: 4px; }
+.sampleSkeleton .bubbleIn { min-width: 240px; opacity: 0.35; }
+
 /* ---------- How it works ---------- */
 .sectionDark { background: #0a1224; padding: 44px 0; }
 .steps { display: grid; grid-template-columns: repeat(3,1fr); gap: 24px; }

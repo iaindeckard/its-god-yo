@@ -1,0 +1,75 @@
+/* Standalone public sample page. Reuses the landing's dark "Read Receipts" visual
+   language (same color tokens, same incoming-bubble treatment) so it reads as the
+   same product, but is fully self-contained and server-rendered. */
+
+.page {
+  background:
+    radial-gradient(720px 460px at 86% 60px, rgba(255,211,122,0.13), transparent 58%),
+    radial-gradient(820px 640px at 94% 150px, rgba(55,138,221,0.22), transparent 62%),
+    #0B1830;
+  color: #fff; min-height: 100vh; overflow-x: clip;
+  font-family: var(--font-poppins), system-ui, sans-serif;
+}
+
+.wrap { max-width: 780px; margin: 0 auto; padding: 0 40px; }
+
+/* ---------- Header / nav ---------- */
+.header { border-bottom: 1px solid rgba(255,255,255,0.06); }
+.navbar { display: flex; align-items: center; justify-content: space-between; padding: 20px 40px; max-width: 1200px; margin: 0 auto; }
+.navHome { font-size: 14px; font-weight: 500; color: #fff; text-decoration: none; }
+.navlinks { display: flex; align-items: center; gap: 24px; font-size: 13.5px; color: #c7d3e6; }
+.navlinks a { color: inherit; text-decoration: none; }
+.navlinks a:hover { color: #fff; }
+.btnWhite { background: #fff; color: #0B1830 !important; padding: 9px 20px; border-radius: 24px; font-weight: 500; font-size: 13.5px; }
+
+/* ---------- Intro ---------- */
+.wordmarkMsg { display: inline-block; background: #111b30; border: 1px solid rgba(255,255,255,0.08); border-radius: 24px 24px 24px 6px; padding: 20px 30px; margin: 44px 0 26px; }
+.intro { margin-bottom: 26px; }
+.eyebrow { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; letter-spacing: 0.14em; color: #FFD37A; text-transform: uppercase; margin-bottom: 14px; }
+.eyebrow::before { content: ""; width: 22px; height: 1px; background: #FFD37A; opacity: 0.7; }
+.h1 { font-size: 34px; line-height: 1.15; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 14px; }
+.sub { font-size: 16px; line-height: 1.6; color: #c7d3e6; max-width: 560px; margin: 0; }
+.empty { color: #c7d3e6; font-size: 15px; padding: 30px 0; }
+
+/* ---------- Sample thread ---------- */
+.thread { position: relative; background: linear-gradient(180deg, #13203a, #0f1a30); border: 1px solid rgba(255,255,255,0.08); border-radius: 22px; padding: 22px 22px 24px; box-shadow: 0 40px 80px rgba(0,0,0,0.5); overflow: hidden; }
+.thread::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 70px; background: linear-gradient(180deg, rgba(255,211,122,0.14), transparent); pointer-events: none; }
+.threadHead { display: flex; align-items: center; gap: 11px; padding-bottom: 14px; margin-bottom: 18px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+.avatar { flex-shrink: 0; }
+.threadName { font-size: 13.5px; font-weight: 600; color: #fff; line-height: 1.2; }
+.threadMeta { font-size: 11px; color: #7686a0; margin-top: 2px; }
+.liveTag { margin-left: auto; font-size: 10px; font-weight: 700; letter-spacing: 0.1em; color: #7ee0a0; display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0; }
+.livePulse { width: 6px; height: 6px; border-radius: 50%; background: #7ee0a0; animation: pulse 1.8s ease-in-out infinite; }
+
+.msgRow { margin-bottom: 18px; }
+.msgRow:last-child { margin-bottom: 0; }
+.bubbleIn { background: #378ADD; color: #fff; border-radius: 15px 15px 15px 4px; font-size: 14.5px; line-height: 1.5; padding: 12px 15px; max-width: 88%; display: inline-block; }
+.cite { font-size: 11.5px; color: #7686a0; margin-top: 6px; padding-left: 4px; }
+
+/* ---------- CTA ---------- */
+.ctaRow { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin: 30px 0 12px; }
+.btnBlue { background: #378ADD; color: #fff !important; padding: 13px 26px; border-radius: 24px; font-weight: 500; font-size: 14px; text-decoration: none; box-shadow: 0 10px 30px rgba(55,138,221,0.35), 0 0 0 5px rgba(255,211,122,0.07); }
+.btnBlue:hover { background: #2f7ccb; }
+.btnOutline { border: 1px solid rgba(255,255,255,0.25); color: #fff !important; padding: 13px 24px; border-radius: 24px; font-weight: 500; font-size: 14px; text-decoration: none; }
+.btnOutline:hover { border-color: rgba(255,255,255,0.5); }
+.btnGhost { color: #9fb0cc !important; font-size: 14px; text-decoration: none; }
+.btnGhost:hover { color: #fff !important; }
+.fineprint { font-size: 12.5px; color: #7686a0; margin: 6px 0 60px; }
+
+/* ---------- Footer ---------- */
+.footer { background: #0a1224; padding: 32px 0; border-top: 1px solid rgba(255,255,255,0.06); }
+.footerRow { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #7686a0; flex-wrap: wrap; gap: 12px; max-width: 1200px; }
+.footerLinks { display: flex; gap: 18px; }
+.footerLinks a { color: inherit; text-decoration: none; }
+.footerLinks a:hover { color: #c7d3e6; }
+.footerLinks .gold { color: #FFD37A; }
+
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .livePulse { animation: none; } }
+
+@media (max-width: 640px) {
+  .wrap { padding: 0 20px; }
+  .navbar { padding: 18px 20px; flex-wrap: wrap; gap: 12px; }
+  .h1 { font-size: 27px; }
+  .footerRow { justify-content: center; text-align: center; }
+}

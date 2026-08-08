@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Wordmark from "./Wordmark";
 import BubbleMark from "./BubbleMark";
 import SponsorRotator from "./SponsorRotator";
@@ -45,6 +45,53 @@ const CONTENT: Record<Audience, {
     step2: "You get a text and reply YES yourself. Nothing starts until you do.",
   },
 };
+
+/**
+ * Homepage sample teaser. Fetches 3 already-approved verses from the public
+ * /api/sample endpoint on mount and shows them as incoming bubbles, with a link
+ * out to the full /sample page. Fetching client-side keeps the high-traffic
+ * homepage static/cached while still reshuffling per visit. Renders nothing if the
+ * approved pool is somehow empty. Pure marketing display — no signup, no capture.
+ */
+function SampleTeaser() {
+  const [verses, setVerses] = useState<{ text: string; verseRef: string | null }[] | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/sample?n=3")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (alive && d?.verses) setVerses(d.verses); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
+  if (verses && verses.length === 0) return null;
+
+  return (
+    <section className={s.sectionDark}>
+      <div className={s.wrap}>
+        <div className={s.eyebrow}>SEE IT FOR REAL</div>
+        <h2 className={s.sampleHeadline}>Actual verses we&rsquo;ve already sent.</h2>
+        <p className={s.sampleSub}>The same voice they&rsquo;d get on their phone. No signup, nothing to enter.</p>
+        <div className={s.sampleThread}>
+          {verses === null
+            ? [0, 1, 2].map((i) => (
+                <div key={i} className={`${s.sampleRow} ${s.sampleSkeleton}`} aria-hidden="true">
+                  <div className={s.bubbleIn}>&nbsp;</div>
+                </div>
+              ))
+            : verses.map((v, i) => (
+                <div key={i} className={s.sampleRow}>
+                  <div className={s.bubbleIn}>{v.text}</div>
+                  {v.verseRef && <div className={s.sampleCite}>{v.verseRef}</div>}
+                </div>
+              ))}
+        </div>
+        <a href="/sample" className={s.btnBlue} style={{ marginTop: 20 }}>See more real samples &rarr;</a>
+      </div>
+    </section>
+  );
+}
 
 /** The bubble-message wordmark used at the top of the gate and hero. */
 function WordmarkBubble() {
@@ -130,6 +177,7 @@ export default function Landing() {
               </a>
             )}
           </div>
+          <a className={s.gateSample} href="/sample">Just want to see it first? See a real sample &rarr;</a>
         </div>
       </div>
     );
@@ -144,6 +192,7 @@ export default function Landing() {
           <nav className={s.navlinks}>
             <a href="#how">How it works</a>
             <a href="#pricing">Pricing</a>
+            <a href="/sample">See a sample</a>
             <a href="/its-okay-to-not-be-okay" className={s.iotnbo}>&#10084; It&rsquo;s okay to not be okay</a>
             {SPANISH_ENABLED && <a href="/?lang=es" className={s.lang}>Espa&ntilde;ol</a>}
             <button className={s.switch} onClick={() => setAudience(audience === "parent" ? "teen" : "parent")}>{c!.switchLabel}</button>
@@ -240,6 +289,11 @@ export default function Landing() {
           <span className={s.threadTag}>One text a day. That&rsquo;s the whole thing.</span>
         </div>
       </section>
+
+      {/* Real, already-approved sample verses — zero-friction proof of what the
+          product feels like before signing up. Fetched client-side so this stays
+          fresh per visit without making the homepage dynamic. */}
+      <SampleTeaser />
 
       {/* Audience-specific manifesto, keyed off the same `audience` gate as the rest
           of the site. Parent sees the "Mom to Bruh" problem framing; teen sees
