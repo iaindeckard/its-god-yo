@@ -49,7 +49,7 @@ export interface Part {
   entries: Entry[];
 }
 
-export const HANDBOOK_UPDATED = "August 7, 2026";
+export const HANDBOOK_UPDATED = "August 8, 2026";
 
 export const PARTS: Part[] = [
   // ------------------------------------------------------------------ START HERE
@@ -394,7 +394,7 @@ export const PARTS: Part[] = [
           { type: "prose", text: "The business metrics view: subscribers, revenue, funnel, delivery, and content health. It is a first-pass dashboard meant to be adjusted freely." },
           { type: "list", items: [
             "A 7, 30, or 90 day range toggle across the whole page.",
-            "A demo-data toggle: with real figures near zero pre-launch, this fills the charts with clearly-labeled illustrative numbers (nothing is written to the database).",
+            "A demo-data toggle: with real figures still near zero this early after launch, this fills the charts with clearly-labeled illustrative numbers (nothing is written to the database).",
             "A strip of at-a-glance tiles (MRR, net revenue, active subscribers, ARPU, new signups, churn, delivery), each expanding to a fuller trend.",
             "Charts for revenue (net and gross, with a click-through to a by-plan and by-source breakdown), MRR and ARR, signups, acquisition source, the signup-to-active funnel, churn, plan and focus-track mix, a delivery heatmap, daily delivery, and SMS spend.",
             "A content-runway card per track, and a reserved-donation-fund card for staff who can see revenue.",
