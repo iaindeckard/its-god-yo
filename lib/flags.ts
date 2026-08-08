@@ -61,3 +61,13 @@ export const DAILY_SEND_ENABLED = true;
  * verified → PURCHASES_ENABLED → then this). Dormant-but-built by design.
  */
 export const SEASONS_ENABLED = false;
+
+/**
+ * Customer-facing cause-promotion status page (/cause/status). While false the
+ * public page is fully dark (returns notFound), regardless of any promotion's own
+ * customer_facing_enabled flag. Two gates must BOTH be true to surface anything to a
+ * customer: this global flag AND the specific promotion's customer_facing_enabled
+ * column. Admin tracking (the /admin/cause-promotions widget) is unaffected by this
+ * flag. Built now, kept dark until Iain enables it for a specific future promotion.
+ */
+export const CAUSE_PUBLIC_ENABLED = false;

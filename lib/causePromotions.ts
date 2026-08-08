@@ -26,11 +26,22 @@ export interface CausePromotionTotal {
   charity_name: string;
   payout_rate: number;
   status: "active" | "closed" | "paid";
-  start_date: string;
-  end_date: string;
+  start_at: string;
+  end_at: string;
+  customer_facing_enabled: boolean;
+  // Derived lifecycle phase (now vs start_at/end_at); no manual turn-off step.
+  phase: "scheduled" | "active" | "closed";
   member_subscriptions: number;
-  segment_gross_cents: number;
-  segment_net_cents: number;
+  realized_members: number;
+  trial_members: number;
+  realized_gross_cents: number;
+  // REALIZED: actual settled money (subscription_payments). REALIZED keeps accruing
+  // after end_at for already-tagged subs.
+  realized_net_cents: number;
+  // POTENTIAL: expected value of in-trial members (not charged, not cancelled);
+  // expires to 0 at end_at. Tracked/displayed SEPARATELY, never blended with realized.
+  potential_cents: number;
+  // Pledged payout — computed on REALIZED net ONLY, never potential.
   payout_cents: number;
 }
 
@@ -39,14 +50,30 @@ export interface CausePromotionMember {
   charity_name: string;
   pending_signup_id: string;
   stripe_subscription_id: string | null;
+  stripe_customer_id: string | null;
   purchaser_email: string | null;
   plan_key: string;
   sub_interval: "monthly" | "annual";
   promo_code: string | null;
   dm_addon: boolean;
+  signup_status: string | null;
   subscription_created_at: string | null;
-  net_cents: number;
-  gross_settled_cents: number;
+  realized_net_cents: number;
+  realized_gross_cents: number;
+  is_realized: boolean;
+  is_trial: boolean;
+  potential_cents: number;
+}
+
+/** One customer's own contribution to a customer-facing promotion (for /cause/status). */
+export interface CustomerCauseContribution {
+  promotion_id: string;
+  charity_name: string;
+  public_title: string | null;
+  public_blurb: string | null;
+  phase: "scheduled" | "active" | "closed";
+  my_realized_cents: number;   // "contributed so far" — real settled money
+  my_potential_cents: number;  // "pending, if your trial converts"
 }
 
 /** Per-promotion rollups. Pass a promotionId to scope to one (the parameterized
@@ -57,6 +84,47 @@ export async function getCausePromotionTotals(promotionId?: string): Promise<Cau
   const { data, error } = await q.order("charity_name");
   if (error) throw new Error(`cause_promotion_totals_failed: ${error.message}`);
   return (data ?? []) as CausePromotionTotal[];
+}
+
+/**
+ * One customer's own contribution to every CUSTOMER-FACING promotion, for the
+ * tokenized /cause/status page. Scoped strictly to the passed stripe customer id —
+ * a customer only ever sees their own subscriptions' realized + potential. Returns
+ * only promotions with customer_facing_enabled = true (the per-promotion gate; the
+ * global CAUSE_PUBLIC_ENABLED flag is enforced at the page).
+ */
+export async function getCustomerCauseContribution(customerId: string): Promise<CustomerCauseContribution[]> {
+  const admin = getSupabaseAdmin();
+
+  // The customer-facing promotions and their public copy / phase.
+  const { data: totals, error: tErr } = await admin
+    .from("v_cause_promotion_totals")
+    .select("promotion_id, charity_name, public_title, public_blurb, phase, customer_facing_enabled")
+    .eq("customer_facing_enabled", true);
+  if (tErr) throw new Error(`cause_customer_totals_failed: ${tErr.message}`);
+  if (!totals?.length) return [];
+
+  // This customer's own member rows across those promotions.
+  const promoIds = totals.map((t) => t.promotion_id);
+  const { data: mine, error: mErr } = await admin
+    .from("v_cause_promotion_members")
+    .select("promotion_id, realized_net_cents, potential_cents")
+    .eq("stripe_customer_id", customerId)
+    .in("promotion_id", promoIds);
+  if (mErr) throw new Error(`cause_customer_members_failed: ${mErr.message}`);
+
+  return totals.map((t) => {
+    const rows = (mine ?? []).filter((r) => r.promotion_id === t.promotion_id);
+    return {
+      promotion_id: t.promotion_id,
+      charity_name: t.charity_name,
+      public_title: t.public_title ?? null,
+      public_blurb: t.public_blurb ?? null,
+      phase: t.phase,
+      my_realized_cents: rows.reduce((s, r) => s + (r.realized_net_cents ?? 0), 0),
+      my_potential_cents: rows.reduce((s, r) => s + (r.potential_cents ?? 0), 0),
+    };
+  });
 }
 
 /** The qualifying subscriptions behind a promotion's total (for spot-checking). */
