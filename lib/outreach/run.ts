@@ -5,6 +5,7 @@ import { buildEmail, buildFollowupEmail, sendViaResend } from "./email";
 import { createPromoCode } from "../promoCodes";
 import { updateCampaign, listCampaigns } from "./campaigns";
 import { resolveVariant, clampDiscountPercent, type MessageVariant } from "./templates";
+import { isSendable } from "./verify";
 
 /**
  * Two-touch outreach sequence (Iain, 2026-08-05):
@@ -66,7 +67,7 @@ export interface SendItem {
   lead_id: string;
   org_name: string;
   to: string;
-  outcome: "would_send" | "sent" | "not_due" | "sequence_complete" | "skipped_allowlist" | "error";
+  outcome: "would_send" | "sent" | "not_due" | "sequence_complete" | "skipped_allowlist" | "skipped_unverified" | "error";
   touch: 1 | 2 | null;
   promo_code: string;
   subject: string;
@@ -83,6 +84,7 @@ export interface SendReport {
   not_due: number;
   complete: number;
   skipped: number;
+  skipped_unverified: number;
   errors: number;
   items: SendItem[];
   generated_at: string;
@@ -127,7 +129,7 @@ export async function runSend(opts: RunSendOptions = {}): Promise<SendReport> {
     mode: live ? "live" : "dry_run",
     gate_reasons: gate.reasons,
     scanned: leads.length,
-    sent: 0, would_send: 0, not_due: 0, complete: 0, skipped: 0, errors: 0,
+    sent: 0, would_send: 0, not_due: 0, complete: 0, skipped: 0, skipped_unverified: 0, errors: 0,
     items: [],
     generated_at: new Date().toISOString(),
   };
@@ -145,6 +147,21 @@ export async function runSend(opts: RunSendOptions = {}): Promise<SendReport> {
         lead_id: lead.id, org_name: lead.org_name, to: lead.contact_email,
         outcome: complete ? "sequence_complete" : "not_due", touch: null,
         promo_code: "", subject: "", send_count_after: lead.send_count,
+      });
+      continue;
+    }
+
+    // Verification hard gate (BOTH modes): a lead must have PASSED verification —
+    // or a permissioned manual override — and be within the freshness window
+    // before it can be sent. Unverified / stale / needs_manual leads are skipped
+    // and reported, so the dry-run preview matches exactly what a live send does.
+    // There is no request parameter that bypasses this; only a verified lead sends.
+    if (!isSendable(lead)) {
+      report.skipped_unverified++;
+      report.items.push({
+        lead_id: lead.id, org_name: lead.org_name, to: lead.contact_email,
+        outcome: "skipped_unverified", touch, promo_code: "", subject: "",
+        send_count_after: lead.send_count,
       });
       continue;
     }

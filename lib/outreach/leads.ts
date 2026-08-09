@@ -31,6 +31,11 @@ export interface OutreachLead {
   estimated_attendance: number | null;
   attendance_source_url: string | null;
   size_bucket: SizeBucket;
+  // Pre-send verification (source-page + email/MX). Orthogonal to `status`: a lead
+  // can be active-but-unverified. See lib/outreach/verify.ts + the send gate.
+  verification_status: "unverified" | "passed" | "failed" | "needs_manual" | "manual_override";
+  verified_at: string | null;
+  verification_notes: Record<string, unknown> | null;
 }
 
 const TABLE = "igy_outreach_leads";

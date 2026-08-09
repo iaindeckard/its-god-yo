@@ -1,6 +1,7 @@
 import "server-only";
 import { OUTREACH } from "./config";
 import { insertDiscovered, type DiscoveredLead } from "./leads";
+import { verifyLeads } from "./verify";
 import { geocodeAddress } from "../geocode";
 import { haversineMiles, sizeBucket, updateCampaign, type Campaign } from "./campaigns";
 
@@ -118,6 +119,11 @@ export async function runDiscovery(): Promise<DiscoveryResult> {
   }
   const leads = await requestLeads(key, userPrompt());
   const { inserted, skipped } = await insertDiscovered(leads, null);
+  // Auto-verify freshly discovered leads (best-effort). A failure leaves them
+  // 'unverified' -> the send gate blocks them until verification runs.
+  await verifyLeads({ onlyUnverified: true }).catch((e) => {
+    console.error("[outreach-discovery] verify pass failed (leads remain unverified):", e instanceof Error ? e.message : e);
+  });
   return { ran: true, found: leads.length, inserted, skipped, leads };
 }
 
@@ -193,6 +199,12 @@ export async function runCampaignDiscovery(campaign: Campaign): Promise<Campaign
   }
 
   const { inserted, skipped } = await insertDiscovered(kept, campaign.id);
+  // Auto-verify the just-staged campaign leads (best-effort) so they arrive with a
+  // verdict; any that can't be confirmed stay 'unverified' and the send gate holds
+  // them until an admin re-verifies or overrides.
+  await verifyLeads({ campaignId: campaign.id, onlyUnverified: true }).catch((e) => {
+    console.error("[outreach-discovery] campaign verify pass failed (leads remain unverified):", e instanceof Error ? e.message : e);
+  });
   await updateCampaign(campaign.id, { status: "ready" }).catch(() => {});
   return { ran: true, found: kept.length, inserted, skipped, leads: kept, ...base, out_of_radius: outOfRadius, rounds };
 }

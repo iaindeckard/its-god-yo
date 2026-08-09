@@ -9,6 +9,10 @@ export default async function OutreachAdminPage() {
   if (!(await can("marketing.outreach.view"))) {
     return <Forbidden permission="marketing.outreach.view" />;
   }
-  const [campaigns, canManage] = await Promise.all([listCampaigns(), can("marketing.outreach.manage")]);
-  return <OutreachManager initialCampaigns={campaigns} canManage={canManage} />;
+  const [campaigns, canManage, canOverride] = await Promise.all([
+    listCampaigns(),
+    can("marketing.outreach.manage"),
+    can("marketing.outreach.verify_override"),
+  ]);
+  return <OutreachManager initialCampaigns={campaigns} canManage={canManage} canOverride={canOverride} />;
 }

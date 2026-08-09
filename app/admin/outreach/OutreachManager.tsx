@@ -34,11 +34,13 @@ interface Lead {
   estimated_attendance: number | null; attendance_source_url: string | null;
   send_count: number; last_sent_at: string | null; promo_code: string | null;
   latitude: number | null; longitude: number | null;
+  verification_status: string; verified_at: string | null;
 }
 interface SendItem { org_name: string; to: string; outcome: string; touch: number | null; promo_code: string; subject: string; }
 interface SendReport {
   mode: string; gate_reasons: string[]; scanned: number; sent: number;
-  would_send: number; not_due: number; complete: number; skipped: number; errors: number;
+  would_send: number; not_due: number; complete: number; skipped: number;
+  skipped_unverified: number; errors: number;
   items: SendItem[];
 }
 
@@ -49,12 +51,19 @@ const statusPill = (s: string) =>
   : s === "needs_review" ? "pill pill-warn"
   : "pill pill-off";
 
+const verifyPill = (s: string) =>
+  s === "passed" ? "pill pill-on"
+  : s === "manual_override" ? "pill pill-on"
+  : s === "needs_manual" ? "pill pill-warn"
+  : s === "failed" ? "pill pill-off"
+  : "pill"; // unverified
+
 const toMapLeads = (ls: Lead[]): MapLead[] =>
   ls.map((l) => ({ id: l.id, org_name: l.org_name, status: l.status, latitude: l.latitude, longitude: l.longitude, size_bucket: l.size_bucket }));
 
 export default function OutreachManager({
-  initialCampaigns, canManage,
-}: { initialCampaigns: Campaign[]; canManage: boolean }) {
+  initialCampaigns, canManage, canOverride,
+}: { initialCampaigns: Campaign[]; canManage: boolean; canOverride: boolean }) {
   const [campaigns, setCampaigns] = useState<Campaign[]>(initialCampaigns);
   const [selected, setSelected] = useState<Campaign | null>(null);
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -154,6 +163,29 @@ export default function OutreachManager({
       await openCampaign(selected);
       await refreshCampaigns();
     } catch (e) { setError(e instanceof Error ? e.message : "discovery failed"); }
+    finally { setBusy(null); }
+  }
+
+  async function verifyLeadsRun() {
+    if (!selected) return;
+    setError(null); setBusy("verify");
+    try {
+      const res = await fetch(`/api/admin/outreach/campaigns/${selected.id}/verify`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "verify failed");
+      await openCampaign(selected);
+    } catch (e) { setError(e instanceof Error ? e.message : "verify failed"); }
+    finally { setBusy(null); }
+  }
+
+  async function overrideVerification(leadId: string) {
+    setError(null); setBusy(`override:${leadId}`);
+    try {
+      const res = await fetch(`/api/admin/outreach/leads/${leadId}/verify-override`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "override failed");
+      if (selected) await openCampaign(selected);
+    } catch (e) { setError(e instanceof Error ? e.message : "override failed"); }
     finally { setBusy(null); }
   }
 
@@ -266,6 +298,8 @@ export default function OutreachManager({
                 <div className="row" style={{ margin: "12px 0", gap: 8, flexWrap: "wrap" }}>
                   <button className="btn btn-primary" disabled={busy === "discover"} onClick={runDiscovery}>
                     {busy === "discover" ? "Discovering…" : "Run discovery"}</button>
+                  <button className="btn btn-ghost" disabled={busy === "verify"} onClick={verifyLeadsRun}>
+                    {busy === "verify" ? "Verifying…" : "Verify leads"}</button>
                   <button className="btn btn-ghost" disabled={!!busy} onClick={() => send(false)}>
                     {busy === "send-dry" ? "Previewing…" : "Preview send (dry-run)"}</button>
                   <button className="btn btn-ghost" disabled={!!busy} onClick={() => send(true)} style={{ borderColor: "#c0392b", color: "#c0392b" }}>
@@ -332,10 +366,10 @@ export default function OutreachManager({
               <div className="sim-scroll">
                 <table className="table">
                   <thead><tr>
-                    <th>Church</th><th>Location</th><th>Size</th><th>Attendance</th><th>Confidence</th><th>Status</th><th>Sends</th>
+                    <th>Church</th><th>Location</th><th>Size</th><th>Attendance</th><th>Confidence</th><th>Status</th><th>Verified</th><th>Sends</th>
                   </tr></thead>
                   <tbody>
-                    {shown.length === 0 && <tr><td colSpan={7} className="muted">No leads{viewBucket !== "all" ? " in this size bucket" : ""}.</td></tr>}
+                    {shown.length === 0 && <tr><td colSpan={8} className="muted">No leads{viewBucket !== "all" ? " in this size bucket" : ""}.</td></tr>}
                     {shown.map((l) => (
                       <tr key={l.id}>
                         <td>{l.website ? <a href={l.website} target="_blank" rel="noreferrer">{l.org_name}</a> : l.org_name}<div className="muted" style={{ fontSize: 12 }}>{l.contact_email}</div></td>
@@ -346,6 +380,15 @@ export default function OutreachManager({
                           : <span className="muted">unknown</span>}</td>
                         <td>{l.discovery_confidence ?? "—"}</td>
                         <td><span className={statusPill(l.status)}>{l.status}</span></td>
+                        <td>
+                          <span className={verifyPill(l.verification_status)}>{l.verification_status}</span>
+                          {canOverride && l.verification_status !== "passed" && l.verification_status !== "manual_override" && (
+                            <button className="btn btn-ghost" style={{ marginLeft: 6, padding: "2px 6px", fontSize: 11 }}
+                              disabled={busy === `override:${l.id}`} onClick={() => overrideVerification(l.id)}
+                              title="Mark this lead manually verified so it can send (requires the override permission)">
+                              {busy === `override:${l.id}` ? "…" : "Override"}</button>
+                          )}
+                        </td>
                         <td>{l.send_count}{l.promo_code ? <div className="mono" style={{ fontSize: 11 }}>{l.promo_code}</div> : null}</td>
                       </tr>
                     ))}
@@ -359,7 +402,7 @@ export default function OutreachManager({
                   <strong>Send {report.mode === "live" ? "result (LIVE)" : "preview (dry-run)"}</strong>
                   {report.gate_reasons.length > 0 && <p className="hint">Gate closed → stayed dry-run: {report.gate_reasons.join("; ")}</p>}
                   <p className="muted" style={{ fontSize: 13 }}>
-                    scanned {report.scanned} · {report.mode === "live" ? `sent ${report.sent}` : `would send ${report.would_send}`} · not due {report.not_due} · complete {report.complete} · skipped {report.skipped} · errors {report.errors}
+                    scanned {report.scanned} · {report.mode === "live" ? `sent ${report.sent}` : `would send ${report.would_send}`} · not due {report.not_due} · complete {report.complete} · unverified {report.skipped_unverified} · skipped {report.skipped} · errors {report.errors}
                   </p>
                   <div className="sim-scroll">
                     <table className="table"><thead><tr><th>Church</th><th>To</th><th>Touch</th><th>Outcome</th><th>Code</th></tr></thead>
