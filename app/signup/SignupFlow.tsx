@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import SalutationSelect from "@/components/SalutationSelect";
 import Link from "next/link";
 import { loadStripe, type Stripe as StripeJs } from "@stripe/stripe-js";
@@ -214,6 +214,25 @@ export default function SignupFlow({
     return () => { cancelled = true; };
   }, [step, teenPhoneE164, teenBirthYear]);
 
+  // Deep-link prefill: /signup?ref=CODE (from a shared referral link) fills the
+  // referral field and validates it, so a referred parent never retypes the code.
+  // Reads window client-side (no Suspense boundary needed); runs once.
+  const referralPrefilled = useRef(false);
+  useEffect(() => {
+    if (referralPrefilled.current) return;
+    referralPrefilled.current = true;
+    try {
+      const code = (new URLSearchParams(window.location.search).get("ref") ?? "").trim();
+      if (code) {
+        setReferralInput(code);
+        void applyReferral(code);
+      }
+    } catch {
+      /* no window / malformed query — ignore */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ---- derived plan ----
   const resolved = useMemo(() => {
     if (planChoice === "individual") {
@@ -303,10 +322,10 @@ export default function SignupFlow({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dmEnabled]);
 
-  async function applyReferral() {
+  async function applyReferral(rawCode?: string) {
     setReferralError(null);
     if (promo) { setReferralApplied(false); setReferralError(s.referralExclusive); return; } // referral ⊕ promo
-    const code = referralInput.trim();
+    const code = (rawCode ?? referralInput).trim();
     if (!code) return;
     setReferralBusy(true);
     try {
@@ -798,7 +817,7 @@ export default function SignupFlow({
                     placeholder="IGY-XXXXXXXX"
                     style={{ flex: 1 }}
                   />
-                  <button className="btn btn-ghost" onClick={applyReferral} disabled={referralBusy || !referralInput.trim()}>
+                  <button className="btn btn-ghost" onClick={() => applyReferral()} disabled={referralBusy || !referralInput.trim()}>
                     {referralBusy ? "…" : s.apply}
                   </button>
                 </div>

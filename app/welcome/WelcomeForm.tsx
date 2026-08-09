@@ -8,6 +8,7 @@ import {
   COMMON_TIMEZONES,
   isValidTimezone,
 } from "@/lib/sendTime";
+import ReferralShare from "./ReferralShare";
 
 interface Props {
   token: string;
@@ -15,6 +16,8 @@ interface Props {
   lang: "en" | "es";
   initialTime: string | null; // "HH:MM[:SS]" or null (=> noon)
   initialTz: string | null;   // IANA or null (=> auto-detect)
+  referralCode: string | null; // purchaser's shareable code, or null if ineligible
+  referralUrl: string | null;  // deep link that pre-fills the code at signup
 }
 
 const COPY = {
@@ -83,8 +86,11 @@ function toHHMM(t: string | null): string | null {
   return m ? `${m[1].padStart(2, "0")}:${m[2]}` : null;
 }
 
-export default function WelcomeForm({ token, firstName, lang, initialTime, initialTz }: Props) {
+export default function WelcomeForm({ token, firstName, lang, initialTime, initialTz, referralCode, referralUrl }: Props) {
   const t = COPY[lang];
+  const referral = referralCode && referralUrl ? (
+    <ReferralShare code={referralCode} url={referralUrl} lang={lang} />
+  ) : null;
   const slots = useMemo(() => sendTimeSlots(), []);
   const [time, setTime] = useState<string>(toHHMM(initialTime) ?? SEND_TIME_DEFAULT);
   const [tz, setTz] = useState<string>(initialTz ?? "");
@@ -206,6 +212,8 @@ export default function WelcomeForm({ token, firstName, lang, initialTime, initi
             {t.hype.changeTime}
           </button>
         </div>
+
+        {referral}
       </div>
     );
   }
@@ -258,6 +266,8 @@ export default function WelcomeForm({ token, firstName, lang, initialTime, initi
       {error && (
         <p style={{ marginTop: 16, color: "#f5b5b5", fontSize: 15, textAlign: "center" }}>{error}</p>
       )}
+
+      {referral}
     </div>
   );
 }

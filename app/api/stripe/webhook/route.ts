@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { getStripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-import { onRefereePaidConversion, onRefereePaymentReversed, type OwnerKind } from "@/lib/referral";
+import { onRefereePaidConversion, onRefereePaymentReversed, ownerKindForPlan } from "@/lib/referral";
 import { markConvertedByPromotionCodeId } from "@/lib/outreach/leads";
 import { upsertSubscriptionPayment, tsIso, type PaymentCapture } from "@/lib/subscriptionPayments";
 import { cancelSubscriptionForSignup, cancelStripeSubscriptionById } from "@/lib/cancelSubscription";
@@ -77,10 +77,6 @@ export async function POST(req: Request) {
   };
   const idOf = (v: unknown): string | null =>
     typeof v === "string" ? v : (v as { id?: string } | null)?.id ?? null;
-  // Group buyers are churches; everyone else is a family. Cosmetic label on the
-  // referee's propagated code — the balance-credit reward scales regardless.
-  const ownerKindForPlan = (planKey: string | null | undefined): OwnerKind =>
-    typeof planKey === "string" && planKey.startsWith("group") ? "church" : "family";
 
   // Fire referral conversion for the referee's first REAL charge. No-ops when the
   // signup wasn't referred. Resolves pending_signup_id + plan from the

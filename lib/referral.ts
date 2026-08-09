@@ -29,6 +29,41 @@ const ROLLING_WINDOW_DAYS = 365;
 
 export type OwnerKind = "family" | "church";
 
+/** Group/church buyers vs everyone else (family). The parent-to-parent loop is
+ *  family-only; the balance-credit reward scales to real plan value regardless.
+ *  Shared by the checkout webhook and the /welcome issuance path so both classify
+ *  a plan identically. */
+export function ownerKindForPlan(planKey: string | null | undefined): OwnerKind {
+  return typeof planKey === "string" && planKey.startsWith("group") ? "church" : "family";
+}
+
+// Same env fallback chain as lib/cornerstone / lib/churchEnrollment.
+const REFERRAL_APP_URL = (
+  process.env.CORNERSTONE_APP_URL || process.env.OUTREACH_APP_URL || "https://itsgodyo.com"
+).replace(/\/$/, "");
+
+/** The shareable signup link that pre-fills a referral code (see SignupFlow). */
+export function referralShareUrl(code: string): string {
+  return `${REFERRAL_APP_URL}/signup?ref=${encodeURIComponent(code)}`;
+}
+
+/**
+ * Whether this Stripe customer is a recognized Cornerstone Partner. Such customers
+ * are excluded from the parent-to-parent referral loop: a church already receives
+ * Cornerstone benefits (locked pricing, recognition, leaderboard), so earning
+ * referral credit on top would be double-dipping. Matches ANY partner record for
+ * the customer, regardless of cornerstone_status.
+ */
+export async function isCornerstonePartnerCustomer(ownerCustomerId: string): Promise<boolean> {
+  const admin = getSupabaseAdmin();
+  const { data } = await admin
+    .from("cornerstone_partners")
+    .select("id")
+    .eq("stripe_customer_id", ownerCustomerId)
+    .limit(1);
+  return !!(data && data.length > 0);
+}
+
 // ─────────────────────────── code generation ───────────────────────────
 // Unambiguous alphabet (no 0/O/1/I/L). e.g. "IGY-7GKQ9M2X".
 const CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
@@ -44,12 +79,20 @@ function isUniqueViolation(err: unknown): boolean {
 
 // ─────────────────────────── minting / lookup ───────────────────────────
 
-/** Idempotently ensure the owner has an active referral code; returns it. Safe
- *  under races (the partial-unique "one active per owner" index arbitrates). */
+/** Idempotently ensure the owner has an active referral code; returns it, or null
+ *  if the owner is excluded from the parent-to-parent loop (a church/group buyer or
+ *  a Cornerstone Partner). This is the single issuance chokepoint: because
+ *  propagation (onRefereePaidConversion) also mints through here, the exclusion
+ *  closes the propagation vector too (a group-plan referee never mints a 'church'
+ *  code). Safe under races (the partial-unique "one active per owner" index
+ *  arbitrates). */
 export async function mintReferralCode(
   ownerCustomerId: string,
   ownerKind: OwnerKind,
-): Promise<{ id: string; code: string }> {
+): Promise<{ id: string; code: string } | null> {
+  if (ownerKind === "church") return null;
+  if (await isCornerstonePartnerCustomer(ownerCustomerId)) return null;
+
   const admin = getSupabaseAdmin();
 
   const existing = await getActiveCodeForOwner(ownerCustomerId);
@@ -85,6 +128,18 @@ export async function getActiveCodeForOwner(
     .eq("active", true)
     .maybeSingle();
   return (data as { id: string; code: string } | null) ?? null;
+}
+
+/** Get-or-create a subscriber's shareable referral, or null if they're excluded
+ *  (church/group buyer or Cornerstone Partner). Used by the /welcome page to
+ *  surface a code an existing subscriber can share. */
+export async function getShareableReferralForCustomer(
+  ownerCustomerId: string,
+  ownerKind: OwnerKind,
+): Promise<{ code: string; url: string } | null> {
+  const minted = await mintReferralCode(ownerCustomerId, ownerKind);
+  if (!minted) return null;
+  return { code: minted.code, url: referralShareUrl(minted.code) };
 }
 
 export interface ReferralCodeLookup {
@@ -235,7 +290,7 @@ export async function onRefereePaidConversion(args: {
 }): Promise<{
   status: "no_referral" | "self_referral_void" | "processed";
   refereeCredited?: boolean;
-  referrerReward?: "granted" | "capped";
+  referrerReward?: "granted" | "capped" | "excluded";
 }> {
   const admin = getSupabaseAdmin();
   const stripe = getStripe();
@@ -282,9 +337,17 @@ export async function onRefereePaidConversion(args: {
     }
   }
 
-  // 2) Referrer get-a-month (once, subject to the rolling cap).
-  let referrerReward: "granted" | "capped" | undefined;
-  if (!ev.referrer_credit_applied_at) {
+  // 2) Referrer get-a-month (once, subject to exclusion + the rolling cap).
+  let referrerReward: "granted" | "capped" | "excluded" | undefined;
+  if (!ev.referrer_credit_applied_at && (await isCornerstonePartnerCustomer(ev.referrer_customer_id))) {
+    // Belt-and-suspenders to the issuance chokepoint: a Cornerstone Partner is
+    // excluded from the parent-to-parent loop (no double-dip). Skip the referrer
+    // reward; the referee still keeps their give-a-month. Leave
+    // referrer_credit_applied_at null so this stays a self-consistent, idempotent
+    // terminal state (a re-drive re-checks and re-excludes).
+    referrerReward = "excluded";
+    await admin.from("referral_events").update({ status: "referrer_excluded", updated_at: new Date().toISOString() }).eq("id", ev.id);
+  } else if (!ev.referrer_credit_applied_at) {
     const net = await referrerNetRewardsInWindow(ev.referrer_customer_id);
     if (net >= MAX_REFERRER_REWARDS_PER_YEAR) {
       referrerReward = "capped";

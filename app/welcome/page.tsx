@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+import { getShareableReferralForCustomer, ownerKindForPlan } from "@/lib/referral";
 import WelcomeForm from "./WelcomeForm";
 
 export const dynamic = "force-dynamic";
@@ -42,17 +43,38 @@ export default async function WelcomePage({
   const token = (c ?? "").trim();
 
   let row:
-    | { recipient_first_name: string | null; language: string | null; send_time_local: string | null; timezone: string | null }
+    | { recipient_first_name: string | null; language: string | null; send_time_local: string | null; timezone: string | null; pending_signup_id: string | null }
     | null = null;
+  // The purchaser's shareable referral (get-or-create), or null when they're not
+  // eligible (a church/group buyer or a Cornerstone Partner). Resolved off the
+  // pending_signups row the consent links to, since that carries the Stripe
+  // customer + plan. Best-effort: a failure here never blocks the welcome page.
+  let referral: { code: string; url: string } | null = null;
 
   if (token) {
     const admin = getSupabaseAdmin();
     const { data } = await admin
       .from("consent_log")
-      .select("recipient_first_name, language, send_time_local, timezone")
+      .select("recipient_first_name, language, send_time_local, timezone, pending_signup_id")
       .eq("welcome_token", token)
       .maybeSingle();
     if (data) row = data;
+
+    if (row?.pending_signup_id) {
+      try {
+        const { data: ps } = await admin
+          .from("pending_signups")
+          .select("stripe_customer_id, plan_key")
+          .eq("id", row.pending_signup_id)
+          .maybeSingle();
+        const psRow = ps as { stripe_customer_id: string | null; plan_key: string | null } | null;
+        if (psRow?.stripe_customer_id) {
+          referral = await getShareableReferralForCustomer(psRow.stripe_customer_id, ownerKindForPlan(psRow.plan_key));
+        }
+      } catch (e) {
+        console.error("[welcome] referral resolve failed:", e instanceof Error ? e.message : e);
+      }
+    }
   }
 
   if (!row) {
@@ -79,6 +101,8 @@ export default async function WelcomePage({
         lang={lang}
         initialTime={row.send_time_local}
         initialTz={row.timezone}
+        referralCode={referral?.code ?? null}
+        referralUrl={referral?.url ?? null}
       />
     </Shell>
   );
