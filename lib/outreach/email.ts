@@ -87,12 +87,18 @@ export function buildEmail(lead: OutreachLead, variant: MessageVariant = "defaul
   // Campaign-specific personal note (empty for null-campaign / unlisted campaigns).
   // Trailing space so it flows straight into the generic transition sentence.
   const personalIntro = (lead.campaign_id && CAMPAIGN_INTRO[lead.campaign_id]) ? `${CAMPAIGN_INTRO[lead.campaign_id]} ` : "";
-  // Footer "we're local too": campaign leads keep it (the personal note above
-  // establishes the local tie); the null-campaign Wichita-cron fallback keeps it
-  // ONLY for genuinely Kansas leads, and drops the sentence entirely otherwise.
+  // The "we're local too" + "support a local small business" claims render ONLY
+  // when there is a real local tie: a campaign that has a CAMPAIGN_INTRO note (the
+  // personal line above that earns the claim), or the Wichita-home fallback (KS).
+  // Otherwise both drop entirely (e.g. Dallas, held in reserve with no CAMPAIGN_INTRO
+  // entry, or an out-of-state fallback lead). The city label below stays regardless
+  // because it is factual. Both claim lines gate together on hasLocalTie.
   const isFallback = !lead.campaign_id;
   const isHomeState = /^(KS|KANSAS)$/i.test((lead.state || "").trim());
-  const localSentence = (!isFallback || isHomeState) ? " We're proud to say we're local too." : "";
+  const hasCampaignIntro = !!(lead.campaign_id && CAMPAIGN_INTRO[lead.campaign_id]);
+  const hasLocalTie = hasCampaignIntro || (isFallback && isHomeState);
+  const localSentence = hasLocalTie ? " We're proud to say we're local too." : "";
+  const localBusiness = hasLocalTie ? " Please, help support a local small business!" : "";
   // Footer locality label: the null-campaign / global-cron fallback keeps the
   // original hardcoded "Wichita-area church"; campaign leads use their OWN city
   // (campaigns now run outside KS), dropping to a plain "a church" if a campaign
@@ -118,7 +124,7 @@ Reply to this email directly, it comes to me.
 
 ---
 It's God, Yo!™ is operated by ${OUTREACH.physicalAddress}.
-You received this because ${org} is ${areaLabelText} with a publicly listed youth ministry.${localSentence} We found your general contact address at ${sourceNote(lead)}. Please, help support a local small business!
+You received this because ${org} is ${areaLabelText} with a publicly listed youth ministry.${localSentence} We found your general contact address at ${sourceNote(lead)}.${localBusiness}
 Unsubscribe (one click): ${link}`;
 
   const html =
@@ -133,7 +139,7 @@ Unsubscribe (one click): ${link}`;
   <hr style="border:none;border-top:1px solid #e2e2e2;margin:22px 0;"/>
   <p style="font-size:12px;color:#777;">
     It's God, Yo!™ is operated by ${esc(OUTREACH.physicalAddress)}.<br/>
-    You received this because ${esc(org)} is ${areaLabelHtml} with a publicly listed youth ministry.${localSentence} We found your general contact address at ${esc(sourceNote(lead))}. Please, help support a local small business!<br/>
+    You received this because ${esc(org)} is ${areaLabelHtml} with a publicly listed youth ministry.${localSentence} We found your general contact address at ${esc(sourceNote(lead))}.${localBusiness}<br/>
     <a href="${link}" style="color:#777;">Unsubscribe (one click)</a>
   </p>
 </div>`;
@@ -171,6 +177,17 @@ export function buildFollowupEmail(
   const org = lead.org_name;
   const link = unsubUrl(lead.id);
   const site = OUTREACH.appUrl;
+  // Footer locality (mirrors email 1): city-based label, and the "local too" +
+  // "local small business" claims render ONLY on a real local tie (a campaign with
+  // a CAMPAIGN_INTRO note, or the Wichita-home KS fallback); dropped otherwise.
+  const isFallback = !lead.campaign_id;
+  const isHomeState = /^(KS|KANSAS)$/i.test((lead.state || "").trim());
+  const hasCampaignIntro = !!(lead.campaign_id && CAMPAIGN_INTRO[lead.campaign_id]);
+  const hasLocalTie = hasCampaignIntro || (isFallback && isHomeState);
+  const localSentence = hasLocalTie ? " We're proud to say we're local too." : "";
+  const localBusiness = hasLocalTie ? " Please, help support a local small business!" : "";
+  const areaLabelText = isFallback ? "a Wichita-area church" : (lead.city ? `a ${lead.city}-area church` : "a church");
+  const areaLabelHtml = isFallback ? "a Wichita-area church" : (lead.city ? `a ${esc(lead.city)}-area church` : "a church");
 
   const subject = `Following up for ${org}'s youth ministry`;
 
@@ -192,7 +209,7 @@ Reply to this email directly, it comes to me.
 
 ---
 It's God, Yo!™ is operated by ${OUTREACH.physicalAddress}.
-You received this because ${org} is a Wichita-area church with a publicly listed youth ministry. We're proud to say we're local too. We found your general contact address at ${sourceNote(lead)}. Please, help support a local small business!
+You received this because ${org} is ${areaLabelText} with a publicly listed youth ministry.${localSentence} We found your general contact address at ${sourceNote(lead)}.${localBusiness}
 Unsubscribe (one click): ${link}`;
 
   const html =
@@ -210,7 +227,7 @@ Unsubscribe (one click): ${link}`;
   <hr style="border:none;border-top:1px solid #e2e2e2;margin:22px 0;"/>
   <p style="font-size:12px;color:#777;">
     It's God, Yo!™ is operated by ${esc(OUTREACH.physicalAddress)}.<br/>
-    You received this because ${esc(org)} is a Wichita-area church with a publicly listed youth ministry. We're proud to say we're local too. We found your general contact address at ${esc(sourceNote(lead))}. Please, help support a local small business!<br/>
+    You received this because ${esc(org)} is ${areaLabelHtml} with a publicly listed youth ministry.${localSentence} We found your general contact address at ${esc(sourceNote(lead))}.${localBusiness}<br/>
     <a href="${link}" style="color:#777;">Unsubscribe (one click)</a>
   </p>
 </div>`;
