@@ -8,6 +8,7 @@
     { "path": "/api/cron/reconcile-payments?days=40", "schedule": "0 9 1 * *" },
     { "path": "/api/cron/daily-send", "schedule": "0,30 * * * *" },
     { "path": "/api/cron/cornerstone-enrollment-reminder", "schedule": "0 16 * * *" },
+    { "path": "/api/cron/dm-upsell", "schedule": "0 17 * * *" },
     { "path": "/api/cron/opener-pool-review", "schedule": "0 13 1 * *" },
     { "path": "/api/cron/season-billing", "schedule": "0 8 * * *" },
     { "path": "/api/cron/season-content-generate", "schedule": "0 6 * * *" },

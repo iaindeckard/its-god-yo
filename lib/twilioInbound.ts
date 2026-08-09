@@ -219,6 +219,13 @@ export async function processInboundReply(from: string, body: string): Promise<I
     const dlang: Lang = (confirmed?.language ?? matched?.language) === "es" ? "es" : "en";
     if (!targetSignupId) return { action: "not_found", reply: REPLY[dlang].notFound };
     await setDmAddon(targetSignupId, on);
+    // If this DM ON is answering the day-14-21 upsell, record the conversion
+    // (best-effort, only flips a 'sent' row -> 'accepted'; never blocks the reply).
+    if (on) {
+      await admin.from("dm_upsell_log").update({ status: "accepted", updated_at: new Date().toISOString() })
+        .eq("pending_signup_id", targetSignupId).eq("status", "sent")
+        .then(undefined, (e) => console.error("[dm-upsell] accept_stamp_failed:", e instanceof Error ? e.message : e));
+    }
     return { action: on ? "dm_on" : "dm_off", reply: on ? REPLY[dlang].dmOn : REPLY[dlang].dmOff, pending_signup_id: targetSignupId };
   }
 

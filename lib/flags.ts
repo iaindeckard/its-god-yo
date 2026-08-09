@@ -43,6 +43,17 @@ export const SPONSORS_ENABLED = false;
 export const CORNERSTONE_ENABLED = true;
 
 /**
+ * Master switch for the day-14-21 "DM from Him" retention upsell cron
+ * (/api/cron/dm-upsell). While false, the cron runs in DRY mode: it computes who
+ * is in the window and would be prompted, and logs it, but sends NO SMS and writes
+ * NO dm_upsell_log rows, so it can be deployed and observed harmlessly. Flip to true
+ * ONLY after the upsell copy has final sign-off (it is preliminarily approved as a
+ * concept, not as specific wording). Depends on the same Twilio config as the daily
+ * send. Never enable in isolation of a working send path.
+ */
+export const DM_UPSELL_ENABLED = false;
+
+/**
  * Master switch for the Stage 2 daily send (the /api/cron/daily-send tick).
  * While false, the cron runs in DRY mode: it still computes who is due and
  * whether approved content exists, but makes NO Twilio calls and writes NO
