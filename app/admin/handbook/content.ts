@@ -49,7 +49,7 @@ export interface Part {
   entries: Entry[];
 }
 
-export const HANDBOOK_UPDATED = "August 8, 2026";
+export const HANDBOOK_UPDATED = "August 9, 2026";
 
 export const PARTS: Part[] = [
   // ------------------------------------------------------------------ START HERE
@@ -191,9 +191,14 @@ export const PARTS: Part[] = [
             "Locked-in pricing.",
             "A downloadable certificate and badge.",
             "An opt-in listing on the public /cornerstone-partners directory, including an interactive 3D atlas-style globe showing partner locations.",
+            "A ranked spot on the public leaderboard at /cornerstone-partners/leaderboard, ordered by how many teens the church has actually brought on board.",
           ] },
           { type: "callout", kind: "warning", title: "Manual approval only", text: "The program launches in manual-approval mode: every application is reviewed by a human at /admin/cornerstone before approval. Nothing auto-approves." },
           { type: "prose", text: "IGY has no customer login system. Churches access their own status through a tokenized link, not an account." },
+          { type: "subheading", text: "How the leaderboard counts" },
+          { type: "prose", text: "The leaderboard count is deliberately stricter than a church's raw signup number. It counts only teens whose subscription has moved past the free trial and been charged for real. A teen still inside their trial, or one whose first payment failed, does not count yet. So a church can have more signups than leaderboard points, and that gap is trials that have not converted. Only churches that opted into public listing appear, and the page shows the church name and count, nothing else." },
+          { type: "prose", text: "Program settings live in cornerstone_config, editable at /admin/cornerstone. The eligible plans are the per-teen church group bands (group_1_50, group_51_150, group_151_300); the certificate prints Ephesians 2:20." },
+          { type: "callout", kind: "info", title: "Eligible-plans is informational today", text: "The eligible-plans setting documents which plans the program is meant for, but nothing in the code currently rejects an application on a different plan server-side. Treat it as guidance, not an enforced gate, until enforcement is added." },
         ],
       },
       {
@@ -238,6 +243,15 @@ export const PARTS: Part[] = [
         blocks: [
           { type: "prose", text: "PURCHASES_ENABLED is the master flag gating all live billing. Anyone touching pricing, Stripe, or the signup flow should check its current state before assuming anything about what a real customer can be charged." },
           { type: "callout", kind: "warning", title: "Current value: true (live since 2026-08-04)", text: "PURCHASES_ENABLED is currently true. IGY is live: /signup runs the real purchase flow and /api/setup-intent creates SetupIntents, so real cards can be entered and real customers can be charged. If it is ever flipped back to false, /signup shows a “coming soon” notice and no one can be charged. Always check the current value before assuming either state." },
+        ],
+      },
+      {
+        id: "data-access-posture",
+        title: "Data access & security posture",
+        blocks: [
+          { type: "prose", text: "Every IGY database table is server-side only. The app reaches its data through a trusted server key (the service role); the public key that ships in the browser can read and write nothing directly. This is enforced at the database with row-level security, so a table with no explicit public rule is closed by default, not open." },
+          { type: "callout", kind: "info", title: "Seasonal tables brought in line (2026-08-09)", text: "Five Holy Season and climax content tables had been created without that lock, leaving them readable and writable with the public key. They were switched to the same server-side-only posture as the rest of the database. No screen or feature changed; they run through the server key exactly as before." },
+          { type: "callout", kind: "escalate", title: "A leaked key is a security incident", text: "If a service key or any credential is ever exposed, treat it as the Part 6 security-incident scenario: escalate to Iain directly, immediately." },
         ],
       },
     ],
