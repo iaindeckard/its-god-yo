@@ -179,7 +179,7 @@ export const PARTS: Part[] = [
     id: "programs",
     number: "3",
     title: "Programs",
-    blurb: "Cornerstone (live) and the affinity promo codes.",
+    blurb: "Cornerstone (live), the affinity promo codes, and the parent-to-parent referral loop.",
     entries: [
       {
         id: "cornerstone-program",
@@ -211,6 +211,19 @@ export const PARTS: Part[] = [
             ["igy_hardtner", "10% off", "Camp Hardtner attendees / their caregivers (attestation required)", "Active · one-time discount"],
           ] },
           { type: "callout", kind: "info", title: "Created in Stripe, managed in-app", text: "These were created directly in the Stripe dashboard. Promo codes are also viewable/manageable in the admin Promo Code Studio (see Part 5) for staff with billing permissions." },
+        ],
+      },
+      {
+        id: "referral-loop",
+        title: "Parent-to-parent referrals (give a month, get a month)",
+        blocks: [
+          { type: "prose", text: "A subscriber can share It's God, Yo with a friend. When the friend subscribes and is charged for real, both sides get a free month. The reward is a Stripe account-balance credit worth one month of each person's own plan, not a coupon, so it scales to whatever they pay. It is separate from promo codes, and a signup can use one or the other, never both." },
+          { type: "subheading", text: "How a subscriber gets and shares their code" },
+          { type: "prose", text: "Every subscriber has their own referral code. They see it on their welcome page (the tokenized /welcome link from the post-signup text, the same no-login link where they set their daily send time). The page shows their code with a copy button and a share button, and the shareable link drops the code straight into a friend's signup so the friend never types it. A friend who subscribes also gets their own code once they convert, so the loop keeps spreading." },
+          { type: "subheading", text: "When the reward actually lands" },
+          { type: "prose", text: "The reward only fires on the friend's first real charge, the same past-trial standard as the Cornerstone leaderboard: a settled recurring charge, not the $0 trial-start. A friend who never gets past the free trial, or whose first payment fails, earns nobody a reward. If that first payment is later refunded or charged back, the referrer's reward is automatically clawed back." },
+          { type: "callout", kind: "info", title: "Two guardrails", text: "A person can earn at most 6 referral rewards in any rolling 12 months. And a referrer must have their own active subscription at the time the friend converts to receive the reward." },
+          { type: "callout", kind: "warning", title: "Cornerstone Partners are excluded", text: "Churches and Cornerstone Partners do not participate in this loop. They already receive Cornerstone benefits (locked pricing, recognition, the leaderboard), so earning referral credit on top would be double-dipping. Partner and church/group accounts are never issued a referral code and are never paid a referral reward." },
         ],
       },
     ],
@@ -395,7 +408,8 @@ export const PARTS: Part[] = [
         address: "/admin/referrals",
         relatedRoute: "/admin/referrals",
         blocks: [
-          { type: "prose", text: "The give/get-a-month referral loop: referral events, rewards, and the reward cap. Referrals reward via a customer-balance credit at the referee's paid conversion (the old 10%-off referral coupon was retired 2026-07-24)." },
+          { type: "prose", text: "A read-only overview of the parent-to-parent referral loop (Part 3 explains the loop itself): recent referral events, their statuses, rewards granted, rewards reversed by clawback, and the net credit issued. It does not edit anything; the loop runs on its own through the signup flow and the Stripe webhook." },
+          { type: "prose", text: "Statuses you will see: pending (a referred signup not yet charged), converted, rewarded, capped (referrer hit the 6-per-year cap), referrer_no_active_sub (the referrer had no active subscription when the friend converted, so the reward is deferred), referrer_excluded (the referrer is a Cornerstone Partner, so no referrer reward is paid), and void (self-referral, or a conversion later refunded/charged back)." },
           { type: "callout", kind: "info", title: "Permission: billing.promo_codes.view (super_admin)", text: "Gated by the same billing permission as Promo Code Studio." },
         ],
       },
