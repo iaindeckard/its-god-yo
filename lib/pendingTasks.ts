@@ -102,12 +102,21 @@ export const QUEUES: PendingQueue[] = [
   {
     key: "outreach",
     label: "Outreach leads",
-    // Outreach has no admin screen yet — it is included so the centralized count is
-    // complete (per spec) and it surfaces in the /admin summary. When an outreach
-    // admin page lands, set navHref + need and it badges automatically.
-    need: "*outreach-no-screen*",
-    navHref: null,
+    // Leads still awaiting a review decision (the legacy needs_review state). Now
+    // that /admin/outreach exists, this badges the real screen.
+    need: "marketing.outreach.view",
+    navHref: "/admin/outreach",
     count: (db) => headCount(db, "igy_outreach_leads", (q) => q.eq("status", "needs_review")),
+  },
+  {
+    key: "outreach_verify",
+    label: "Outreach leads to verify",
+    // needs_manual leads: automated verification could not confirm them. An admin
+    // reviews and overrides on /admin/outreach (Step 3), where each lead shows its
+    // plain-language reason. Gated on manage (override is a further permission).
+    need: "marketing.outreach.manage",
+    navHref: "/admin/outreach",
+    count: (db) => headCount(db, "igy_outreach_leads", (q) => q.eq("verification_status", "needs_manual")),
   },
 ];
 
