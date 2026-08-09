@@ -52,6 +52,22 @@ function sourceNote(lead: OutreachLead): string {
 }
 
 /**
+ * Campaign-specific personal note for email 1 — one sentence inserted BEFORE the
+ * generic "…has an active youth ministry…" transition, keyed by campaign_id. Any
+ * campaign not listed here, and the null-campaign / global-cron fallback, get no
+ * personal line (the generic sentence stands alone, exactly as before). This copy
+ * is code-resident and reviewed, same governance as the rest of the template.
+ */
+const CAMPAIGN_INTRO: Record<string, string> = {
+  // New Iberia, LA
+  "7193c8f9-62c4-4e7a-ac41-a142b9ac8160":
+    "I actually grew up in New Iberia, so getting this into the hands of teens back home means something to me.",
+  // Dallas Metro, TX
+  "0dfe6428-02a2-4e7d-8aba-1c7a6a93feb0":
+    "My aunt Nora lives at The Tradition here in Dallas, so this area isn't unfamiliar to me.",
+};
+
+/**
  * Build the compliant outreach email (spec §2). The copy here is the LOCKED /
  * APPROVED version (Iain, 2026-07-28 — IGY-Church-Outreach-Email-Copy-APPROVED-
  * 2026-07-28.md). Approval of the copy does NOT open the send gate: mail still
@@ -68,6 +84,21 @@ export function buildEmail(lead: OutreachLead, variant: MessageVariant = "defaul
   const org = lead.org_name;
   const link = unsubUrl(lead.id);
   const site = OUTREACH.appUrl;
+  // Campaign-specific personal note (empty for null-campaign / unlisted campaigns).
+  // Trailing space so it flows straight into the generic transition sentence.
+  const personalIntro = (lead.campaign_id && CAMPAIGN_INTRO[lead.campaign_id]) ? `${CAMPAIGN_INTRO[lead.campaign_id]} ` : "";
+  // Footer "we're local too": campaign leads keep it (the personal note above
+  // establishes the local tie); the null-campaign Wichita-cron fallback keeps it
+  // ONLY for genuinely Kansas leads, and drops the sentence entirely otherwise.
+  const isFallback = !lead.campaign_id;
+  const isHomeState = /^(KS|KANSAS)$/i.test((lead.state || "").trim());
+  const localSentence = (!isFallback || isHomeState) ? " We're proud to say we're local too." : "";
+  // Footer locality label: the null-campaign / global-cron fallback keeps the
+  // original hardcoded "Wichita-area church"; campaign leads use their OWN city
+  // (campaigns now run outside KS), dropping to a plain "a church" if a campaign
+  // lead somehow has no city rather than mislabeling it Wichita.
+  const areaLabelText = isFallback ? "a Wichita-area church" : (lead.city ? `a ${lead.city}-area church` : "a church");
+  const areaLabelHtml = isFallback ? "a Wichita-area church" : (lead.city ? `a ${esc(lead.city)}-area church` : "a church");
 
   const subject = `A partnership opportunity for ${org}'s youth ministry`;
 
@@ -76,7 +107,7 @@ export function buildEmail(lead: OutreachLead, variant: MessageVariant = "defaul
 
 I'm Iain, founder of It's God, Yo!, a daily Scripture text devotional built for teens, ${SPANISH_ENABLED ? "in English (KJV) and Spanish (Reina-Valera 1909)" : "in English (KJV)"}. One verse a day, rewritten in their language, real slang they use today so they actually understand it. There's always a link back to the full KJV text too. And thanks to a proprietary system, the slang is never stale.
 
-${org} has an active youth ministry, and I thought this might be useful for the students you're already working with. You can see how it works and sign up at ${site}.
+${personalIntro}${org} has an active youth ministry, and I thought this might be useful for the students you're already working with. You can see how it works and sign up at ${site}.
 
 No pressure here. Share it if it's a fit, ignore it if it's not. If you'd rather not hear from us again, the link below removes ${org} for good.
 
@@ -87,14 +118,14 @@ Reply to this email directly, it comes to me.
 
 ---
 It's God, Yo!™ is operated by ${OUTREACH.physicalAddress}.
-You received this because ${org} is a Wichita-area church with a publicly listed youth ministry. We're proud to say we're local too. We found your general contact address at ${sourceNote(lead)}. Please, help support a local small business!
+You received this because ${org} is ${areaLabelText} with a publicly listed youth ministry.${localSentence} We found your general contact address at ${sourceNote(lead)}. Please, help support a local small business!
 Unsubscribe (one click): ${link}`;
 
   const html =
 `<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:#1a1a1a;max-width:600px;margin:0 auto;">
   <p>Hi ${esc(org)} team,</p>
   <p>I'm Iain, founder of <strong>It's God, Yo!</strong>, a daily Scripture text devotional built for teens, ${SPANISH_ENABLED ? "in English (KJV) and Spanish (Reina-Valera 1909)" : "in English (KJV)"}. One verse a day, rewritten in their language, real slang they use today so they actually understand it. There's always a link back to the full KJV text too. And thanks to a proprietary system, the slang is never stale.</p>
-  <p>${esc(org)} has an active youth ministry, and I thought this might be useful for the students you're already working with. You can see how it works and sign up at <a href="${site}" style="color:#00ABBC;">${esc(site.replace(/^https?:\/\//, ""))}</a>.</p>
+  <p>${personalIntro}${esc(org)} has an active youth ministry, and I thought this might be useful for the students you're already working with. You can see how it works and sign up at <a href="${site}" style="color:#00ABBC;">${esc(site.replace(/^https?:\/\//, ""))}</a>.</p>
   <p>No pressure here. Share it if it's a fit, ignore it if it's not. If you'd rather not hear from us again, the link below removes ${esc(org)} for good.</p>
   <p style="margin-bottom:2px;">Thanks for helping us get the Word of God to young people every day.</p>
   <p style="margin-bottom:2px;"><strong>Iain Deckard</strong> · It's God, Yo!</p>
@@ -102,7 +133,7 @@ Unsubscribe (one click): ${link}`;
   <hr style="border:none;border-top:1px solid #e2e2e2;margin:22px 0;"/>
   <p style="font-size:12px;color:#777;">
     It's God, Yo!™ is operated by ${esc(OUTREACH.physicalAddress)}.<br/>
-    You received this because ${esc(org)} is a Wichita-area church with a publicly listed youth ministry. We're proud to say we're local too. We found your general contact address at ${esc(sourceNote(lead))}. Please, help support a local small business!<br/>
+    You received this because ${esc(org)} is ${areaLabelHtml} with a publicly listed youth ministry.${localSentence} We found your general contact address at ${esc(sourceNote(lead))}. Please, help support a local small business!<br/>
     <a href="${link}" style="color:#777;">Unsubscribe (one click)</a>
   </p>
 </div>`;
