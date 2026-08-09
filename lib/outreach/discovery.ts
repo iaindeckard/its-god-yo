@@ -166,7 +166,13 @@ export async function runCampaignDiscovery(campaign: Campaign): Promise<Campaign
   let outOfRadius = 0;
   let rounds = 0;
   let emptyStreak = 0;
-  const MAX_ROUNDS = 6;
+  // Raised 6 -> 8 alongside the target bump (15 -> 35): a larger target needs more
+  // rounds to reach. The emptyStreak<2 guard still stops early when an area is
+  // exhausted, so a small area (e.g. New Iberia) won't waste rounds inventing
+  // leads. NOTE: leads are only persisted AFTER this loop (insertDiscovered), so
+  // the whole loop + geocode + auto-verify must finish inside the route's
+  // maxDuration or the run is lost — hence maxDuration was also raised (see route).
+  const MAX_ROUNDS = 8;
 
   while (kept.length < target && rounds < MAX_ROUNDS && emptyStreak < 2) {
     rounds++;
