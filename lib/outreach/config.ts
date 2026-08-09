@@ -27,7 +27,7 @@ export const OUTREACH = {
   // Discovery (§4)
   discoveryModel: process.env.OUTREACH_DISCOVERY_MODEL || "claude-sonnet-5",
   geography: process.env.OUTREACH_GEOGRAPHY || "the Wichita, Kansas metro area",
-  discoveryTarget: Number(process.env.OUTREACH_DISCOVERY_TARGET_COUNT || 15),
+  discoveryTarget: Number(process.env.OUTREACH_DISCOVERY_TARGET_COUNT || 35),
 } as const;
 
 /**

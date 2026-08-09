@@ -6,7 +6,12 @@ import { runCampaignDiscovery } from "@/lib/outreach/discovery";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 300;
+// Raised 300 -> 600 for the target=35 era: discovery does up to 8 web-search
+// rounds + throttled per-lead geocoding, then insert, then the inline auto-verify
+// page-fetch pass, ALL in this one invocation. Leads persist only after the loop,
+// so a mid-run timeout discards the whole run. 600s (within Vercel Pro/Fluid limits)
+// gives that combined path room to finish.
+export const maxDuration = 600;
 
 /**
  * Run geographic-scoped discovery for this campaign: loops the Claude web-search
