@@ -257,8 +257,12 @@ export default function OutreachManager({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "send failed");
-      setReport(data.report);
+      // Refresh the campaign/leads FIRST, then set the report LAST: openCampaign
+      // clears report (setReport(null)) at its start, so setting the report before
+      // it would be instantly clobbered (the "flash then vanish" bug). The report
+      // is a persistent card that must stay until the next action.
       await openCampaign(selected);
+      setReport(data.report);
     } catch (e) { setError(e instanceof Error ? e.message : "send failed"); }
     finally { setBusy(null); }
   }
