@@ -615,6 +615,105 @@ export function filterDirectory(entries: PublicDirectoryEntry[], f: DirectoryFil
     (f.year == null || e.yearJoined === f.year));
 }
 
+// ---- public leaderboard (/cornerstone-partners/leaderboard) -----------------
+
+/** One row of the public leaderboard: a listed church + its past-trial conversions. */
+export interface LeaderboardEntry {
+  partnerNumber: number;
+  churchName: string;
+  count: number;
+}
+
+/**
+ * Ranked leaderboard of listed Cornerstone Partners by the number of teens they
+ * referred who are PAST TRIAL, i.e. a real recurring charge has actually settled.
+ *
+ * Why not pending_signups.status = 'active': that flag flips on the $0
+ * trial-start invoice.paid webhook (~7 days before any money moves), so it counts
+ * subscribers still inside their free trial. The only reliable "past trial" signal
+ * is a settled recurring charge in subscription_payments — a `kind='charge'`,
+ * `billing_reason='subscription_cycle'` row with `settled_amount_cents > 0` and
+ * `livemode = true` (the $0 trial-start invoice never produces a charge row). See
+ * lib/createSubscription.ts + app/api/stripe/webhook/route.ts.
+ *
+ * Aggregated entirely in the service-role client (no DB view) so nothing new is
+ * exposed to the anon key. Every listed partner is returned (count 0 if none yet),
+ * sorted by count desc, then partner_number asc for a stable order.
+ */
+export async function getCornerstoneLeaderboard(): Promise<LeaderboardEntry[]> {
+  const admin = getSupabaseAdmin();
+
+  // 1. Listed, non-revoked partners — safe fields only (name + public number).
+  const { data: partnersData, error: pErr } = await admin
+    .from("cornerstone_partners")
+    .select("id, partner_number, church:churches(name)")
+    .eq("public_listing_status", "listed")
+    .neq("cornerstone_status", "revoked");
+  if (pErr) throw new Error(`cornerstone_leaderboard_partners_failed: ${pErr.message}`);
+  const partners = (partnersData ?? []) as unknown as {
+    id: string; partner_number: number; church: { name: string } | null;
+  }[];
+  if (partners.length === 0) return [];
+
+  const counts = new Map<string, number>();
+  for (const p of partners) counts.set(p.id, 0);
+
+  const toSorted = (): LeaderboardEntry[] =>
+    partners
+      .map((p) => ({
+        partnerNumber: p.partner_number,
+        churchName: p.church?.name ?? "",
+        count: counts.get(p.id) ?? 0,
+      }))
+      .sort((a, b) => b.count - a.count || a.partnerNumber - b.partnerNumber);
+
+  // 2. Their enrollment links — ALL statuses (a past referral still counts even if
+  //    the link was later paused/revoked). Map each link back to its partner.
+  const partnerIds = partners.map((p) => p.id);
+  const { data: linksData, error: lErr } = await admin
+    .from("church_enrollment_links")
+    .select("id, cornerstone_partner_id")
+    .in("cornerstone_partner_id", partnerIds);
+  if (lErr) throw new Error(`cornerstone_leaderboard_links_failed: ${lErr.message}`);
+  const links = (linksData ?? []) as { id: string; cornerstone_partner_id: string }[];
+  if (links.length === 0) return toSorted();
+  const linkToPartner = new Map<string, string>(links.map((l) => [l.id, l.cornerstone_partner_id]));
+
+  // 3. Signups referred through those links that reached subscription creation.
+  const linkIds = links.map((l) => l.id);
+  const { data: signupsData, error: sErr } = await admin
+    .from("pending_signups")
+    .select("enrollment_link_id, stripe_subscription_id")
+    .in("enrollment_link_id", linkIds)
+    .not("stripe_subscription_id", "is", null);
+  if (sErr) throw new Error(`cornerstone_leaderboard_signups_failed: ${sErr.message}`);
+  const signups = (signupsData ?? []) as { enrollment_link_id: string; stripe_subscription_id: string }[];
+  if (signups.length === 0) return toSorted();
+
+  // 4. Which of those subscriptions are actually PAST TRIAL (real charge settled)?
+  const subIds = [...new Set(signups.map((s) => s.stripe_subscription_id))];
+  const { data: paidData, error: payErr } = await admin
+    .from("subscription_payments")
+    .select("stripe_subscription_id")
+    .in("stripe_subscription_id", subIds)
+    .eq("kind", "charge")
+    .eq("billing_reason", "subscription_cycle")
+    .eq("livemode", true)
+    .gt("settled_amount_cents", 0);
+  if (payErr) throw new Error(`cornerstone_leaderboard_payments_failed: ${payErr.message}`);
+  const pastTrialSubs = new Set(
+    ((paidData ?? []) as { stripe_subscription_id: string }[]).map((r) => r.stripe_subscription_id),
+  );
+
+  // 5. Tally past-trial signups per partner.
+  for (const su of signups) {
+    if (!pastTrialSubs.has(su.stripe_subscription_id)) continue;
+    const partnerId = linkToPartner.get(su.enrollment_link_id);
+    if (partnerId) counts.set(partnerId, (counts.get(partnerId) ?? 0) + 1);
+  }
+  return toSorted();
+}
+
 // ---- church-facing status link (tokenized, no login) -----------------------
 
 /**
