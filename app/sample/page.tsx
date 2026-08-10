@@ -50,8 +50,8 @@ export default async function SamplePage() {
           <div className={s.eyebrow}>SEE IT FOR REAL</div>
           <h1 className={s.h1}>This is what lands on their phone.</h1>
           <p className={s.sub}>
-            Real verses we&rsquo;ve already sent, in the exact voice we text them. No signup,
-            nothing to enter. Reload for a fresh set.
+            A curated set of real, human-approved messages in the exact voice we text them.
+            No signup and nothing to enter. Reload for a fresh set.
           </p>
         </div>
 

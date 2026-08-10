@@ -69,7 +69,7 @@ const THEMED_FALLBACK_DISCLOSURE = {
   en: "Heads up: on the occasional day your focus doesn't have a message ready, you'll get that day's General verse instead, never nothing.",
   es: "Nota: en los días en que tu enfoque no tenga un mensaje listo, recibirás el versículo General de ese día, nunca te quedarás sin nada.",
 } as const;
-const TOTAL_DOTS = 7;
+const TOTAL_DOTS = SPANISH_ENABLED ? 7 : 6;
 
 const money = (n: number) => `$${n % 1 === 0 ? n.toFixed(0) : n.toFixed(2)}`;
 
@@ -132,7 +132,9 @@ export default function SignupFlow({
       setSpanishBusy(false);
     }
   }
-  const [step, setStep] = useState<number>(STEP.LANG);
+  // Do not make English customers confirm a language when English is the only
+  // available product. The language chooser returns automatically at launch.
+  const [step, setStep] = useState<number>(SPANISH_ENABLED ? STEP.LANG : STEP.FOCUS);
   const [themeTrack, setThemeTrack] = useState<string>("general");
   const s = t[lang];
 
@@ -253,7 +255,7 @@ export default function SignupFlow({
   const promoAttestOk = !promoNeedsAttest || promoAttest;
 
   function reset() {
-    setStep(STEP.LANG);
+    setStep(SPANISH_ENABLED ? STEP.LANG : STEP.FOCUS);
     setThemeTrack("general");
     setResult(null);
     setError(null);
@@ -445,7 +447,7 @@ export default function SignupFlow({
     }
   }
 
-  const dotIndex = Math.min(step, TOTAL_DOTS - 1);
+  const dotIndex = Math.min(step - (SPANISH_ENABLED ? 0 : 1), TOTAL_DOTS - 1);
 
   // Purchaser / account-holder identity: name + structured salutation. Shared by
   // both RECIPIENT steps (family + individual/gift/group). Salutation options are
@@ -460,14 +462,21 @@ export default function SignupFlow({
         <label>{lang === "es" ? "Tu apellido" : "Your last name"}</label>
         <input value={purchaserLastName} onChange={(e) => setPurchaserLastName(e.target.value)} />
       </div>
-      <SalutationSelect
-        lang={lang}
-        value={purchaserSalutation}
-        onChange={setPurchaserSalutation}
-        label={lang === "es" ? "Título(s)" : "Title(s)"}
-        otherLabel={lang === "es" ? "Otro" : "Other"}
-        hint={lang === "es" ? "Opcional. Elige los que apliquen. Puedes combinar títulos (p. ej. Rev. Dr.)." : "Optional. Pick any that apply. Combine titles if you like (e.g. Rev. Dr.)."}
-      />
+      <details style={{ marginBottom: 16 }}>
+        <summary style={{ cursor: "pointer", fontSize: 14, color: "var(--igy-muted)" }}>
+          {lang === "es" ? "Agregar un título (opcional)" : "Add a title (optional)"}
+        </summary>
+        <div style={{ marginTop: 12 }}>
+          <SalutationSelect
+            lang={lang}
+            value={purchaserSalutation}
+            onChange={setPurchaserSalutation}
+            label={lang === "es" ? "Título(s)" : "Title(s)"}
+            otherLabel={lang === "es" ? "Otro" : "Other"}
+            hint={lang === "es" ? "Elige los que apliquen. Puedes combinar títulos (p. ej. Rev. Dr.)." : "Pick any that apply. Combine titles if you like (e.g. Rev. Dr.)."}
+          />
+        </div>
+      </details>
     </>
   );
 
@@ -625,7 +634,9 @@ export default function SignupFlow({
                 </p>
               )}
               <div className="wizard-nav">
-                <button className="btn btn-ghost" onClick={() => setStep(STEP.LANG)}>{s.back}</button>
+                {SPANISH_ENABLED
+                  ? <button className="btn btn-ghost" onClick={() => setStep(STEP.LANG)}>{s.back}</button>
+                  : <span />}
                 <button className="btn btn-primary" onClick={() => setStep(STEP.PLAN)}>{s.continue}</button>
               </div>
             </section>
