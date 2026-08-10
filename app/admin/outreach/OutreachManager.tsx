@@ -248,12 +248,12 @@ export default function OutreachManager({
 
   async function send(live: boolean) {
     if (!selected) return;
-    if (live && !confirm("Send LIVE to this campaign's active leads? This puts real email in front of real churches (subject to the send gate).")) return;
+    if (live && !confirm("Deploy this campaign now? Clicking OK will send emails to all eligible active leads. Click Cancel to cancel.")) return;
     setError(null); setBusy(live ? "send-live" : "send-dry"); setReport(null);
     try {
       const res = await fetch(`/api/admin/outreach/campaigns/${selected.id}/send`, {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ dry: !live }),
+        body: JSON.stringify({ dry: !live, confirmed: live }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "send failed");
@@ -458,10 +458,10 @@ export default function OutreachManager({
                 <button className="btn btn-ghost" disabled={!!busy} onClick={() => send(false)}>
                   {busy === "send-dry" ? "Previewing…" : "Preview send (dry-run)"}</button>
                 <button className="btn btn-ghost" disabled={!!busy} onClick={() => send(true)} style={{ borderColor: "#c0392b", color: "#c0392b" }}>
-                  {busy === "send-live" ? "Sending…" : "Send live"}</button>
+                  {busy === "send-live" ? "Deploying…" : "Deploy"}</button>
               </div>
               <p className="hint" style={{ marginTop: 8 }}>
-                The Send live button alone does not put mail in inboxes. A real send also requires the three server env flags (OUTREACH_COPY_APPROVED, OUTREACH_LEGAL_APPROVED, OUTREACH_SEND_LIVE) to be set and the app redeployed; those are not editable from this page. Until then every run stays a dry-run preview, and only verified, promoted leads are ever eligible.
+                Deploy sends immediately after you confirm the warning. Only verified, promoted, eligible leads can receive email. Automated sends remain separately controlled by the server approval and send-live flags.
               </p>
 
               {report && (

@@ -27,7 +27,7 @@ export const OUTREACH = {
   // Discovery (§4)
   discoveryModel: process.env.OUTREACH_DISCOVERY_MODEL || "claude-sonnet-5",
   geography: process.env.OUTREACH_GEOGRAPHY || "the Wichita, Kansas metro area",
-  discoveryTarget: Number(process.env.OUTREACH_DISCOVERY_TARGET_COUNT || 35),
+  discoveryTarget: Number(process.env.OUTREACH_DISCOVERY_TARGET_COUNT || 20),
 } as const;
 
 /**
@@ -51,6 +51,16 @@ export function sendGate(): { live: boolean; reasons: string[] } {
   if (process.env.OUTREACH_LEGAL_APPROVED !== "true") reasons.push("OUTREACH_LEGAL_APPROVED not set");
   if (process.env.OUTREACH_SEND_LIVE !== "true") reasons.push("OUTREACH_SEND_LIVE not set");
   return { live: reasons.length === 0, reasons };
+}
+
+/**
+ * A manual Deploy from the authenticated admin is itself the one-time master
+ * authorization to send. Automated/cron sends still require all three env
+ * flags. The manual path intentionally replaces those persistent switches with
+ * the authenticated, per-click confirmation; all lead-level safety gates remain.
+ */
+export function manualDeployGate(): { live: boolean; reasons: string[] } {
+  return { live: true, reasons: [] };
 }
 
 /**

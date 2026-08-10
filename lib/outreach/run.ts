@@ -1,5 +1,5 @@
 import "server-only";
-import { OUTREACH, sendGate, sendAllowlist } from "./config";
+import { OUTREACH, sendGate, manualDeployGate, sendAllowlist } from "./config";
 import { fetchActiveLeads, recordSend, type OutreachLead, type SendScope } from "./leads";
 import { buildEmail, buildFollowupEmail, sendViaResend } from "./email";
 import { createPromoCode } from "../promoCodes";
@@ -97,6 +97,8 @@ export interface RunSendOptions {
   sizeBuckets?: string[];
   /** Force dry-run even when the gate is open (safe preview). */
   forceDry?: boolean;
+  /** Authenticated admin explicitly confirmed the one-time Deploy prompt. */
+  manualDeploy?: boolean;
 }
 
 /**
@@ -111,8 +113,8 @@ export interface RunSendOptions {
  * gate + allowlist still authoritatively govern WHETHER anything goes out live.
  */
 export async function runSend(opts: RunSendOptions = {}): Promise<SendReport> {
-  const { campaignId, sizeBuckets, forceDry = false } = opts;
-  const gate = sendGate();
+  const { campaignId, sizeBuckets, forceDry = false, manualDeploy = false } = opts;
+  const gate = manualDeploy ? manualDeployGate() : sendGate();
   const live = gate.live && !forceDry;
   const allowlist = sendAllowlist();
   const scope: SendScope | undefined = campaignId ? { campaignId, sizeBuckets } : undefined;

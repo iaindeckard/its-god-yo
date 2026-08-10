@@ -83,6 +83,8 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 /** One Claude web-search discovery call. Returns parsed, minimally-valid leads
  *  (or [] if the model's output couldn't be parsed). Throws on API error. */
 async function requestLeads(key: string, prompt: string): Promise<DiscoveredLead[]> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 90_000);
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -97,7 +99,8 @@ async function requestLeads(key: string, prompt: string): Promise<DiscoveredLead
       tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 12 }],
       messages: [{ role: "user", content: prompt }],
     }),
-  });
+    signal: controller.signal,
+  }).finally(() => clearTimeout(timeout));
   if (!res.ok) {
     const detail = (await res.text()).slice(0, 400);
     throw new Error(`anthropic_${res.status}: ${detail}`);
@@ -166,18 +169,27 @@ export async function runCampaignDiscovery(campaign: Campaign): Promise<Campaign
   let outOfRadius = 0;
   let rounds = 0;
   let emptyStreak = 0;
-  // Raised 6 -> 8 alongside the target bump (15 -> 35): a larger target needs more
-  // rounds to reach. The emptyStreak<2 guard still stops early when an area is
-  // exhausted, so a small area (e.g. New Iberia) won't waste rounds inventing
-  // leads. NOTE: leads are only persisted AFTER this loop (insertDiscovered), so
-  // the whole loop + geocode + auto-verify must finish inside the route's
-  // maxDuration or the run is lost — hence maxDuration was also raised (see route).
-  const MAX_ROUNDS = 8;
+  let inserted = 0;
+  let skipped = 0;
+  // Leave two minutes of the route budget for persistence/status cleanup and
+  // best-effort verification. Sparse markets are the slow case because the model
+  // keeps searching for leads that do not exist.
+  const deadline = Date.now() + 8 * 60_000;
+  const MAX_ROUNDS = 5;
 
-  while (kept.length < target && rounds < MAX_ROUNDS && emptyStreak < 2) {
+  while (kept.length < target && rounds < MAX_ROUNDS && emptyStreak < 2 && Date.now() < deadline) {
     rounds++;
-    const batch = await requestLeads(key, campaignPrompt(campaign, target - kept.length, excludeNames));
+    let batch: DiscoveredLead[];
+    try {
+      batch = await requestLeads(key, campaignPrompt(campaign, target - kept.length, excludeNames));
+    } catch (e) {
+      // Preserve prior rounds and let the campaign return to a usable state. A
+      // sparse-market provider timeout is a partial result, not a stuck campaign.
+      console.error("[outreach-discovery] campaign round failed; keeping completed rounds:", e instanceof Error ? e.message : e);
+      break;
+    }
     let addedThisRound = 0;
+    const roundLeads: DiscoveredLead[] = [];
     for (const l of batch) {
       const email = l.contact_email?.trim().toLowerCase();
       if (!email || seen.has(email)) continue;
@@ -193,24 +205,34 @@ export async function runCampaignDiscovery(campaign: Campaign): Promise<Campaign
         outOfRadius++;
         continue; // positively outside the radius -> drop
       }
-      kept.push({
+      const enriched = {
         ...l,
         latitude: coords?.lat ?? null,
         longitude: coords?.lng ?? null,
         size_bucket: sizeBucket(l.estimated_attendance),
-      });
+      };
+      kept.push(enriched);
+      roundLeads.push(enriched);
       addedThisRound++;
+    }
+    // Persist every completed round. A later provider timeout can no longer erase
+    // all useful work from earlier rounds.
+    if (roundLeads.length) {
+      const saved = await insertDiscovered(roundLeads, campaign.id);
+      inserted += saved.inserted;
+      skipped += saved.skipped;
     }
     emptyStreak = addedThisRound === 0 ? emptyStreak + 1 : 0;
   }
 
-  const { inserted, skipped } = await insertDiscovered(kept, campaign.id);
+  // Mark ready before best-effort verification so a slow external page can never
+  // strand the campaign in `discovering`. Unverified leads remain safely blocked.
+  await updateCampaign(campaign.id, { status: "ready" }).catch(() => {});
   // Auto-verify the just-staged campaign leads (best-effort) so they arrive with a
   // verdict; any that can't be confirmed stay 'unverified' and the send gate holds
   // them until an admin re-verifies or overrides.
   await verifyLeads({ campaignId: campaign.id, onlyUnverified: true }).catch((e) => {
     console.error("[outreach-discovery] campaign verify pass failed (leads remain unverified):", e instanceof Error ? e.message : e);
   });
-  await updateCampaign(campaign.id, { status: "ready" }).catch(() => {});
   return { ran: true, found: kept.length, inserted, skipped, leads: kept, ...base, out_of_radius: outOfRadius, rounds };
 }

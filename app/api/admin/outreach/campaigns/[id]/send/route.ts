@@ -13,10 +13,10 @@ export const maxDuration = 300;
  * campaign's active (promoted) leads only, separate from the company-wide
  * active-lead cycle. Body: { sizeBuckets?: string[], dry?: boolean }.
  *
- * Still fully governed by the send gate + OUTREACH_SEND_ALLOWLIST — scope controls
- * WHO and WHEN, never WHETHER. `dry` defaults to TRUE so the admin gets a preview
- * (the SendReport) and must explicitly pass dry:false to attempt a live send (and
- * even then, the env send gate must be open or it stays a dry-run).
+ * `dry` defaults to TRUE. A live request must include both dry:false and the
+ * explicit confirmed:true acknowledgement sent only after the admin accepts the
+ * Deploy warning. Verification, suppression, due-date and optional allowlist
+ * gates remain enforced server-side. Automated sends retain the env gates.
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -26,8 +26,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!campaign) return NextResponse.json({ error: "not_found" }, { status: 404 });
     const body = await req.json().catch(() => ({}));
     const sizeBuckets = Array.isArray(body.sizeBuckets) && body.sizeBuckets.length ? body.sizeBuckets : undefined;
-    const forceDry = body.dry !== false; // default dry-run unless explicitly dry:false
-    const report = await runSend({ campaignId: id, sizeBuckets, forceDry });
+    const forceDry = body.dry !== false;
+    const manualDeploy = !forceDry && body.confirmed === true;
+    if (!forceDry && !manualDeploy) {
+      return NextResponse.json({ error: "deploy_confirmation_required" }, { status: 400 });
+    }
+    const report = await runSend({ campaignId: id, sizeBuckets, forceDry, manualDeploy });
     return NextResponse.json({ ok: true, report });
   } catch (e) {
     return apiError(e);
