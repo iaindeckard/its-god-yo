@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 
 export default function CookiesPage() {
   return (
-    <LegalPage title="Cookie Policy" updated="July 22, 2026">
+    <LegalPage title="Cookie Policy" updated="August 10, 2026">
       <h2>1. What this page covers</h2>
       <p>
         This page explains what cookies and similar technologies (like browser local storage) the itsgodyo.com website uses when you visit or sign up. It describes what the site <strong>actually does</strong>, not an aspirational policy.
@@ -18,11 +18,12 @@ export default function CookiesPage() {
       <p>As of the most recent review of a fresh, logged-out page load, the site:</p>
       <ul>
         <li>sets <strong>no cookies of its own</strong> during normal browsing;</li>
-        <li>uses <strong>no</strong> browser local storage or session storage;</li>
-        <li>loads <strong>no</strong> third-party scripts, and runs <strong>no analytics or tracking tools of any kind</strong> (no Google Analytics, Vercel Analytics, Plausible, or similar);</li>
+        <li>uses browser session storage for a random, temporary funnel-session identifier that expires when the browser session ends;</li>
+        <li>runs limited first-party conversion measurement so we can understand whether anonymous visits progress through sampling, signup, consent, and activation;</li>
+        <li>loads <strong>no</strong> third-party analytics scripts (no Google Analytics, Meta Pixel, Vercel Analytics, Plausible, or similar);</li>
         <li>runs <strong>no advertising cookies or third-party ad trackers</strong>.</li>
       </ul>
-      <p>Because there are no non-essential cookies to consent to, the site does not show a cookie-consent banner.</p>
+      <p>The first-party funnel record does not store message content, phone numbers, names, email addresses, full URLs, or advertising identifiers. Because it uses no cookie and is limited to essential product measurement, the site does not show a cookie-consent banner.</p>
 
       <h2>3. Payment processing (Stripe)</h2>
       <p>

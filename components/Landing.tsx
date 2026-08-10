@@ -5,6 +5,8 @@ import Wordmark from "./Wordmark";
 import BubbleMark from "./BubbleMark";
 import SponsorRotator from "./SponsorRotator";
 import { PURCHASES_ENABLED, SPANISH_ENABLED, SPONSORS_ENABLED, CORNERSTONE_ENABLED } from "@/lib/flags";
+import { trackConversion } from "@/lib/conversionAnalytics";
+import SocialProof from "./SocialProof";
 import s from "./landing.module.css";
 
 type Audience = "parent" | "teen";
@@ -110,6 +112,13 @@ export default function Landing() {
 
   const c = audience ? CONTENT[audience] : null;
 
+  useEffect(() => { trackConversion("landing_view"); }, []);
+
+  function chooseAudience(next: Audience) {
+    setAudience(next);
+    trackConversion("audience_selected", { audience: next });
+  }
+
   // Always hand parents the canonical production domain. The previous Vercel URL
   // fragmented trust, attribution, and any future campaign measurement.
   const shareUrl = "https://itsgodyo.com";
@@ -152,7 +161,7 @@ export default function Landing() {
           <div className={s.gateQuestion}>Who&rsquo;s here today?</div>
           <div className={s.gateSub}>We&rsquo;ll tailor everything on this site to you, so it actually makes sense.</div>
           <div className={s.gateChoices}>
-            <button className={s.gateCard} onClick={() => setAudience("parent")}>
+            <button className={s.gateCard} onClick={() => chooseAudience("parent")}>
               <figure className={s.gateFigure}>
                 <img className={s.gateImg} src="/gate/parent.jpg" width={480} height={384} alt="A multi-generational family, parents and a grandmother gathered around a teenager at sunset (AI-generated image)" />
                 <figcaption className={s.gateAiTag}>AI-generated image</figcaption>
@@ -160,7 +169,7 @@ export default function Landing() {
               <div className={s.gateCardTitle}>I&rsquo;m a parent or caregiver</div>
               <div className={s.gateCardBody}>Set up and pay for a daily scripture text for your teen.</div>
             </button>
-            <button className={s.gateCard} onClick={() => setAudience("teen")}>
+            <button className={s.gateCard} onClick={() => chooseAudience("teen")}>
               <figure className={s.gateFigure}>
                 <img className={s.gateImg} src="/gate/teen.jpg" width={480} height={320} alt="Two teenagers sitting at a skatepark, smiling at a phone together (AI-generated image)" />
                 <figcaption className={s.gateAiTag}>AI-generated image</figcaption>
@@ -451,6 +460,8 @@ export default function Landing() {
           </div>
         </div>
       </section>
+
+      <SocialProof />
 
       {/* Sponsor rotator — renders only when there are active sponsors AND the
           Sponsor Program is enabled (deprioritized 2026-08-01, see lib/flags). */}

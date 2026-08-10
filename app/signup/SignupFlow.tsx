@@ -18,6 +18,7 @@ import { SPANISH_ENABLED } from "@/lib/flags";
 import CountrySelect from "@/components/CountrySelect";
 import { countryByIso2, DEFAULT_COUNTRY } from "@/lib/countries";
 import { toE164FromParts } from "@/lib/phone";
+import { trackConversion } from "@/lib/conversionAnalytics";
 
 // Best-effort browser timezone (IANA) captured at signup — the purchaser-level
 // fallback for the Stage 2 send-time chain. Null if the browser can't resolve it.
@@ -138,6 +139,8 @@ export default function SignupFlow({
   const [themeTrack, setThemeTrack] = useState<string>("general");
   const s = t[lang];
 
+  useEffect(() => { trackConversion("signup_started", { church: !!church }); }, [church]);
+
   // plan
   const [planChoice, setPlanChoice] = useState<PlanChoice>(
     (["individual", "family", "gift"].includes(initialPlan || "") ? initialPlan : "individual") as PlanChoice
@@ -160,6 +163,7 @@ export default function SignupFlow({
   const [purchaserSalutation, setPurchaserSalutation] = useState<string[]>([]);
   const [teenBirthYear, setTeenBirthYear] = useState("");
   const [teenGate, setTeenGate] = useState<Gate | null>(null);
+  const [statusUrl, setStatusUrl] = useState<string | null>(null);
   const [teenEnhancedAck, setTeenEnhancedAck] = useState(false);
 
   // DM from Him add-on — a single toggle for the SAME recipient (wraps their own
@@ -400,6 +404,11 @@ export default function SignupFlow({
         stripe: stripeIds ?? undefined,
       });
       await attachReferral((res as { pending_signup_id?: string }).pending_signup_id);
+      trackConversion("consent_sent", { plan: resolved!.key });
+      if (purchaserEmail.trim()) {
+        const status = await fetch("/api/signup/status", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pending_signup_id: res.pending_signup_id, purchaser_email: purchaserEmail.trim() }) }).then((r) => r.ok ? r.json() : null).catch(() => null);
+        if (status?.url) setStatusUrl(status.url);
+      }
       setResult(res);
       setStep(STEP.DONE);
     } catch (e) {
@@ -438,6 +447,11 @@ export default function SignupFlow({
         stripe: ids,
       });
       await attachReferral((res as { pending_signup_id?: string }).pending_signup_id);
+      trackConversion("consent_sent", { plan: "family" });
+      if (purchaserEmail.trim()) {
+        const status = await fetch("/api/signup/status", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pending_signup_id: res.pending_signup_id, purchaser_email: purchaserEmail.trim() }) }).then((r) => r.ok ? r.json() : null).catch(() => null);
+        if (status?.url) setStatusUrl(status.url);
+      }
       setResult(res);
       setStep(STEP.DONE);
     } catch (e) {
@@ -648,7 +662,7 @@ export default function SignupFlow({
               <h2>{s.wPlanTitle}</h2>
               <div style={{ marginTop: 16 }}>
                 {/* Individual */}
-                <div className={`choice ${planChoice === "individual" ? "selected" : ""}`} onClick={() => setPlanChoice("individual")} role="button" tabIndex={0}>
+                <div className={`choice ${planChoice === "individual" ? "selected" : ""}`} onClick={() => { setPlanChoice("individual"); trackConversion("plan_selected", { plan: "individual" }); }} role="button" tabIndex={0}>
                   <div>
                     <div className="c-title">{s.planIndividualName}</div>
                     <div className="muted" style={{ fontSize: 14 }}>{s.planIndividualDesc}</div>
@@ -671,7 +685,7 @@ export default function SignupFlow({
                 )}
 
                 {/* Family */}
-                <div className={`choice ${planChoice === "family" ? "selected" : ""}`} onClick={() => setPlanChoice("family")} role="button" tabIndex={0}>
+                <div className={`choice ${planChoice === "family" ? "selected" : ""}`} onClick={() => { setPlanChoice("family"); trackConversion("plan_selected", { plan: "family" }); }} role="button" tabIndex={0}>
                   <div>
                     <div className="c-title">{s.planFamilyName}</div>
                     <div className="muted" style={{ fontSize: 14 }}>{s.planFamilyDesc}</div>
@@ -680,7 +694,7 @@ export default function SignupFlow({
                 </div>
 
                 {/* Gift */}
-                <div className={`choice ${planChoice === "gift" ? "selected" : ""}`} onClick={() => setPlanChoice("gift")} role="button" tabIndex={0}>
+                <div className={`choice ${planChoice === "gift" ? "selected" : ""}`} onClick={() => { setPlanChoice("gift"); trackConversion("plan_selected", { plan: "gift" }); }} role="button" tabIndex={0}>
                   <div>
                     <div className="c-title">{s.planGiftName}</div>
                     <div className="muted" style={{ fontSize: 14 }}>{s.planGiftDesc}</div>
@@ -997,6 +1011,7 @@ export default function SignupFlow({
               <h2>{s.doneTitle}</h2>
               <p className="muted" style={{ maxWidth: 460, margin: "0 auto 8px" }}>{result.message}</p>
               <p className="hint">{s.noChargeYet}</p>
+              {statusUrl && <p style={{ marginTop: 14 }}><Link href={statusUrl}>Track confirmation status &rarr;</Link></p>}
               <div style={{ marginTop: 24 }}>
                 <Link className="btn btn-primary" href="/">{lang === "es" ? "Volver al inicio" : "Back home"}</Link>
                 <button className="btn btn-ghost" style={{ marginLeft: 10 }} onClick={reset}>{s.startOver}</button>

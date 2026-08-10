@@ -64,6 +64,13 @@ export const DM_UPSELL_ENABLED = false;
  */
 export const DAILY_SEND_ENABLED = true;
 
+/** Freemium is deliberately dark-launched. When enabled, pilot recipients get
+ * seven daily messages and then one message per week. The separate recruitment
+ * gate lets us collect a bounded waitlist before changing delivery behavior. */
+export const FREEMIUM_ENABLED = false;
+export const PILOT_RECRUITMENT_ENABLED = false;
+export const FREEMIUM_PILOT_CAP = 250;
+
 /**
  * Holy Season add-on products (Christmastide / Advent / Eastertide / Lent). While
  * false: the season purchase/toggle UI is hidden, and the moving-date billing cron

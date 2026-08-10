@@ -1,6 +1,7 @@
 import "server-only";
 import { getSupabaseAdmin } from "./supabaseAdmin";
-import { DAILY_SEND_ENABLED, SPANISH_ENABLED } from "./flags";
+import { DAILY_SEND_ENABLED, FREEMIUM_ENABLED, SPANISH_ENABLED } from "./flags";
+import { freemiumDeliveryAllowed, type AccessTier } from "./freemium";
 import { smsCostCents, TWILIO_US_SEGMENT_PRICE_CENTS, TWILIO_US_TOLLFREE_CARRIER_FEE_CENTS } from "./costs";
 import { evaluateDue } from "./sendTiming";
 import { composeDailyMessage } from "./dmAddon";
@@ -105,10 +106,19 @@ export async function runDailySend(opts: { dryRun?: boolean } = {}): Promise<Dai
   // pending_signup. Opted-in recipients get the same verse re-wrapped in
   // first-person framing (composeDailyMessage); everyone else gets it as-is.
   const dmBySignup = new Map<string, boolean>();
+  const accessByConsent = new Map<string, { tier: AccessTier; weeklySendDow: number | null }>();
   const signupIds = [...new Set(rows.map((r) => r.pending_signup_id).filter(Boolean))];
   if (signupIds.length) {
     const { data: dmRows } = await admin.from("pending_signups").select("id, dm_addon").in("id", signupIds);
     for (const d of (dmRows ?? []) as Array<{ id: string; dm_addon: boolean | null }>) dmBySignup.set(d.id, !!d.dm_addon);
+  }
+  if (FREEMIUM_ENABLED && rows.length) {
+    const { data: accessRows, error: accessError } = await admin.from("consent_log")
+      .select("id,access_tier,weekly_send_dow").in("id", rows.map((r) => r.consent_id));
+    if (accessError) throw new Error(`freemium_access_query_failed: ${accessError.message}`);
+    for (const a of (accessRows ?? []) as Array<{ id: string; access_tier: AccessTier; weekly_send_dow: number | null }>) {
+      accessByConsent.set(a.id, { tier: a.access_tier, weeklySendDow: a.weekly_send_dow });
+    }
   }
 
   // Per-run cache of the approved slot for a (localDate, track).
@@ -130,6 +140,11 @@ export async function runDailySend(opts: { dryRun?: boolean } = {}): Promise<Dai
 
   for (const r of rows) {
     const tz = r.timezone || "America/Chicago";
+    const access = accessByConsent.get(r.consent_id);
+    if (!freemiumDeliveryAllowed({ enabled: FREEMIUM_ENABLED, tier: access?.tier, weeklySendDow: access?.weeklySendDow, nowMs, timezone: tz })) {
+      summary.not_due++;
+      continue;
+    }
     const { due, localDate: dateStr } = evaluateDue(nowMs, tz, r.send_time_local, r.confirmed_at);
     if (!due) { summary.not_due++; continue; }
     summary.due++;

@@ -4,6 +4,7 @@ import BubbleMark from "@/components/BubbleMark";
 import { PURCHASES_ENABLED, CORNERSTONE_ENABLED } from "@/lib/flags";
 import { getSampleVerses } from "@/lib/sampleVerses";
 import s from "./sample.module.css";
+import ConversionView from "@/components/ConversionView";
 
 export const metadata: Metadata = {
   title: "See a real sample | It's God, Yo!™",
@@ -28,6 +29,7 @@ export default async function SamplePage() {
 
   return (
     <div className={s.page}>
+      <ConversionView event="sample_viewed" />
       <header className={s.header}>
         <div className={s.navbar}>
           <a className={s.navHome} href="/">Home</a>

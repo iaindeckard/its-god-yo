@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import SalutationSelect from "@/components/SalutationSelect";
+import ConversionView from "@/components/ConversionView";
+import ChurchCostCalculator from "@/components/ChurchCostCalculator";
+import { trackConversion } from "@/lib/conversionAnalytics";
 
 /**
  * Public Cornerstone Partner application/enrollment form. Reuses the app's shared
@@ -57,6 +60,7 @@ export default function ApplicationForm() {
       });
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || "Something went wrong. Please try again.");
+      trackConversion("church_interest_submitted", { preferred_plan: f.preferred_plan || "undecided" });
       setDone(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "error");
@@ -80,6 +84,7 @@ export default function ApplicationForm() {
 
   return (
     <main style={{ maxWidth: 860, margin: "0 auto", padding: "48px 24px" }}>
+      <ConversionView event="landing_view" properties={{ audience: "church" }} />
       <div style={{ maxWidth: 700, margin: "0 auto 36px", textAlign: "center" }}>
         <p className="strong" style={{ color: "var(--igy-blue)", letterSpacing: ".08em", fontSize: 13, marginBottom: 8 }}>FOR CHURCHES &amp; YOUTH GROUPS</p>
         <h1 style={{ fontSize: 36, lineHeight: 1.15, marginBottom: 12 }}>Keep Scripture present between Sundays.</h1>
@@ -112,6 +117,18 @@ export default function ApplicationForm() {
           <div><strong>151–300 teens</strong><br /><span className="muted">$36 / teen / year</span></div>
           <div><strong>301+</strong><br /><span className="muted">Let&rsquo;s design the rollout</span></div>
         </div>
+      </div>
+
+      <ChurchCostCalculator />
+      <div className="card" style={{ marginBottom: 24 }}>
+        <h2 style={{ marginTop: 0 }}>A low-risk rollout</h2>
+        <ol style={{ lineHeight: 1.7 }}>
+          <li>Start with a 10–25 teen pilot and nominate one church coordinator.</li>
+          <li>Families enroll through your attributed link; every recipient confirms by text.</li>
+          <li>Review participation after the first week, then expand only if it serves your group.</li>
+        </ol>
+        <p className="muted"><strong>Who pays?</strong> The church may sponsor every participant, or families may enroll individually. We’ll confirm the arrangement before launch.</p>
+        <p><a href="/sample">Read actual message samples</a> &nbsp;·&nbsp; <a href="#apply">Request a pilot walkthrough</a></p>
       </div>
 
       <div id="apply" style={{ maxWidth: 620, margin: "0 auto" }}>
