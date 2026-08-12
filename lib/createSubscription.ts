@@ -146,7 +146,9 @@ export async function createSubscriptionForPendingSignup(pendingSignupId: string
       .update({ stripe_subscription_id: sub.id, subscription_created_at: new Date().toISOString(), status: "active" })
       .eq("id", ps.id);
     if (consentIds.length) {
-      await admin.from("consent_log").update({ consent_status: "confirmed" }).in("id", consentIds);
+      // Also set the pending_signup back-reference so a later SMS STOP can always
+      // resolve this subscription and cancel billing (see twilioInbound).
+      await admin.from("consent_log").update({ consent_status: "confirmed", pending_signup_id: ps.id }).in("id", consentIds);
     }
     return { status: "created", subscription_id: sub.id };
   }
@@ -175,9 +177,11 @@ export async function createSubscriptionForPendingSignup(pendingSignupId: string
     .update({ stripe_subscription_id: sub.id, subscription_created_at: new Date().toISOString(), status: "subscription_created", expected_first_charge_cents: expectedFirstChargeCents })
     .eq("id", ps.id);
 
-  // The recipient(s) replied YES — move consent from pending to confirmed.
+  // The recipient(s) replied YES — move consent from pending to confirmed, and set
+  // the pending_signup back-reference so a later SMS STOP can always resolve this
+  // subscription and cancel billing (see twilioInbound).
   if (consentIds.length) {
-    await admin.from("consent_log").update({ consent_status: "confirmed" }).in("id", consentIds);
+    await admin.from("consent_log").update({ consent_status: "confirmed", pending_signup_id: ps.id }).in("id", consentIds);
   }
 
   return { status: "created", subscription_id: sub.id };

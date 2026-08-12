@@ -6,6 +6,7 @@ import { classifyReply } from "./twilio";
 import { toE164, phoneKey } from "./phone";
 import { cancelSubscriptionForSignup, cancelFamilyBaseIfNoActiveTeens } from "./cancelSubscription";
 import { setDmAddon } from "./dmAddon";
+import { resolveActiveSignupForConsent } from "./stopCancelResolve";
 
 /**
  * Core inbound-reply logic for the Twilio "YES" handler.
@@ -92,11 +93,6 @@ interface ConsentRow {
   welcome_token: string | null;
 }
 
-// A pending_signup with a live subscription (i.e. a CONFIRMED subscriber). Used
-// to gate the confirmed-subscriber STOP path below. Excludes 'awaiting_confirmation'
-// (still pending — handled by the pending path) and 'canceled' (already off).
-const ACTIVE_SIGNUP_STATUSES = ["subscription_created", "active"];
-
 interface ConfirmedMatch {
   consentId: string;
   consentType: string | null;
@@ -140,13 +136,9 @@ async function findConfirmedActiveSubscriber(
   }
 
   for (const r of rows) {
-    if (!r.pending_signup_id) continue;
-    const { data: ps } = await admin
-      .from("pending_signups")
-      .select("id, status")
-      .eq("id", r.pending_signup_id)
-      .in("status", ACTIVE_SIGNUP_STATUSES)
-      .maybeSingle();
+    // Resolve via EITHER link direction (back-reference or forward link) so a null
+    // consent_log.pending_signup_id no longer silently skips a live subscriber.
+    const ps = await resolveActiveSignupForConsent(admin, r.id, r.pending_signup_id);
     if (ps) return { consentId: r.id, consentType: r.consent_type, signupId: ps.id, language: r.language };
   }
   return null;
@@ -263,17 +255,33 @@ export async function processInboundReply(from: string, body: string): Promise<I
       // legacy / prefix-divergent rows are still opted out.
       const { data: knownRows } = await admin
         .from("consent_log")
-        .select("id, recipient_phone")
+        .select("id, recipient_phone, pending_signup_id, consent_type")
         .neq("consent_status", "opted_out")
         .limit(1000);
-      const optOutIds = ((knownRows ?? []) as Array<{ id: string; recipient_phone: string }>)
-        .filter((r) => phoneKey(r.recipient_phone) === fromKey)
-        .map((r) => r.id);
+      const matchedRows = ((knownRows ?? []) as Array<{ id: string; recipient_phone: string; pending_signup_id: string | null; consent_type: string | null }>)
+        .filter((r) => phoneKey(r.recipient_phone) === fromKey);
+      const optOutIds = matchedRows.map((r) => r.id);
       if (optOutIds.length) {
         await admin
           .from("consent_log")
           .update({ consent_status: "opted_out", opted_out_at: new Date().toISOString(), opt_out_method: "sms_stop", confirmation_reply_raw: body })
           .in("id", optOutIds);
+      }
+      // Belt-and-suspenders: a STOP must STOP BILLING even when the confirmed-
+      // subscriber match above failed (e.g. consent was never flipped to
+      // 'confirmed' but a subscription exists). Resolve each matched consent row to
+      // its owning ACTIVE signup via either link direction and cancel any live
+      // subscription. Idempotent. Skip family_teen here — cancelling the whole
+      // family base for one teen is wrong; that teardown is handled by the
+      // confirmed-subscriber path's family branch.
+      const canceledSignups = new Set<string>();
+      for (const r of matchedRows) {
+        if (r.consent_type === "family_teen") continue;
+        const ps = await resolveActiveSignupForConsent(admin, r.id, r.pending_signup_id);
+        if (ps && !canceledSignups.has(ps.id)) {
+          canceledSignups.add(ps.id);
+          await cancelSubscriptionForSignup(ps.id, "sms_stop_safety_net");
+        }
       }
       return { action: "opted_out", reply: REPLY.en.optedOut };
     }
@@ -292,11 +300,13 @@ export async function processInboundReply(from: string, body: string): Promise<I
     }
     if (intent !== "confirm") return { action: "unknown", reply: REPLY[lang].unknown };
 
-    // YES: confirm this teen + start THEIR 7-day trial clock.
+    // YES: confirm this teen + start THEIR 7-day trial clock. Also set the
+    // pending_signup back-reference so a later STOP can always find the billing.
     await admin
       .from("consent_log")
       .update({
         consent_status: "confirmed",
+        pending_signup_id: familySignupId,
         confirmation_reply_received: true,
         confirmation_reply_at: new Date().toISOString(),
         confirmation_reply_raw: body,
@@ -326,7 +336,7 @@ export async function processInboundReply(from: string, body: string): Promise<I
 
   await admin
     .from("consent_log")
-    .update({ consent_status: "confirmed", confirmation_reply_received: true, confirmation_reply_at: new Date().toISOString(), confirmation_reply_raw: body })
+    .update({ consent_status: "confirmed", pending_signup_id: signup!.id, confirmation_reply_received: true, confirmation_reply_at: new Date().toISOString(), confirmation_reply_raw: body })
     .eq("id", matched.id);
 
   const consentIds = [signup!.teen_consent_id, signup!.plus_one_consent_id].filter(Boolean) as string[];
