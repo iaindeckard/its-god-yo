@@ -100,7 +100,7 @@ async function requestLeads(key: string, prompt: string): Promise<DiscoveredLead
       store: false,
       instructions: DISCOVERY_SYSTEM,
       input: prompt,
-      tools: [{ type: "web_search", search_context_size: "high" }],
+      tools: [{ type: "web_search", search_context_size: "medium" }],
       text: { format: { type: "json_schema", name: "church_discovery", strict: true, schema: {
         type: "object", additionalProperties: false, required: ["leads"], properties: {
           leads: { type: "array", items: { type: "object", additionalProperties: false,
@@ -201,7 +201,7 @@ export async function continueCampaignDiscovery(campaign: Campaign): Promise<Dis
     ? { lat: campaign.center_lat, lng: campaign.center_lng } : null;
   try {
     const remaining = Math.max(1, run.target_count - run.found_count);
-    const batch = await requestLeads(key, campaignPrompt(campaign, Math.min(12, remaining), run.discovered_names));
+    const batch = await requestLeads(key, campaignPrompt(campaign, Math.min(5, remaining), run.discovered_names));
     let found = run.found_count, inserted = run.inserted_count, skipped = run.skipped_count;
     let outOfRadius = run.out_of_radius_count, added = 0;
     const names = [...run.discovered_names];
