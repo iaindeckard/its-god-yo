@@ -44,6 +44,18 @@ interface SendReport {
   skipped_unverified: number; errors: number;
   items: SendItem[];
 }
+interface MarketRecommendation {
+  market_name: string; state: string; center_label: string; radius_miles: number; score: number;
+  why_now: string; audience: string; test_size: number; channels: string[];
+  timing: { start: string; end: string; rationale: string };
+  message: { theme: string; value_proposition: string; call_to_action: string; subject_line: string; opening: string };
+  success_metrics: string[]; risks: string[]; assumptions: string[];
+  evidence: { claim: string; url: string }[];
+}
+interface MarketingProposal {
+  id: string; status: "draft" | "approved" | "rejected";
+  analysis: { executive_summary: string; next_action: string; data_limitations: string[]; recommendations: MarketRecommendation[] };
+}
 
 const statusPill = (s: string) =>
   s === "active" ? "pill pill-on"
@@ -108,6 +120,11 @@ export default function OutreachManager({
   const [offerDraft, setOfferDraft] = useState<{ discount_percent: string; message_variant: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [analystForm, setAnalystForm] = useState({
+    objective: "church_enrollment", audience: "Church youth leaders and parents",
+    budget_level: "small_test", preferred_window: "", constraints: "Avoid Dallas and do not use New Iberia until its discovery issue is resolved.",
+  });
+  const [proposal, setProposal] = useState<MarketingProposal | null>(null);
 
   async function refreshCampaigns() {
     const res = await fetch("/api/admin/outreach/campaigns");
@@ -267,6 +284,37 @@ export default function OutreachManager({
     finally { setBusy(null); }
   }
 
+  async function runAnalyst() {
+    setError(null); setBusy("analyst"); setProposal(null);
+    try {
+      const res = await fetch("/api/admin/outreach/analyst", {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(analystForm),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "marketing analysis failed");
+      setProposal(data.proposal);
+    } catch (e) { setError(e instanceof Error ? e.message : "marketing analysis failed"); }
+    finally { setBusy(null); }
+  }
+
+  async function approveMarket(marketIndex: number) {
+    if (!proposal) return;
+    const market = proposal.analysis.recommendations[marketIndex];
+    if (!confirm(`Approve the ${market.market_name} plan and create a DRAFT campaign? This will not discover leads, promote contacts, open the send gate, or send anything.`)) return;
+    setError(null); setBusy(`approve:${marketIndex}`);
+    try {
+      const res = await fetch(`/api/admin/outreach/analyst/${proposal.id}/approve`, {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ market_index: marketIndex }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "approval failed");
+      setProposal((current) => current ? { ...current, status: "approved" } : current);
+      await refreshCampaigns();
+      await openCampaign(data.campaign);
+    } catch (e) { setError(e instanceof Error ? e.message : "approval failed"); }
+    finally { setBusy(null); }
+  }
+
   const shown = viewBucket === "all" ? leads : leads.filter((l) => l.size_bucket === viewBucket);
   const stagedByBucket = (b: SizeBucket) => leads.filter((l) => l.size_bucket === b && l.status === "staged").length;
 
@@ -281,6 +329,94 @@ export default function OutreachManager({
       </div>
 
       {error && <div className="card" style={{ borderColor: "#c0392b", color: "#c0392b" }}>{error}</div>}
+
+      <section className="card" style={{ borderColor: "#8aa9ca", background: "linear-gradient(135deg, #f4f8fc 0%, #fff 65%)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
+          <div style={{ maxWidth: 720 }}>
+            <div className="pill pill-on" style={{ marginBottom: 8 }}>AI decision support</div>
+            <h2 style={{ margin: 0 }}>Marketing analyst</h2>
+            <p className="muted" style={{ marginBottom: 0 }}>
+              Get evidence-backed recommendations for where, when, and how to run the next controlled outreach test. Every result is a draft. You choose a market before a campaign is created, and all existing lead, copy, legal, and send gates remain in force.
+            </p>
+          </div>
+          <div className="pill pill-warn">Manual approval required</div>
+        </div>
+
+        {canManage ? (
+          <div style={{ marginTop: 18 }}>
+            <div className="row" style={{ gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
+              <div className="field" style={{ margin: 0, minWidth: 210 }}><label>Goal</label>
+                <select value={analystForm.objective} onChange={(e) => setAnalystForm((form) => ({ ...form, objective: e.target.value }))}>
+                  <option value="church_enrollment">Church enrollment</option><option value="parent_purchases">Parent purchases</option>
+                  <option value="referral_growth">Referral growth</option><option value="seasonal_promotion">Seasonal promotion</option>
+                  <option value="retention_reactivation">Retention or reactivation</option><option value="partner_recruitment">Partner recruitment</option>
+                </select>
+              </div>
+              <div className="field" style={{ margin: 0, minWidth: 240, flex: 1 }}><label>Audience</label>
+                <input value={analystForm.audience} onChange={(e) => setAnalystForm((form) => ({ ...form, audience: e.target.value }))} />
+              </div>
+              <div className="field" style={{ margin: 0, minWidth: 160 }}><label>Budget posture</label>
+                <select value={analystForm.budget_level} onChange={(e) => setAnalystForm((form) => ({ ...form, budget_level: e.target.value }))}>
+                  <option value="small_test">Small test</option><option value="moderate">Moderate</option><option value="growth">Growth</option>
+                </select>
+              </div>
+            </div>
+            <div className="row" style={{ gap: 12, alignItems: "flex-end", flexWrap: "wrap", marginTop: 12 }}>
+              <div className="field" style={{ margin: 0, minWidth: 220 }}><label>Preferred timing (optional)</label>
+                <input value={analystForm.preferred_window} placeholder="Let the analyst recommend" onChange={(e) => setAnalystForm((form) => ({ ...form, preferred_window: e.target.value }))} />
+              </div>
+              <div className="field" style={{ margin: 0, minWidth: 280, flex: 1 }}><label>Constraints</label>
+                <input value={analystForm.constraints} onChange={(e) => setAnalystForm((form) => ({ ...form, constraints: e.target.value }))} />
+              </div>
+              <button className="btn btn-primary" disabled={!!busy || !analystForm.audience.trim()} onClick={runAnalyst}>
+                {busy === "analyst" ? "Researching markets..." : "Recommend my next campaign"}
+              </button>
+            </div>
+            <p className="hint" style={{ marginBottom: 0 }}>The analyst uses current public web sources plus the constraints you provide. It labels assumptions and does not send, schedule, promote, or change campaign gates.</p>
+          </div>
+        ) : <p className="muted">You can view campaigns, but marketing.outreach.manage is required to generate or approve a proposal.</p>}
+
+        {proposal && (
+          <div style={{ marginTop: 20, borderTop: "1px solid #cad8e6", paddingTop: 18 }}>
+            <h3 style={{ marginTop: 0 }}>Analyst recommendation</h3>
+            <p>{proposal.analysis.executive_summary}</p>
+            <p className="hint"><strong>Suggested next action:</strong> {proposal.analysis.next_action}</p>
+            <div style={{ display: "grid", gap: 12 }}>
+              {proposal.analysis.recommendations.map((market, index) => (
+                <article key={`${market.center_label}-${index}`} style={{ border: "1px solid #d9e2eb", borderRadius: 10, padding: 16, background: "#fff" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                    <div><h3 style={{ margin: 0 }}>{index + 1}. {market.market_name}</h3><p className="muted" style={{ margin: "4px 0 0" }}>{market.center_label} · {market.radius_miles} miles · test {market.test_size} contacts</p></div>
+                    <span className="pill pill-on">Priority {market.score}/100</span>
+                  </div>
+                  <p><strong>Why now:</strong> {market.why_now}</p>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
+                    <div><strong>Audience</strong><p className="muted">{market.audience}</p></div>
+                    <div><strong>Timing</strong><p className="muted">{market.timing.start} to {market.timing.end}<br />{market.timing.rationale}</p></div>
+                    <div><strong>Message direction</strong><p className="muted">{market.message.theme}<br />{market.message.value_proposition}<br />CTA: {market.message.call_to_action}</p></div>
+                  </div>
+                  <details><summary><strong>Draft copy, evidence, risks, and measurement</strong></summary>
+                    <div style={{ paddingTop: 10 }}>
+                      <p><strong>Subject:</strong> {market.message.subject_line}<br /><strong>Opening:</strong> {market.message.opening}</p>
+                      <p><strong>Channels:</strong> {market.channels.join(", ") || "Not specified"}</p>
+                      <p><strong>Measure:</strong> {market.success_metrics.join("; ") || "Not specified"}</p>
+                      <p><strong>Risks:</strong> {market.risks.join("; ") || "None listed"}</p>
+                      <p><strong>Assumptions:</strong> {market.assumptions.join("; ") || "None listed"}</p>
+                      <strong>Sources</strong><ul>{market.evidence.map((source) => <li key={source.url}><a href={source.url} target="_blank" rel="noreferrer">{source.claim}</a></li>)}</ul>
+                    </div>
+                  </details>
+                  <div style={{ marginTop: 12, padding: "10px 12px", borderRadius: 8, background: "#fff8ec" }}>
+                    <strong>Approval boundary:</strong> approving creates a draft geographic campaign only. Draft copy stays advisory and cannot enter the send system until separately reviewed and added as an approved message variant.
+                  </div>
+                  <button className="btn btn-primary" style={{ marginTop: 12 }} disabled={proposal.status !== "draft" || !!busy} onClick={() => approveMarket(index)}>
+                    {busy === `approve:${index}` ? "Creating draft..." : proposal.status === "approved" ? "Proposal already approved" : "Approve plan and create draft campaign"}
+                  </button>
+                </article>
+              ))}
+            </div>
+            {proposal.analysis.data_limitations.length > 0 && <p className="hint" style={{ marginBottom: 0 }}><strong>Data limits:</strong> {proposal.analysis.data_limitations.join("; ")}</p>}
+          </div>
+        )}
+      </section>
 
       {/* Campaign picker + New campaign (deselect => Step 1 create mode) */}
       <div className="card" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>

@@ -132,3 +132,9 @@ export async function updateCampaign(id: string, patch: CampaignPatch): Promise<
   if (error) throw new Error(`update_campaign_failed: ${error.message}`);
   return data as Campaign;
 }
+
+/** Roll back a just-created draft when a proposal approval loses a race or fails. */
+export async function deleteDraftCampaign(id: string): Promise<void> {
+  const { error } = await getSupabaseAdmin().from(TABLE).delete().eq("id", id).eq("status", "draft");
+  if (error) throw new Error(`delete_draft_campaign_failed: ${error.message}`);
+}
