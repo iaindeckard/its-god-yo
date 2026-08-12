@@ -243,10 +243,11 @@ export interface DiscoveredLead {
 export async function insertDiscovered(
   leads: DiscoveredLead[],
   campaignId: string | null = null,
-): Promise<{ inserted: number; skipped: number }> {
+): Promise<{ inserted: number; skipped: number; insertedIds: string[] }> {
   const admin = getSupabaseAdmin();
   let inserted = 0;
   let skipped = 0;
+  const insertedIds: string[] = [];
   for (const l of leads) {
     const email = l.contact_email?.trim().toLowerCase();
     if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { skipped++; continue; }
@@ -287,8 +288,9 @@ export async function insertDiscovered(
     const { data, error } = await admin.from(TABLE).insert(row).select("id");
     if (error || !data?.length) { skipped++; continue; }
     inserted++;
+    insertedIds.push(data[0].id);
   }
-  return { inserted, skipped };
+  return { inserted, skipped, insertedIds };
 }
 
 export const AGE_OUT_LIMIT = OUTREACH.ageOutSends;

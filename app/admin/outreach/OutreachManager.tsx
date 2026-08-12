@@ -64,6 +64,11 @@ interface MarketingProposal {
   id: string; status: "draft" | "approved" | "rejected";
   analysis: { executive_summary: string; next_action: string; data_limitations: string[]; recommendations: MarketRecommendation[] };
 }
+interface DiscoveryRun {
+  status: "running" | "processing" | "completed" | "failed"; round_count: number; max_rounds: number;
+  found_count: number; inserted_count: number; skipped_count: number; out_of_radius_count: number;
+  target_count: number; last_error: string | null;
+}
 
 const statusPill = (s: string) =>
   s === "active" ? "pill pill-on"
@@ -131,6 +136,7 @@ export default function OutreachManager({
   const [selected, setSelected] = useState<Campaign | null>(null);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
+  const [discoveryRun, setDiscoveryRun] = useState<DiscoveryRun | null>(null);
   const [viewBucket, setViewBucket] = useState<"all" | SizeBucket>("all");
   const [promoteSel, setPromoteSel] = useState<Set<SizeBucket>>(new Set());
   const [report, setReport] = useState<SendReport | null>(null);
@@ -154,11 +160,11 @@ export default function OutreachManager({
   }
 
   async function openCampaign(c: Campaign) {
-    setSelected(c); setLeads([]); setDeliveries([]); setReport(null); setViewBucket("all"); setPromoteSel(new Set()); setDetailDraft(null); setOfferDraft(null);
+    setSelected(c); setLeads([]); setDeliveries([]); setDiscoveryRun(null); setReport(null); setViewBucket("all"); setPromoteSel(new Set()); setDetailDraft(null); setOfferDraft(null);
     const res = await fetch(`/api/admin/outreach/campaigns/${c.id}`);
     const data = await res.json();
     if (res.ok) {
-      setSelected(data.campaign); setLeads(data.leads); setDeliveries(data.deliveries ?? []);
+      setSelected(data.campaign); setLeads(data.leads); setDeliveries(data.deliveries ?? []); setDiscoveryRun(data.discoveryRun ?? null);
       setReleaseDraft(data.campaign.release_at ? toDateTimeLocal(data.campaign.release_at) : "");
       setOfferDraft({ discount_percent: String(data.campaign.discount_percent ?? 10), message_variant: data.campaign.message_variant ?? "default" });
     } else setError(data.error || "failed to load campaign");
@@ -167,7 +173,7 @@ export default function OutreachManager({
   // Deselect => Step 1 create mode (draw a new area). One control drives the
   // mode switch; the single map remounts via key={selected?.id ?? "new"}.
   function newCampaign() {
-    setSelected(null); setLeads([]); setReport(null);
+    setSelected(null); setLeads([]); setDiscoveryRun(null); setReport(null);
     setViewBucket("all"); setPromoteSel(new Set());
     setDetailDraft(null); setOfferDraft(null); setError(null);
     setCreateName(""); setCreateDraft(null);
@@ -236,10 +242,17 @@ export default function OutreachManager({
     if (!selected) return;
     setError(null); setBusy("discover");
     try {
-      const res = await fetch(`/api/admin/outreach/campaigns/${selected.id}/discover`, { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "discovery failed");
-      if (data.result && data.result.ran === false) setError(`Discovery no-op: ${data.result.reason} (set ANTHROPIC_API_KEY).`);
+      let complete = false;
+      while (!complete) {
+        const res = await fetch(`/api/admin/outreach/campaigns/${selected.id}/discover`, { method: "POST" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "discovery failed");
+        const run = data.run as DiscoveryRun;
+        setDiscoveryRun(run);
+        complete = run.status === "completed" || run.status === "failed";
+        if (run.status === "failed") throw new Error(run.last_error || "discovery failed");
+        if (!complete) await new Promise((resolve) => setTimeout(resolve, 750));
+      }
       await openCampaign(selected);
       await refreshCampaigns();
     } catch (e) { setError(e instanceof Error ? e.message : "discovery failed"); }
@@ -533,6 +546,9 @@ export default function OutreachManager({
           <div className="card">
             <h3>2 · Discover</h3>
             <p className="muted">Search public sources for churches within the radius, using only public general emails and youth-ministry signals. Discovered leads land staged (found, not yet in the send pipeline) and are auto-verified.</p>
+            {discoveryRun && <p className="hint" role="status">
+              {discoveryRun.status === "completed" ? "Discovery complete" : "Discovery in progress"}: round {discoveryRun.round_count} of {discoveryRun.max_rounds} · found {discoveryRun.found_count} · saved {discoveryRun.inserted_count} · already known/skipped {discoveryRun.skipped_count} · outside radius {discoveryRun.out_of_radius_count}
+            </p>}
             {canManage && (
               <button className="btn btn-primary" disabled={busy === "discover"} onClick={runDiscovery}>
                 {busy === "discover" ? "Discovering…" : "Run discovery"}</button>
