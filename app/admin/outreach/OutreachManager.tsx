@@ -47,6 +47,11 @@ interface SendReport {
   skipped_unverified: number; errors: number;
   items: SendItem[];
 }
+interface Delivery {
+  id: string; lead_id: string; touch: number; status: string; provider_message_id: string | null;
+  error: string | null; sent_at: string | null; delivered_at: string | null;
+  last_event_at: string | null; last_event_type: string | null;
+}
 interface MarketRecommendation {
   market_name: string; state: string; center_label: string; radius_miles: number; score: number;
   why_now: string; audience: string; test_size: number; channels: string[];
@@ -65,6 +70,11 @@ const statusPill = (s: string) =>
   : s === "converted" ? "pill pill-on"
   : s === "staged" ? "pill pill-warn"
   : s === "needs_review" ? "pill pill-warn"
+  : "pill pill-off";
+
+const deliveryStatusPill = (s: string) =>
+  s === "delivered" ? "pill pill-on"
+  : ["sent", "claimed", "delayed"].includes(s) ? "pill pill-warn"
   : "pill pill-off";
 
 const verifyPill = (s: string) =>
@@ -120,6 +130,7 @@ export default function OutreachManager({
   const [campaigns, setCampaigns] = useState<Campaign[]>(initialCampaigns);
   const [selected, setSelected] = useState<Campaign | null>(null);
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [viewBucket, setViewBucket] = useState<"all" | SizeBucket>("all");
   const [promoteSel, setPromoteSel] = useState<Set<SizeBucket>>(new Set());
   const [report, setReport] = useState<SendReport | null>(null);
@@ -143,11 +154,11 @@ export default function OutreachManager({
   }
 
   async function openCampaign(c: Campaign) {
-    setSelected(c); setLeads([]); setReport(null); setViewBucket("all"); setPromoteSel(new Set()); setDetailDraft(null); setOfferDraft(null);
+    setSelected(c); setLeads([]); setDeliveries([]); setReport(null); setViewBucket("all"); setPromoteSel(new Set()); setDetailDraft(null); setOfferDraft(null);
     const res = await fetch(`/api/admin/outreach/campaigns/${c.id}`);
     const data = await res.json();
     if (res.ok) {
-      setSelected(data.campaign); setLeads(data.leads);
+      setSelected(data.campaign); setLeads(data.leads); setDeliveries(data.deliveries ?? []);
       setReleaseDraft(data.campaign.release_at ? toDateTimeLocal(data.campaign.release_at) : "");
       setOfferDraft({ discount_percent: String(data.campaign.discount_percent ?? 10), message_variant: data.campaign.message_variant ?? "default" });
     } else setError(data.error || "failed to load campaign");
@@ -672,6 +683,29 @@ export default function OutreachManager({
                   </div>
                 </div>
               )}
+              <div className="card" style={{ marginTop: 14 }}>
+                <strong>Delivery tracking</strong>
+                <p className="muted" style={{ fontSize: 13 }}>
+                  accepted {deliveries.filter((d) => Boolean(d.sent_at)).length} · delivered {deliveries.filter((d) => d.status === "delivered").length} · delayed {deliveries.filter((d) => d.status === "delayed").length} · bounced {deliveries.filter((d) => d.status === "bounced").length} · complained {deliveries.filter((d) => d.status === "complained").length} · suppressed {deliveries.filter((d) => d.status === "suppressed").length} · failed {deliveries.filter((d) => d.status === "failed").length}
+                </p>
+                <div className="sim-scroll">
+                  <table className="table"><thead><tr><th>Church</th><th>To</th><th>Touch</th><th>Provider status</th><th>Updated</th><th>Message ID</th></tr></thead>
+                    <tbody>
+                      {deliveries.length === 0 && <tr><td colSpan={6} className="muted">No tracked deliveries for this campaign.</td></tr>}
+                      {deliveries.map((delivery) => {
+                        const lead = leads.find((item) => item.id === delivery.lead_id);
+                        return <tr key={delivery.id}>
+                          <td>{lead?.org_name ?? "Unknown"}</td><td>{lead?.contact_email ?? "Unknown"}</td><td>{delivery.touch}</td>
+                          <td><span className={deliveryStatusPill(delivery.status)}>{delivery.status}</span>{delivery.error ? <div className="muted" style={{ fontSize: 11 }}>{delivery.error}</div> : null}</td>
+                          <td>{delivery.last_event_at || delivery.delivered_at || delivery.sent_at ? new Date(delivery.last_event_at || delivery.delivered_at || delivery.sent_at || "").toLocaleString() : "—"}</td>
+                          <td className="mono" style={{ fontSize: 11 }}>{delivery.provider_message_id ?? "—"}</td>
+                        </tr>;
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="hint">Accepted means Resend accepted the API request. Delivered means Resend confirmed delivery to the recipient mail server.</p>
+              </div>
             </div>
           )}
         </>

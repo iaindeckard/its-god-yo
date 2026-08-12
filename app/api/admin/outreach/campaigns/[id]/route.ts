@@ -4,6 +4,7 @@ import { apiError } from "@/lib/apiError";
 import { getCampaign, updateCampaign, type CampaignPatch, type CampaignStatus } from "@/lib/outreach/campaigns";
 import { fetchCampaignLeads } from "@/lib/outreach/leads";
 import { clampDiscountPercent, isApprovedVariant } from "@/lib/outreach/templates";
+import { listCampaignDeliveries } from "@/lib/outreach/deliveries";
 
 export const dynamic = "force-dynamic";
 
@@ -14,8 +15,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     const { id } = await params;
     const campaign = await getCampaign(id);
     if (!campaign) return NextResponse.json({ error: "not_found" }, { status: 404 });
-    const leads = await fetchCampaignLeads(id);
-    return NextResponse.json({ campaign, leads });
+    const [leads, deliveries] = await Promise.all([fetchCampaignLeads(id), listCampaignDeliveries(id)]);
+    return NextResponse.json({ campaign, leads, deliveries });
   } catch (e) {
     return apiError(e);
   }
