@@ -90,6 +90,15 @@ export async function upsertSubscriptionPayment(
     console.warn(`[subscription_payments] no balance_transaction for ${p.kind} charge=${p.chargeId ?? "?"} — skipped`);
     return { inserted: false };
   }
+  // Live-only ledger: never persist a test-mode settlement (e.g. a test-clock smoke
+  // test). Both writers — the webhook and the reconcile cron — route through here,
+  // so this single gate keeps subscription_payments structurally free of test
+  // artifacts. Previously test rows were inserted and merely excluded downstream
+  // (the DEI ETL/rollup counts livemode=true only); this stops them existing at all.
+  if ((bt as unknown as { livemode?: boolean }).livemode !== true) {
+    console.warn(`[subscription_payments] skipped test-mode (livemode=false) ${p.kind} bt=${bt.id}`);
+    return { inserted: false };
+  }
   const { data, error } = await admin
     .from("subscription_payments")
     .upsert(buildPaymentRow(p, bt), { onConflict: "balance_transaction_id", ignoreDuplicates: true })
