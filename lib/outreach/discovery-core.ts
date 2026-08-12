@@ -15,3 +15,7 @@ export function discoveryIsComplete(input: {
 }): boolean {
   return input.found >= input.target || input.round >= input.maxRounds || input.emptyStreak >= 2;
 }
+
+export function discoveryErrorStatus(found: number): "completed" | "failed" {
+  return found > 0 ? "completed" : "failed";
+}

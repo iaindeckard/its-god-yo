@@ -547,7 +547,7 @@ export default function OutreachManager({
             <h3>2 · Discover</h3>
             <p className="muted">Search public sources for churches within the radius, using only public general emails and youth-ministry signals. Discovered leads land staged (found, not yet in the send pipeline) and are auto-verified.</p>
             {discoveryRun && <p className="hint" role="status">
-              {discoveryRun.status === "completed" ? "Discovery complete" : "Discovery in progress"}: round {discoveryRun.round_count} of {discoveryRun.max_rounds} · found {discoveryRun.found_count} · saved {discoveryRun.inserted_count} · already known/skipped {discoveryRun.skipped_count} · outside radius {discoveryRun.out_of_radius_count}
+              {discoveryRun.status === "completed" ? (discoveryRun.last_error ? "Discovery complete with saved partial results" : "Discovery complete") : "Discovery in progress"}: round {discoveryRun.round_count} of {discoveryRun.max_rounds} · found {discoveryRun.found_count} · saved {discoveryRun.inserted_count} · already known/skipped {discoveryRun.skipped_count} · outside radius {discoveryRun.out_of_radius_count}
             </p>}
             {canManage && (
               <button className="btn btn-primary" disabled={busy === "discover"} onClick={runDiscovery}>

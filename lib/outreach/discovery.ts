@@ -5,7 +5,7 @@ import { verifyLeads } from "./verify";
 import { geocodeAddress } from "../geocode";
 import { haversineMiles, sizeBucket, updateCampaign, type Campaign } from "./campaigns";
 import { getSupabaseAdmin } from "../supabaseAdmin";
-import { discoveryIsComplete, extractDiscoveryJson } from "./discovery-core";
+import { discoveryErrorStatus, discoveryIsComplete, extractDiscoveryJson } from "./discovery-core";
 
 /**
  * Monthly discovery (spec §4). Calls the Claude API with the web-search tool and
@@ -231,8 +231,10 @@ export async function continueCampaignDiscovery(campaign: Campaign): Promise<Dis
     return run;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    await patchRun(run.id, { status: "failed", last_error: message.slice(0, 500), completed_at: new Date().toISOString() });
+    const status = discoveryErrorStatus(run.found_count);
+    run = await patchRun(run.id, { status, last_error: message.slice(0, 500), completed_at: new Date().toISOString() });
     await updateCampaign(campaign.id, { status: "ready" }).catch(() => {});
+    if (status === "completed") return run;
     throw error;
   }
 }

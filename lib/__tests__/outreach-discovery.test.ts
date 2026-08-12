@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { discoveryIsComplete, extractDiscoveryJson } from "../outreach/discovery-core";
+import { discoveryErrorStatus, discoveryIsComplete, extractDiscoveryJson } from "../outreach/discovery-core";
 
 describe("outreach discovery core", () => {
   it("parses strict and fenced lead payloads", () => {
@@ -16,5 +16,10 @@ describe("outreach discovery core", () => {
     expect(discoveryIsComplete({ found: 35, target: 35, round: 3, maxRounds: 8, emptyStreak: 0 })).toBe(true);
     expect(discoveryIsComplete({ found: 5, target: 35, round: 8, maxRounds: 8, emptyStreak: 0 })).toBe(true);
     expect(discoveryIsComplete({ found: 5, target: 35, round: 3, maxRounds: 8, emptyStreak: 2 })).toBe(true);
+  });
+
+  it("keeps durable results when a later provider round times out", () => {
+    expect(discoveryErrorStatus(15)).toBe("completed");
+    expect(discoveryErrorStatus(0)).toBe("failed");
   });
 });
