@@ -46,6 +46,7 @@ const TABLE = "igy_outreach_leads";
 export interface SendScope {
   campaignId?: string;
   sizeBuckets?: string[];
+  leadIds?: string[];
 }
 
 /** Active leads eligible for a send (spec §1: status='active' is the ONLY gate —
@@ -56,6 +57,7 @@ export async function fetchActiveLeads(scope?: SendScope): Promise<OutreachLead[
   let q = admin.from(TABLE).select("*").eq("status", "active");
   if (scope?.campaignId) q = q.eq("campaign_id", scope.campaignId);
   if (scope?.sizeBuckets && scope.sizeBuckets.length) q = q.in("size_bucket", scope.sizeBuckets);
+  if (scope?.leadIds && scope.leadIds.length) q = q.in("id", scope.leadIds);
   const { data, error } = await q.order("first_found_at", { ascending: true });
   if (error) throw new Error(`fetch_active_failed: ${error.message}`);
   return (data ?? []) as OutreachLead[];

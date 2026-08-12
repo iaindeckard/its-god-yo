@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { isAuthorizedCron } from "@/lib/cronAuth";
-import { runSend } from "@/lib/outreach/run";
+import { runScheduledCampaigns } from "@/lib/outreach/scheduler";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 /**
- * Monthly church-outreach send (Vercel Cron, see vercel.json).
+ * Poll for campaign-owned releases (Vercel Cron, see vercel.json).
  *
  * SAFE BY DEFAULT: this runs in DRY-RUN unless the send gate is fully open
  * (OUTREACH_COPY_APPROVED + OUTREACH_LEGAL_APPROVED + OUTREACH_SEND_LIVE all
@@ -22,10 +22,9 @@ export async function GET(req: Request) {
   const authed = isAuthorizedCron(req);
   if (!authed) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const forceDry = new URL(req.url).searchParams.get("dry") === "1";
   try {
-    const report = await runSend({ forceDry });
-    return NextResponse.json({ ok: true, report });
+    const reports = await runScheduledCampaigns();
+    return NextResponse.json({ ok: true, campaigns_processed: reports.length, reports });
   } catch (e) {
     console.error("[outreach-send] failed:", e);
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "send_failed" }, { status: 500 });

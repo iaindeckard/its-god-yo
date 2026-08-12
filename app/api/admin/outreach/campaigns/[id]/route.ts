@@ -21,7 +21,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   }
 }
 
-const STATUSES: CampaignStatus[] = ["draft", "discovering", "ready", "sending", "archived"];
+const STATUSES: CampaignStatus[] = ["draft", "discovering", "ready", "paused", "archived"];
 
 /** Edit a campaign (name, status, size_filter, radius). */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {

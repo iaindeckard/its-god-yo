@@ -243,12 +243,16 @@ Unsubscribe (one click): ${link}`;
 /** Send one built email via Resend (reuses RESEND_API_KEY). Returns the provider
  *  message id on success. Throws on any non-2xx so the caller can record failure
  *  without advancing the lead. */
-export async function sendViaResend(email: BuiltEmail): Promise<{ id: string }> {
+export async function sendViaResend(email: BuiltEmail, idempotencyKey?: string): Promise<{ id: string }> {
   const key = process.env.RESEND_API_KEY;
   if (!key) throw new Error("RESEND_API_KEY not set");
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+      ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
+    },
     body: JSON.stringify({
       from: email.from,
       to: [email.to],

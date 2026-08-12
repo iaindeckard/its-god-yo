@@ -13,7 +13,7 @@ import { geocodeAddress, type LatLng } from "../geocode";
  */
 
 export type SizeBucket = "small" | "medium" | "large" | "mega" | "unknown";
-export type CampaignStatus = "draft" | "discovering" | "ready" | "sending" | "archived";
+export type CampaignStatus = "draft" | "discovering" | "ready" | "scheduled" | "sending" | "active" | "completed" | "paused" | "archived";
 
 export interface Campaign {
   id: string;
@@ -29,6 +29,14 @@ export interface Campaign {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  release_at: string | null;
+  release_timezone: string | null;
+  scheduled_at: string | null;
+  scheduled_by: string | null;
+  schedule_snapshot: Record<string, unknown> | null;
+  release_started_at: string | null;
+  release_completed_at: string | null;
+  last_release_report: Record<string, unknown> | null;
 }
 
 const TABLE = "outreach_campaigns";
@@ -119,6 +127,14 @@ export interface CampaignPatch {
   center_lng?: number | null;
   discount_percent?: number;
   message_variant?: string | null;
+  release_at?: string | null;
+  release_timezone?: string | null;
+  scheduled_at?: string | null;
+  scheduled_by?: string | null;
+  schedule_snapshot?: Record<string, unknown> | null;
+  release_started_at?: string | null;
+  release_completed_at?: string | null;
+  last_release_report?: Record<string, unknown> | null;
 }
 
 export async function updateCampaign(id: string, patch: CampaignPatch): Promise<Campaign> {

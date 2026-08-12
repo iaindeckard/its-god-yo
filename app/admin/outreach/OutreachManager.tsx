@@ -19,6 +19,9 @@ interface Campaign {
   radius_miles: number; size_filter: string[] | null;
   status: string; created_at: string;
   discount_percent: number; message_variant: string | null;
+  release_at: string | null; release_timezone: string | null;
+  scheduled_at: string | null; release_started_at: string | null; release_completed_at: string | null;
+  schedule_snapshot: { recipient_count?: number } | null;
 }
 
 // Approved message variants (mirror of lib/outreach/templates.ts, which is
@@ -71,6 +74,12 @@ const verifyPill = (s: string) =>
   : s === "failed" ? "pill pill-off"
   : "pill"; // unverified
 
+function toDateTimeLocal(value: string): string {
+  const date = new Date(value);
+  const shifted = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return shifted.toISOString().slice(0, 16);
+}
+
 // Turn the machine verification_notes into one plain-language line so an override
 // decision is informed without leaving the page. Returns null when there is
 // nothing to explain (a passed/override lead, or missing notes).
@@ -118,6 +127,7 @@ export default function OutreachManager({
   const [createDraft, setCreateDraft] = useState<CampaignMapChange | null>(null);
   const [detailDraft, setDetailDraft] = useState<CampaignMapChange | null>(null);
   const [offerDraft, setOfferDraft] = useState<{ discount_percent: string; message_variant: string } | null>(null);
+  const [releaseDraft, setReleaseDraft] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [analystForm, setAnalystForm] = useState({
@@ -138,6 +148,7 @@ export default function OutreachManager({
     const data = await res.json();
     if (res.ok) {
       setSelected(data.campaign); setLeads(data.leads);
+      setReleaseDraft(data.campaign.release_at ? toDateTimeLocal(data.campaign.release_at) : "");
       setOfferDraft({ discount_percent: String(data.campaign.discount_percent ?? 10), message_variant: data.campaign.message_variant ?? "default" });
     } else setError(data.error || "failed to load campaign");
   }
@@ -281,6 +292,37 @@ export default function OutreachManager({
       await openCampaign(selected);
       setReport(data.report);
     } catch (e) { setError(e instanceof Error ? e.message : "send failed"); }
+    finally { setBusy(null); }
+  }
+
+  async function scheduleRelease() {
+    if (!selected || !releaseDraft) return;
+    const release = new Date(releaseDraft);
+    if (!Number.isFinite(release.getTime()) || release.getTime() <= Date.now()) { setError("Choose a future release date and time."); return; }
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Chicago";
+    if (!confirm(`Schedule this campaign for ${release.toLocaleString()} (${timezone})? The exact verified active audience and approved offer will be recorded.`)) return;
+    setError(null); setBusy("schedule");
+    try {
+      const res = await fetch(`/api/admin/outreach/campaigns/${selected.id}/schedule`, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ release_at: release.toISOString(), timezone }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "schedule failed");
+      await refreshCampaigns(); await openCampaign(data.campaign);
+    } catch (e) { setError(e instanceof Error ? e.message : "schedule failed"); }
+    finally { setBusy(null); }
+  }
+
+  async function pauseRelease() {
+    if (!selected || !confirm("Pause this scheduled release? No campaign email will be released until you schedule it again.")) return;
+    setError(null); setBusy("pause");
+    try {
+      const res = await fetch(`/api/admin/outreach/campaigns/${selected.id}/schedule`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "pause failed");
+      await refreshCampaigns(); await openCampaign(data.campaign);
+    } catch (e) { setError(e instanceof Error ? e.message : "pause failed"); }
     finally { setBusy(null); }
   }
 
@@ -586,18 +628,32 @@ export default function OutreachManager({
             </div>
           )}
 
-          {/* STEP 5 — Preview + send */}
+          {/* STEP 5 — Preview + schedule */}
           {canManage && (
             <div className="card">
-              <h3>5 · Preview + send</h3>
+              <h3>5 · Preview + schedule</h3>
               <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
                 <button className="btn btn-ghost" disabled={!!busy} onClick={() => send(false)}>
                   {busy === "send-dry" ? "Previewing…" : "Preview send (dry-run)"}</button>
-                <button className="btn btn-ghost" disabled={!!busy} onClick={() => send(true)} style={{ borderColor: "#c0392b", color: "#c0392b" }}>
-                  {busy === "send-live" ? "Sending…" : "Send live"}</button>
+              </div>
+              <div style={{ marginTop: 14, padding: "12px", borderRadius: 8, background: "#f6faff" }}>
+                <div className="row" style={{ gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
+                  <div className="field" style={{ margin: 0 }}>
+                    <label>Release date and time</label>
+                    <input type="datetime-local" value={releaseDraft} onChange={(e) => setReleaseDraft(e.target.value)} />
+                  </div>
+                  <button className="btn btn-primary" disabled={!releaseDraft || !!busy} onClick={scheduleRelease}>
+                    {busy === "schedule" ? "Scheduling…" : selected.status === "scheduled" ? "Reschedule campaign" : "Approve and schedule"}
+                  </button>
+                  {selected.status === "scheduled" && <button className="btn btn-ghost" disabled={!!busy} onClick={pauseRelease}>{busy === "pause" ? "Pausing…" : "Pause release"}</button>}
+                </div>
+                {selected.release_at && <p className="hint" style={{ marginBottom: 0 }}>
+                  <strong>{selected.status === "scheduled" ? "Next release" : "Last scheduled release"}:</strong> {new Date(selected.release_at).toLocaleString()} ({selected.release_timezone || "timezone not recorded"})
+                  {selected.schedule_snapshot?.recipient_count != null ? ` · ${selected.schedule_snapshot.recipient_count} approved recipients` : ""}
+                </p>}
               </div>
               <p className="hint" style={{ marginTop: 8 }}>
-                The Send live button alone does not put mail in inboxes. A real send also requires the three server env flags (OUTREACH_COPY_APPROVED, OUTREACH_LEGAL_APPROVED, OUTREACH_SEND_LIVE) to be set and the app redeployed; those are not editable from this page. Until then every run stays a dry-run preview, and only verified, promoted leads are ever eligible.
+                Scheduling records the exact verified, promoted audience, approved template, offer, date, time, timezone, and approver. The frequent worker releases only due scheduled campaigns. The three server approval flags remain the emergency master gate; when closed, a due campaign stays scheduled and no mail is sent.
               </p>
 
               {report && (

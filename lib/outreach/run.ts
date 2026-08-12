@@ -6,6 +6,7 @@ import { createPromoCode } from "../promoCodes";
 import { updateCampaign, listCampaigns } from "./campaigns";
 import { resolveVariant, clampDiscountPercent, type MessageVariant } from "./templates";
 import { isSendable } from "./verify";
+import { claimDelivery, markDeliveryFailed, markDeliverySent, type DeliveryClaim } from "./deliveries";
 
 /**
  * Two-touch outreach sequence (Iain, 2026-08-05):
@@ -67,7 +68,7 @@ export interface SendItem {
   lead_id: string;
   org_name: string;
   to: string;
-  outcome: "would_send" | "sent" | "not_due" | "sequence_complete" | "skipped_allowlist" | "skipped_unverified" | "error";
+  outcome: "would_send" | "sent" | "not_due" | "sequence_complete" | "skipped_allowlist" | "skipped_unverified" | "already_claimed" | "error";
   touch: 1 | 2 | null;
   promo_code: string;
   subject: string;
@@ -95,8 +96,12 @@ export interface RunSendOptions {
   campaignId?: string;
   /** Narrow further to specific size buckets within the campaign. */
   sizeBuckets?: string[];
+  /** Exact human-approved recipient snapshot for a scheduled release. */
+  leadIds?: string[];
   /** Force dry-run even when the gate is open (safe preview). */
   forceDry?: boolean;
+  /** Scheduler owns campaign lifecycle transitions around the full release. */
+  updateCampaignStatus?: boolean;
 }
 
 /**
@@ -111,11 +116,11 @@ export interface RunSendOptions {
  * gate + allowlist still authoritatively govern WHETHER anything goes out live.
  */
 export async function runSend(opts: RunSendOptions = {}): Promise<SendReport> {
-  const { campaignId, sizeBuckets, forceDry = false } = opts;
+  const { campaignId, sizeBuckets, leadIds, forceDry = false, updateCampaignStatus = true } = opts;
   const gate = sendGate();
   const live = gate.live && !forceDry;
   const allowlist = sendAllowlist();
-  const scope: SendScope | undefined = campaignId ? { campaignId, sizeBuckets } : undefined;
+  const scope: SendScope | undefined = campaignId ? { campaignId, sizeBuckets, leadIds } : undefined;
   const leads = await fetchActiveLeads(scope);
 
   // Per-campaign offer resolution (Phase 4a): map campaign_id -> {discount, variant}.
@@ -200,7 +205,20 @@ export async function runSend(opts: RunSendOptions = {}): Promise<SendReport> {
 
     // Live send. Touch 1 is code-free; touch 2 mints/attaches the code at the
     // campaign's discount, with the campaign's message variant.
+    let claim: DeliveryClaim | null = null;
     try {
+      if (campaignId) {
+        claim = await claimDelivery(campaignId, lead.id, touch);
+        if (!claim) {
+          report.skipped++;
+          report.items.push({
+            lead_id: lead.id, org_name: lead.org_name, to: lead.contact_email,
+            outcome: "already_claimed", touch, promo_code: "", subject: "",
+            send_count_after: lead.send_count,
+          });
+          continue;
+        }
+      }
       let promo: { code: string; promotionCodeId: string } | null = null;
       let email;
       if (touch === 1) {
@@ -209,8 +227,9 @@ export async function runSend(opts: RunSendOptions = {}): Promise<SendReport> {
         promo = await ensurePromoCode(lead, offer.discountPercent);
         email = buildFollowupEmail(lead, promo.code, offer.discountPercent, offer.variant);
       }
-      await sendViaResend(email);
+      const provider = await sendViaResend(email, claim?.idempotencyKey);
       await recordSend(lead.id, lead.send_count, promo);
+      if (claim) await markDeliverySent(claim, provider.id);
       report.sent++;
       report.items.push({
         lead_id: lead.id, org_name: lead.org_name, to: lead.contact_email,
@@ -218,6 +237,7 @@ export async function runSend(opts: RunSendOptions = {}): Promise<SendReport> {
         send_count_after: lead.send_count + 1,
       });
     } catch (e) {
+      if (claim) await markDeliveryFailed(claim, e instanceof Error ? e.message : String(e));
       report.errors++;
       report.items.push({
         lead_id: lead.id, org_name: lead.org_name, to: lead.contact_email,
@@ -227,9 +247,10 @@ export async function runSend(opts: RunSendOptions = {}): Promise<SendReport> {
     }
   }
 
-  // A live per-campaign send that actually mailed marks the campaign 'sending'.
-  if (campaignId && live && report.sent > 0) {
-    await updateCampaign(campaignId, { status: "sending" }).catch(() => {});
+  // A live per-campaign manual send marks the campaign active. Scheduled sends
+  // are finalized by scheduler.ts after the complete report is available.
+  if (campaignId && live && report.sent > 0 && updateCampaignStatus) {
+    await updateCampaign(campaignId, { status: "active" }).catch(() => {});
   }
 
   return report;
