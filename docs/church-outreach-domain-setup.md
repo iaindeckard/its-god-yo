@@ -5,8 +5,9 @@ done from the app. Do them before flipping the send gate.
 
 ## 1. Authenticate the sending subdomain in Resend (SPF / DKIM / DMARC)
 
-Send identity is `hello@outreach.itsgodyo.com` — a **dedicated subdomain**, so cold-outreach
-reputation is isolated from `itsgodyo.com` (your product/transactional mail).
+Send identity is `hello@itsgodyo.com` (confirmed by Iain on 2026-08-12). The
+existing `outreach.itsgodyo.com` records remain useful for the Resend return path
+and unsubscribe address, but the visible From address is on the root domain.
 
 1. Resend → **Domains → Add Domain** → enter `outreach.itsgodyo.com` (a subdomain, not the root).
 2. Resend shows the exact DNS records to add at your DNS host (GoDaddy, per project notes). They are:
