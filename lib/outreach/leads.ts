@@ -46,6 +46,7 @@ const TABLE = "igy_outreach_leads";
 export interface SendScope {
   campaignId?: string;
   sizeBuckets?: string[];
+  leadIds?: string[];
 }
 
 /** Active leads eligible for a send (spec §1: status='active' is the ONLY gate —
@@ -56,6 +57,7 @@ export async function fetchActiveLeads(scope?: SendScope): Promise<OutreachLead[
   let q = admin.from(TABLE).select("*").eq("status", "active");
   if (scope?.campaignId) q = q.eq("campaign_id", scope.campaignId);
   if (scope?.sizeBuckets && scope.sizeBuckets.length) q = q.in("size_bucket", scope.sizeBuckets);
+  if (scope?.leadIds && scope.leadIds.length) q = q.in("id", scope.leadIds);
   const { data, error } = await q.order("first_found_at", { ascending: true });
   if (error) throw new Error(`fetch_active_failed: ${error.message}`);
   return (data ?? []) as OutreachLead[];
@@ -241,10 +243,11 @@ export interface DiscoveredLead {
 export async function insertDiscovered(
   leads: DiscoveredLead[],
   campaignId: string | null = null,
-): Promise<{ inserted: number; skipped: number }> {
+): Promise<{ inserted: number; skipped: number; insertedIds: string[] }> {
   const admin = getSupabaseAdmin();
   let inserted = 0;
   let skipped = 0;
+  const insertedIds: string[] = [];
   for (const l of leads) {
     const email = l.contact_email?.trim().toLowerCase();
     if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { skipped++; continue; }
@@ -285,8 +288,9 @@ export async function insertDiscovered(
     const { data, error } = await admin.from(TABLE).insert(row).select("id");
     if (error || !data?.length) { skipped++; continue; }
     inserted++;
+    insertedIds.push(data[0].id);
   }
-  return { inserted, skipped };
+  return { inserted, skipped, insertedIds };
 }
 
 export const AGE_OUT_LIMIT = OUTREACH.ageOutSends;

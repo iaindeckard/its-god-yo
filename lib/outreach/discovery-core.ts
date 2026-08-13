@@ -1,0 +1,21 @@
+import type { DiscoveredLead } from "./leads";
+
+export function extractDiscoveryJson(text: string): { leads: DiscoveredLead[] } | null {
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
+  const candidate = fenced ?? text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1);
+  try {
+    const parsed = JSON.parse(candidate);
+    if (parsed && Array.isArray(parsed.leads)) return parsed as { leads: DiscoveredLead[] };
+  } catch { /* invalid provider output */ }
+  return null;
+}
+
+export function discoveryIsComplete(input: {
+  found: number; target: number; round: number; maxRounds: number; emptyStreak: number;
+}): boolean {
+  return input.found >= input.target || input.round >= input.maxRounds || input.emptyStreak >= 2;
+}
+
+export function discoveryErrorStatus(found: number): "completed" | "failed" {
+  return found > 0 ? "completed" : "failed";
+}

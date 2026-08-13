@@ -19,6 +19,9 @@ interface Campaign {
   radius_miles: number; size_filter: string[] | null;
   status: string; created_at: string;
   discount_percent: number; message_variant: string | null;
+  release_at: string | null; release_timezone: string | null;
+  scheduled_at: string | null; release_started_at: string | null; release_completed_at: string | null;
+  schedule_snapshot: { recipient_count?: number } | null;
 }
 
 // Approved message variants (mirror of lib/outreach/templates.ts, which is
@@ -44,6 +47,11 @@ interface SendReport {
   skipped_unverified: number; errors: number;
   items: SendItem[];
 }
+interface Delivery {
+  id: string; lead_id: string; touch: number; status: string; provider_message_id: string | null;
+  error: string | null; sent_at: string | null; delivered_at: string | null;
+  last_event_at: string | null; last_event_type: string | null;
+}
 interface MarketRecommendation {
   market_name: string; state: string; center_label: string; radius_miles: number; score: number;
   why_now: string; audience: string; test_size: number; channels: string[];
@@ -56,6 +64,11 @@ interface MarketingProposal {
   id: string; status: "draft" | "approved" | "rejected";
   analysis: { executive_summary: string; next_action: string; data_limitations: string[]; recommendations: MarketRecommendation[] };
 }
+interface DiscoveryRun {
+  status: "running" | "processing" | "completed" | "failed"; round_count: number; max_rounds: number;
+  found_count: number; inserted_count: number; skipped_count: number; out_of_radius_count: number;
+  target_count: number; last_error: string | null;
+}
 
 const statusPill = (s: string) =>
   s === "active" ? "pill pill-on"
@@ -64,12 +77,23 @@ const statusPill = (s: string) =>
   : s === "needs_review" ? "pill pill-warn"
   : "pill pill-off";
 
+const deliveryStatusPill = (s: string) =>
+  s === "delivered" ? "pill pill-on"
+  : ["sent", "claimed", "delayed"].includes(s) ? "pill pill-warn"
+  : "pill pill-off";
+
 const verifyPill = (s: string) =>
   s === "passed" ? "pill pill-on"
   : s === "manual_override" ? "pill pill-on"
   : s === "needs_manual" ? "pill pill-warn"
   : s === "failed" ? "pill pill-off"
   : "pill"; // unverified
+
+function toDateTimeLocal(value: string): string {
+  const date = new Date(value);
+  const shifted = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return shifted.toISOString().slice(0, 16);
+}
 
 // Turn the machine verification_notes into one plain-language line so an override
 // decision is informed without leaving the page. Returns null when there is
@@ -111,6 +135,8 @@ export default function OutreachManager({
   const [campaigns, setCampaigns] = useState<Campaign[]>(initialCampaigns);
   const [selected, setSelected] = useState<Campaign | null>(null);
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [deliveries, setDeliveries] = useState<Delivery[]>([]);
+  const [discoveryRun, setDiscoveryRun] = useState<DiscoveryRun | null>(null);
   const [viewBucket, setViewBucket] = useState<"all" | SizeBucket>("all");
   const [promoteSel, setPromoteSel] = useState<Set<SizeBucket>>(new Set());
   const [report, setReport] = useState<SendReport | null>(null);
@@ -118,6 +144,7 @@ export default function OutreachManager({
   const [createDraft, setCreateDraft] = useState<CampaignMapChange | null>(null);
   const [detailDraft, setDetailDraft] = useState<CampaignMapChange | null>(null);
   const [offerDraft, setOfferDraft] = useState<{ discount_percent: string; message_variant: string } | null>(null);
+  const [releaseDraft, setReleaseDraft] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [analystForm, setAnalystForm] = useState({
@@ -133,11 +160,12 @@ export default function OutreachManager({
   }
 
   async function openCampaign(c: Campaign) {
-    setSelected(c); setLeads([]); setReport(null); setViewBucket("all"); setPromoteSel(new Set()); setDetailDraft(null); setOfferDraft(null);
+    setSelected(c); setLeads([]); setDeliveries([]); setDiscoveryRun(null); setReport(null); setViewBucket("all"); setPromoteSel(new Set()); setDetailDraft(null); setOfferDraft(null);
     const res = await fetch(`/api/admin/outreach/campaigns/${c.id}`);
     const data = await res.json();
     if (res.ok) {
-      setSelected(data.campaign); setLeads(data.leads);
+      setSelected(data.campaign); setLeads(data.leads); setDeliveries(data.deliveries ?? []); setDiscoveryRun(data.discoveryRun ?? null);
+      setReleaseDraft(data.campaign.release_at ? toDateTimeLocal(data.campaign.release_at) : "");
       setOfferDraft({ discount_percent: String(data.campaign.discount_percent ?? 10), message_variant: data.campaign.message_variant ?? "default" });
     } else setError(data.error || "failed to load campaign");
   }
@@ -145,7 +173,7 @@ export default function OutreachManager({
   // Deselect => Step 1 create mode (draw a new area). One control drives the
   // mode switch; the single map remounts via key={selected?.id ?? "new"}.
   function newCampaign() {
-    setSelected(null); setLeads([]); setReport(null);
+    setSelected(null); setLeads([]); setDiscoveryRun(null); setReport(null);
     setViewBucket("all"); setPromoteSel(new Set());
     setDetailDraft(null); setOfferDraft(null); setError(null);
     setCreateName(""); setCreateDraft(null);
@@ -214,10 +242,17 @@ export default function OutreachManager({
     if (!selected) return;
     setError(null); setBusy("discover");
     try {
-      const res = await fetch(`/api/admin/outreach/campaigns/${selected.id}/discover`, { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "discovery failed");
-      if (data.result && data.result.ran === false) setError(`Discovery no-op: ${data.result.reason} (set ANTHROPIC_API_KEY).`);
+      let complete = false;
+      while (!complete) {
+        const res = await fetch(`/api/admin/outreach/campaigns/${selected.id}/discover`, { method: "POST" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "discovery failed");
+        const run = data.run as DiscoveryRun;
+        setDiscoveryRun(run);
+        complete = run.status === "completed" || run.status === "failed";
+        if (run.status === "failed") throw new Error(run.last_error || "discovery failed");
+        if (!complete) await new Promise((resolve) => setTimeout(resolve, 750));
+      }
       await openCampaign(selected);
       await refreshCampaigns();
     } catch (e) { setError(e instanceof Error ? e.message : "discovery failed"); }
@@ -281,6 +316,37 @@ export default function OutreachManager({
       await openCampaign(selected);
       setReport(data.report);
     } catch (e) { setError(e instanceof Error ? e.message : "send failed"); }
+    finally { setBusy(null); }
+  }
+
+  async function scheduleRelease() {
+    if (!selected || !releaseDraft) return;
+    const release = new Date(releaseDraft);
+    if (!Number.isFinite(release.getTime()) || release.getTime() <= Date.now()) { setError("Choose a future release date and time."); return; }
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Chicago";
+    if (!confirm(`Schedule this campaign for ${release.toLocaleString()} (${timezone})? The exact verified active audience and approved offer will be recorded.`)) return;
+    setError(null); setBusy("schedule");
+    try {
+      const res = await fetch(`/api/admin/outreach/campaigns/${selected.id}/schedule`, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ release_at: release.toISOString(), timezone }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "schedule failed");
+      await refreshCampaigns(); await openCampaign(data.campaign);
+    } catch (e) { setError(e instanceof Error ? e.message : "schedule failed"); }
+    finally { setBusy(null); }
+  }
+
+  async function pauseRelease() {
+    if (!selected || !confirm("Pause this scheduled release? No campaign email will be released until you schedule it again.")) return;
+    setError(null); setBusy("pause");
+    try {
+      const res = await fetch(`/api/admin/outreach/campaigns/${selected.id}/schedule`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "pause failed");
+      await refreshCampaigns(); await openCampaign(data.campaign);
+    } catch (e) { setError(e instanceof Error ? e.message : "pause failed"); }
     finally { setBusy(null); }
   }
 
@@ -480,6 +546,9 @@ export default function OutreachManager({
           <div className="card">
             <h3>2 · Discover</h3>
             <p className="muted">Search public sources for churches within the radius, using only public general emails and youth-ministry signals. Discovered leads land staged (found, not yet in the send pipeline) and are auto-verified.</p>
+            {discoveryRun && <p className="hint" role="status">
+              {discoveryRun.status === "completed" ? (discoveryRun.last_error ? "Discovery complete with saved partial results" : "Discovery complete") : "Discovery in progress"}: round {discoveryRun.round_count} of {discoveryRun.max_rounds} · found {discoveryRun.found_count} · saved {discoveryRun.inserted_count} · already known/skipped {discoveryRun.skipped_count} · outside radius {discoveryRun.out_of_radius_count}
+            </p>}
             {canManage && (
               <button className="btn btn-primary" disabled={busy === "discover"} onClick={runDiscovery}>
                 {busy === "discover" ? "Discovering…" : "Run discovery"}</button>
@@ -586,18 +655,32 @@ export default function OutreachManager({
             </div>
           )}
 
-          {/* STEP 5 — Preview + send */}
+          {/* STEP 5 — Preview + schedule */}
           {canManage && (
             <div className="card">
-              <h3>5 · Preview + send</h3>
+              <h3>5 · Preview + schedule</h3>
               <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
                 <button className="btn btn-ghost" disabled={!!busy} onClick={() => send(false)}>
                   {busy === "send-dry" ? "Previewing…" : "Preview send (dry-run)"}</button>
-                <button className="btn btn-ghost" disabled={!!busy} onClick={() => send(true)} style={{ borderColor: "#c0392b", color: "#c0392b" }}>
-                  {busy === "send-live" ? "Sending…" : "Send live"}</button>
+              </div>
+              <div style={{ marginTop: 14, padding: "12px", borderRadius: 8, background: "#f6faff" }}>
+                <div className="row" style={{ gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
+                  <div className="field" style={{ margin: 0 }}>
+                    <label>Release date and time</label>
+                    <input type="datetime-local" value={releaseDraft} onChange={(e) => setReleaseDraft(e.target.value)} />
+                  </div>
+                  <button className="btn btn-primary" disabled={!releaseDraft || !!busy} onClick={scheduleRelease}>
+                    {busy === "schedule" ? "Scheduling…" : selected.status === "scheduled" ? "Reschedule campaign" : "Approve and schedule"}
+                  </button>
+                  {selected.status === "scheduled" && <button className="btn btn-ghost" disabled={!!busy} onClick={pauseRelease}>{busy === "pause" ? "Pausing…" : "Pause release"}</button>}
+                </div>
+                {selected.release_at && <p className="hint" style={{ marginBottom: 0 }}>
+                  <strong>{selected.status === "scheduled" ? "Next release" : "Last scheduled release"}:</strong> {new Date(selected.release_at).toLocaleString()} ({selected.release_timezone || "timezone not recorded"})
+                  {selected.schedule_snapshot?.recipient_count != null ? ` · ${selected.schedule_snapshot.recipient_count} approved recipients` : ""}
+                </p>}
               </div>
               <p className="hint" style={{ marginTop: 8 }}>
-                The Send live button alone does not put mail in inboxes. A real send also requires the three server env flags (OUTREACH_COPY_APPROVED, OUTREACH_LEGAL_APPROVED, OUTREACH_SEND_LIVE) to be set and the app redeployed; those are not editable from this page. Until then every run stays a dry-run preview, and only verified, promoted leads are ever eligible.
+                Scheduling records the exact verified, promoted audience, approved template, offer, date, time, timezone, and approver. The frequent worker releases only due scheduled campaigns. The three server approval flags remain the emergency master gate; when closed, a due campaign stays scheduled and no mail is sent.
               </p>
 
               {report && (
@@ -616,6 +699,29 @@ export default function OutreachManager({
                   </div>
                 </div>
               )}
+              <div className="card" style={{ marginTop: 14 }}>
+                <strong>Delivery tracking</strong>
+                <p className="muted" style={{ fontSize: 13 }}>
+                  accepted {deliveries.filter((d) => Boolean(d.sent_at)).length} · delivered {deliveries.filter((d) => d.status === "delivered").length} · delayed {deliveries.filter((d) => d.status === "delayed").length} · bounced {deliveries.filter((d) => d.status === "bounced").length} · complained {deliveries.filter((d) => d.status === "complained").length} · suppressed {deliveries.filter((d) => d.status === "suppressed").length} · failed {deliveries.filter((d) => d.status === "failed").length}
+                </p>
+                <div className="sim-scroll">
+                  <table className="table"><thead><tr><th>Church</th><th>To</th><th>Touch</th><th>Provider status</th><th>Updated</th><th>Message ID</th></tr></thead>
+                    <tbody>
+                      {deliveries.length === 0 && <tr><td colSpan={6} className="muted">No tracked deliveries for this campaign.</td></tr>}
+                      {deliveries.map((delivery) => {
+                        const lead = leads.find((item) => item.id === delivery.lead_id);
+                        return <tr key={delivery.id}>
+                          <td>{lead?.org_name ?? "Unknown"}</td><td>{lead?.contact_email ?? "Unknown"}</td><td>{delivery.touch}</td>
+                          <td><span className={deliveryStatusPill(delivery.status)}>{delivery.status}</span>{delivery.error ? <div className="muted" style={{ fontSize: 11 }}>{delivery.error}</div> : null}</td>
+                          <td>{delivery.last_event_at || delivery.delivered_at || delivery.sent_at ? new Date(delivery.last_event_at || delivery.delivered_at || delivery.sent_at || "").toLocaleString() : "—"}</td>
+                          <td className="mono" style={{ fontSize: 11 }}>{delivery.provider_message_id ?? "—"}</td>
+                        </tr>;
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="hint">Accepted means Resend accepted the API request. Delivered means Resend confirmed delivery to the recipient mail server.</p>
+              </div>
             </div>
           )}
         </>

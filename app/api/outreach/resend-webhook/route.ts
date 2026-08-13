@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { suppressByEmail, findLeadByContactEmail } from "@/lib/outreach/leads";
 import { recordActionItem } from "@/lib/actionItems";
+import { recordDeliveryEvent, type ResendDeliveryEvent } from "@/lib/outreach/deliveries";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,6 +35,7 @@ type EmailAddr = string | { email?: string; address?: string; name?: string };
 
 interface ResendEvent {
   type?: string;
+  created_at?: string;
   data?: {
     to?: EmailAddr[] | EmailAddr;
     email?: string;
@@ -167,7 +169,11 @@ export async function POST(req: Request) {
   const emails = recipients(event.data);
   let suppressed = 0;
   let replyFlagged = false;
+  let deliveryEvent: { duplicate: boolean; matched: boolean; status: string | null } | null = null;
   try {
+    if (event.type?.startsWith("email.") && event.type !== "email.received") {
+      deliveryEvent = await recordDeliveryEvent(id, event as ResendDeliveryEvent);
+    }
     if (event.type === "email.bounced") {
       const bounceType = event.data?.bounce?.type ?? "";
       // Only hard/permanent bounces suppress; soft/transient bounces retry.
@@ -184,5 +190,5 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "handler_error" }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, type: event.type, suppressed, replyFlagged });
+  return NextResponse.json({ ok: true, type: event.type, suppressed, replyFlagged, deliveryEvent });
 }

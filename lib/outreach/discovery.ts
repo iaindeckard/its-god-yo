@@ -4,6 +4,8 @@ import { insertDiscovered, type DiscoveredLead } from "./leads";
 import { verifyLeads } from "./verify";
 import { geocodeAddress } from "../geocode";
 import { haversineMiles, sizeBucket, updateCampaign, type Campaign } from "./campaigns";
+import { getSupabaseAdmin } from "../supabaseAdmin";
+import { discoveryErrorStatus, discoveryIsComplete, extractDiscoveryJson } from "./discovery-core";
 
 /**
  * Monthly discovery (spec §4). Calls the Claude API with the web-search tool and
@@ -48,18 +50,9 @@ function campaignPrompt(campaign: Campaign, target: number, exclude: string[]): 
   return `Find up to ${target} churches or youth organizations located within ${campaign.radius_miles} miles of ${campaign.center_label} that have an active youth/student ministry and a public general contact email. Follow every rule. For each, capture city and state, the general email, phone, website, a short youth_ministry_signal quoting what you found and where, the source URL(s), a confidence rating, and (only if publicly stated) estimated_attendance + attendance_source_url.${excludeLine}`;
 }
 
-interface AnthropicContentBlock { type: string; text?: string }
-interface AnthropicResponse { content?: AnthropicContentBlock[] }
-
-function extractJson(text: string): { leads: DiscoveredLead[] } | null {
-  // Tolerate a ```json fence or surrounding prose.
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
-  const candidate = fenced ?? text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1);
-  try {
-    const parsed = JSON.parse(candidate);
-    if (parsed && Array.isArray(parsed.leads)) return parsed as { leads: DiscoveredLead[] };
-  } catch { /* fall through */ }
-  return null;
+interface OpenAIResponse {
+  output_text?: string;
+  output?: Array<{ content?: Array<{ type?: string; text?: string }> }>;
 }
 
 export interface DiscoveryResult {
@@ -72,7 +65,7 @@ export interface DiscoveryResult {
 }
 
 function apiKey(): string | null {
-  return process.env.ANTHROPIC_API_KEY || process.env.OUTREACH_ANTHROPIC_KEY || null;
+  return process.env.OPENAI_API_KEY || null;
 }
 
 // Nominatim usage policy is <=1 req/s. Space out the per-lead geocodes (same
@@ -80,31 +73,53 @@ function apiKey(): string | null {
 const GEOCODE_THROTTLE_MS = 1100;
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-/** One Claude web-search discovery call. Returns parsed, minimally-valid leads
+/** One OpenAI web-search discovery call. Returns parsed, minimally-valid leads
  *  (or [] if the model's output couldn't be parsed). Throws on API error. */
 async function requestLeads(key: string, prompt: string): Promise<DiscoveredLead[]> {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 90_000);
+  const leadProperties = {
+    org_name: { type: "string" }, city: { type: "string" }, state: { type: "string" },
+    denomination_type: { type: ["string", "null"] }, contact_email: { type: "string" },
+    phone: { type: ["string", "null"] }, website: { type: ["string", "null"] },
+    youth_ministry_signal: { type: "string" }, source_urls: { type: "array", items: { type: "string" } },
+    discovery_confidence: { type: "string", enum: ["high", "medium", "low"] },
+    estimated_attendance: { type: ["integer", "null"] }, attendance_source_url: { type: ["string", "null"] },
+  };
+  let res: Response;
+  try {
+    res = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
-      "x-api-key": key,
-      "anthropic-version": "2023-06-01",
+      authorization: `Bearer ${key}`,
       "content-type": "application/json",
     },
+    signal: controller.signal,
     body: JSON.stringify({
-      model: OUTREACH.discoveryModel,
-      max_tokens: 8000,
-      system: DISCOVERY_SYSTEM,
-      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 12 }],
-      messages: [{ role: "user", content: prompt }],
+      model: OUTREACH.openaiDiscoveryModel,
+      store: false,
+      instructions: DISCOVERY_SYSTEM,
+      input: prompt,
+      tools: [{ type: "web_search", search_context_size: "medium" }],
+      text: { format: { type: "json_schema", name: "church_discovery", strict: true, schema: {
+        type: "object", additionalProperties: false, required: ["leads"], properties: {
+          leads: { type: "array", items: { type: "object", additionalProperties: false,
+            required: Object.keys(leadProperties), properties: leadProperties } },
+        },
+      } } },
     }),
-  });
+    });
+  } finally {
+    clearTimeout(timer);
+  }
   if (!res.ok) {
     const detail = (await res.text()).slice(0, 400);
-    throw new Error(`anthropic_${res.status}: ${detail}`);
+    throw new Error(`openai_${res.status}: ${detail}`);
   }
-  const data = (await res.json()) as AnthropicResponse;
-  const text = (data.content ?? []).filter((b) => b.type === "text").map((b) => b.text ?? "").join("\n");
-  const parsed = extractJson(text);
+  const data = (await res.json()) as OpenAIResponse;
+  const text = data.output_text ?? (data.output ?? []).flatMap((item) => item.content ?? [])
+    .filter((item) => item.type === "output_text").map((item) => item.text ?? "").join("\n");
+  const parsed = extractDiscoveryJson(text);
   if (!parsed) return [];
   return parsed.leads.filter((l) => l && l.org_name && l.contact_email);
 }
@@ -114,7 +129,7 @@ async function requestLeads(key: string, prompt: string): Promise<DiscoveredLead
 export async function runDiscovery(): Promise<DiscoveryResult> {
   const key = apiKey();
   if (!key) {
-    console.log("[outreach-discovery] ANTHROPIC_API_KEY not set — discovery skipped (no-op).");
+    console.log("[outreach-discovery] OPENAI_API_KEY not set — discovery skipped (no-op).");
     return { ran: false, reason: "no_api_key", found: 0, inserted: 0, skipped: 0, leads: [] };
   }
   const leads = await requestLeads(key, userPrompt());
@@ -133,84 +148,93 @@ export interface CampaignDiscoveryResult extends DiscoveryResult {
   rounds: number;
 }
 
-/**
- * Campaign-scoped discovery (Phase 1). Loops the web-search call within the
- * campaign's radius until the target count is reached or two consecutive rounds
- * add nothing new — this is how a large area yields a large pool (delivered in
- * batches) while a small radius naturally returns fewer. Each lead is geocoded
- * (best-effort, keyless Nominatim) and, when we can positively place it OUTSIDE
- * the radius, dropped; a lead we can't geocode is kept (the prompt already scoped
- * it to the area, and we can't disprove membership). Attendance -> size_bucket.
- * Leads are inserted 'staged' (never auto-send). Cross-round + cross-campaign
- * de-dup is the existing unique(lower(email)) index (Option A: one lead, one
- * campaign).
- */
-export async function runCampaignDiscovery(campaign: Campaign): Promise<CampaignDiscoveryResult> {
-  const base = { campaign_id: campaign.id, out_of_radius: 0, rounds: 0 };
+export interface DiscoveryRun {
+  id: string; campaign_id: string; status: "running" | "processing" | "completed" | "failed";
+  provider: string; target_count: number; max_rounds: number; round_count: number;
+  found_count: number; inserted_count: number; skipped_count: number; out_of_radius_count: number;
+  empty_streak: number; discovered_names: string[]; last_error: string | null;
+  started_at: string; heartbeat_at: string; completed_at: string | null;
+}
+
+const RUNS_TABLE = "outreach_discovery_runs";
+const MAX_ROUNDS = 8;
+const STALE_PROCESSING_MS = 2 * 60 * 1000;
+
+export async function latestDiscoveryRun(campaignId: string): Promise<DiscoveryRun | null> {
+  const { data, error } = await getSupabaseAdmin().from(RUNS_TABLE).select("*")
+    .eq("campaign_id", campaignId).order("started_at", { ascending: false }).limit(1).maybeSingle();
+  if (error) throw new Error(`discovery_run_lookup_failed: ${error.message}`);
+  return data as DiscoveryRun | null;
+}
+
+async function createDiscoveryRun(campaign: Campaign): Promise<DiscoveryRun> {
+  const admin = getSupabaseAdmin();
+  const prior = await latestDiscoveryRun(campaign.id);
+  if (prior && ["running", "processing"].includes(prior.status)) return prior;
+  const { data, error } = await admin.from(RUNS_TABLE).insert({
+    campaign_id: campaign.id, target_count: OUTREACH.discoveryTarget, max_rounds: MAX_ROUNDS,
+  }).select("*").single();
+  if (error) throw new Error(`discovery_run_create_failed: ${error.message}`);
+  await updateCampaign(campaign.id, { status: "discovering" });
+  return data as DiscoveryRun;
+}
+
+async function patchRun(id: string, patch: Record<string, unknown>): Promise<DiscoveryRun> {
+  const { data, error } = await getSupabaseAdmin().from(RUNS_TABLE)
+    .update({ ...patch, heartbeat_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq("id", id).select("*").single();
+  if (error) throw new Error(`discovery_run_update_failed: ${error.message}`);
+  return data as DiscoveryRun;
+}
+
+/** Process exactly one durable discovery round. The browser can call this again
+ * until complete; every accepted lead is persisted before the round returns. */
+export async function continueCampaignDiscovery(campaign: Campaign): Promise<DiscoveryRun> {
   const key = apiKey();
-  if (!key) {
-    console.log("[outreach-discovery] ANTHROPIC_API_KEY not set — campaign discovery skipped (no-op).");
-    return { ran: false, reason: "no_api_key", found: 0, inserted: 0, skipped: 0, leads: [], ...base };
-  }
+  if (!key) throw new Error("OPENAI_API_KEY is not configured");
+  let run = await createDiscoveryRun(campaign);
+  if (["completed", "failed"].includes(run.status)) return run;
+  if (run.status === "processing" && Date.now() - new Date(run.heartbeat_at).getTime() < STALE_PROCESSING_MS) return run;
 
-  const target = OUTREACH.discoveryTarget;
+  run = await patchRun(run.id, { status: "processing", last_error: null });
   const center = campaign.center_lat != null && campaign.center_lng != null
-    ? { lat: campaign.center_lat, lng: campaign.center_lng }
-    : null;
-
-  await updateCampaign(campaign.id, { status: "discovering" }).catch(() => {});
-
-  const seen = new Set<string>();      // lowercased emails seen this run (loop de-dup)
-  const kept: DiscoveredLead[] = [];   // in-radius, enriched
-  const excludeNames: string[] = [];   // org names to tell the model to skip
-  let outOfRadius = 0;
-  let rounds = 0;
-  let emptyStreak = 0;
-  // Raised 6 -> 8 alongside the target bump (15 -> 35): a larger target needs more
-  // rounds to reach. The emptyStreak<2 guard still stops early when an area is
-  // exhausted, so a small area (e.g. New Iberia) won't waste rounds inventing
-  // leads. NOTE: leads are only persisted AFTER this loop (insertDiscovered), so
-  // the whole loop + geocode + auto-verify must finish inside the route's
-  // maxDuration or the run is lost — hence maxDuration was also raised (see route).
-  const MAX_ROUNDS = 8;
-
-  while (kept.length < target && rounds < MAX_ROUNDS && emptyStreak < 2) {
-    rounds++;
-    const batch = await requestLeads(key, campaignPrompt(campaign, target - kept.length, excludeNames));
-    let addedThisRound = 0;
-    for (const l of batch) {
-      const email = l.contact_email?.trim().toLowerCase();
-      if (!email || seen.has(email)) continue;
-      seen.add(email);
-      excludeNames.push(l.org_name);
-
-      // Best-effort geocode of the church's city/state for map plotting + radius
-      // membership. A miss leaves coords null and the lead is kept. Throttled to
-      // respect Nominatim's <=1 req/s policy.
-      const coords = await geocodeAddress({ city: l.city, state: l.state, country: "United States" });
+    ? { lat: campaign.center_lat, lng: campaign.center_lng } : null;
+  try {
+    const remaining = Math.max(1, run.target_count - run.found_count);
+    const batch = await requestLeads(key, campaignPrompt(campaign, Math.min(5, remaining), run.discovered_names));
+    let found = run.found_count, inserted = run.inserted_count, skipped = run.skipped_count;
+    let outOfRadius = run.out_of_radius_count, added = 0;
+    const names = [...run.discovered_names];
+    for (const lead of batch) {
+      if (names.some((name) => name.toLowerCase() === lead.org_name.toLowerCase())) { skipped++; continue; }
+      names.push(lead.org_name);
+      const coords = await geocodeAddress({ city: lead.city, state: lead.state, country: "United States" });
       await sleep(GEOCODE_THROTTLE_MS);
-      if (coords && center && haversineMiles(center, coords) > Number(campaign.radius_miles)) {
-        outOfRadius++;
-        continue; // positively outside the radius -> drop
-      }
-      kept.push({
-        ...l,
-        latitude: coords?.lat ?? null,
-        longitude: coords?.lng ?? null,
-        size_bucket: sizeBucket(l.estimated_attendance),
-      });
-      addedThisRound++;
+      if (coords && center && haversineMiles(center, coords) > Number(campaign.radius_miles)) { outOfRadius++; continue; }
+      const enriched = { ...lead, latitude: coords?.lat ?? null, longitude: coords?.lng ?? null,
+        size_bucket: sizeBucket(lead.estimated_attendance) };
+      const saved = await insertDiscovered([enriched], campaign.id);
+      inserted += saved.inserted; skipped += saved.skipped; found++; added++;
+      await patchRun(run.id, { found_count: found, inserted_count: inserted, skipped_count: skipped,
+        out_of_radius_count: outOfRadius, discovered_names: names });
+      if (saved.insertedIds.length) await verifyLeads({ ids: saved.insertedIds }).catch(() => {});
     }
-    emptyStreak = addedThisRound === 0 ? emptyStreak + 1 : 0;
+    const round = run.round_count + 1;
+    const emptyStreak = added === 0 ? run.empty_streak + 1 : 0;
+    const done = discoveryIsComplete({ found, target: run.target_count, round, maxRounds: run.max_rounds, emptyStreak });
+    run = await patchRun(run.id, {
+      status: done ? "completed" : "running", round_count: round, found_count: found,
+      inserted_count: inserted, skipped_count: skipped, out_of_radius_count: outOfRadius,
+      empty_streak: emptyStreak, discovered_names: names, completed_at: done ? new Date().toISOString() : null,
+    });
+    if (done) await updateCampaign(campaign.id, { status: "ready" });
+    return run;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const status = discoveryErrorStatus(run.found_count);
+    run = await patchRun(run.id, { status, last_error: message.slice(0, 500), completed_at: new Date().toISOString() });
+    await updateCampaign(campaign.id, { status: "ready" }).catch(() => {});
+    if (status === "completed") return run;
+    throw error;
   }
-
-  const { inserted, skipped } = await insertDiscovered(kept, campaign.id);
-  // Auto-verify the just-staged campaign leads (best-effort) so they arrive with a
-  // verdict; any that can't be confirmed stay 'unverified' and the send gate holds
-  // them until an admin re-verifies or overrides.
-  await verifyLeads({ campaignId: campaign.id, onlyUnverified: true }).catch((e) => {
-    console.error("[outreach-discovery] campaign verify pass failed (leads remain unverified):", e instanceof Error ? e.message : e);
-  });
-  await updateCampaign(campaign.id, { status: "ready" }).catch(() => {});
-  return { ran: true, found: kept.length, inserted, skipped, leads: kept, ...base, out_of_radius: outOfRadius, rounds };
 }

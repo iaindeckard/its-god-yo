@@ -105,6 +105,7 @@ export async function GET(req: Request) {
           cap: {
             kind: "charge",
             bt,
+            livemode: ch.livemode,
             originalAmountCents: ch.amount ?? null,
             originalCurrency: ch.currency ?? null,
             chargeId: ch.id,
@@ -126,6 +127,7 @@ export async function GET(req: Request) {
           cap: {
             kind: "refund",
             bt,
+            livemode: (rf as unknown as { livemode?: boolean }).livemode ?? null, // Refund carries livemode in JSON; SDK type omits it
             originalAmountCents: typeof rf.amount === "number" ? -rf.amount : null, // signed to match settled
             originalCurrency: rf.currency ?? null,
             chargeId: idOf((rf as unknown as { charge?: unknown }).charge),
@@ -148,6 +150,7 @@ export async function GET(req: Request) {
           cap: {
             kind: "dispute",
             bt,
+            livemode: dp.livemode,
             originalAmountCents: null,
             originalCurrency: bt.currency ?? null,
             chargeId: idOf((dp as unknown as { charge?: unknown }).charge),

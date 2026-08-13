@@ -4,19 +4,17 @@ import "server-only";
  * Church-outreach agent — shared config + the send gate.
  * Spec: IGY-Church-Outreach-Agent-Spec-v1-READY-CORRECTED.md.
  *
- * SENDING IDENTITY (Iain, 2026-07-27): send as hello@outreach.itsgodyo.com (a
- * dedicated subdomain, so cold-outreach reputation is isolated from the root
- * product domain), Reply-To to Iain's Gmail (he reads every reply personally,
- * §7.4). Provider is Resend, reusing the RESEND_API_KEY already used by
- * lib/sponsorInquiry.ts — no second email vendor.
+ * SENDING IDENTITY (Iain, 2026-08-12): send as hello@itsgodyo.com. Reply-To is
+ * Iain's Gmail (he reads every reply personally, §7.4). Provider is Resend,
+ * reusing the RESEND_API_KEY already used by lib/sponsorInquiry.ts — no second
+ * email vendor.
  */
 
 export const OUTREACH = {
-  from: process.env.OUTREACH_FROM || "It's God, Yo <hello@outreach.itsgodyo.com>",
+  from: process.env.OUTREACH_FROM || "It's God, Yo <hello@itsgodyo.com>",
   replyTo: process.env.OUTREACH_REPLY_TO || "iaindeckard@gmail.com",
-  // Where the one-click unsubscribe route lives (this Next app). The From
-  // *domain* is outreach.itsgodyo.com, but the unsub link just needs to be an
-  // https URL we control and serve.
+  // Where the one-click unsubscribe route lives (this Next app). The unsubscribe
+  // link only needs to be an https URL we control and serve.
   appUrl: (process.env.OUTREACH_APP_URL || "https://itsgodyo.com").replace(/\/$/, ""),
   // Legally-required physical address in every commercial email (§2). Pulled
   // from IGY's own ToS/privacy footer — keep in sync with those pages.
@@ -26,6 +24,7 @@ export const OUTREACH = {
   promoPrefix: process.env.OUTREACH_PROMO_PREFIX || "IGY",
   // Discovery (§4)
   discoveryModel: process.env.OUTREACH_DISCOVERY_MODEL || "claude-sonnet-5",
+  openaiDiscoveryModel: process.env.OUTREACH_OPENAI_MODEL || "gpt-5-mini",
   geography: process.env.OUTREACH_GEOGRAPHY || "the Wichita, Kansas metro area",
   discoveryTarget: Number(process.env.OUTREACH_DISCOVERY_TARGET_COUNT || 35),
 } as const;
