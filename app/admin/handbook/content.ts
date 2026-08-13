@@ -251,6 +251,14 @@ export const PARTS: Part[] = [
         ],
       },
       {
+        id: "payment-ledger",
+        title: "The payment ledger and its safety net",
+        blocks: [
+          { type: "prose", text: "Every settled charge, refund, and dispute is mirrored into one subscription_payments row keyed by its Stripe balance transaction id. Two writers fill it: the Stripe webhook (live, event-driven) and a daily reconciliation cron (reconcile-payments) that re-lists Stripe and backfills anything the webhook missed. The cron is the durability guarantee. A webhook capture that fails is swallowed on purpose so it can never break billing, and the cron catches the gap the next day, then emails (and sends a Tier 3 SMS) if a payment stays missing beyond the grace window." },
+          { type: "callout", kind: "info", title: "livemode comes from the Stripe object, never the balance transaction", text: "The ledger is live-only, so test-mode settlements are excluded and test artifacts never count as revenue. That test/live signal has to be read from the source object (the charge, refund, or dispute) or the webhook event, because Stripe balance_transaction objects carry no livemode field. On 2026-08-13 a missing refund was traced to a guard that read balance_transaction.livemode (always undefined), which silently skipped every capture in both writers. If you ever touch this path, gate on the source object's livemode, not the balance transaction." },
+        ],
+      },
+      {
         id: "purchases-enabled",
         title: "PURCHASES_ENABLED: the billing kill-switch",
         blocks: [

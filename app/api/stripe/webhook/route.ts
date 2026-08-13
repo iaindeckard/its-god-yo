@@ -217,6 +217,7 @@ export async function POST(req: Request) {
     await recordPayment({
       kind: "charge",
       bt,
+      livemode: ch.livemode,
       originalAmountCents: ch.amount ?? null,
       originalCurrency: ch.currency ?? null,
       chargeId: ch.id,
@@ -235,7 +236,13 @@ export async function POST(req: Request) {
   // rate (negative amount). Record each so net = SUM(settled_amount_cents); never
   // derive a refund by subtracting the original presentment amount.
   const captureRefunds = async (charge: Stripe.Charge) => {
-    const refunds = (charge.refunds as unknown as { data?: Stripe.Refund[] } | null)?.data ?? [];
+    // The Charge in a charge.refunded event does NOT carry an expanded `refunds` list
+    // in current API versions (refunds must be expanded/fetched), so reading
+    // charge.refunds.data would loop over nothing and capture zero refunds. List them
+    // explicitly. The reconcile cron is still the durability backstop, but this keeps
+    // live refund capture working. Idempotent on balance_transaction_id either way.
+    const refunds: Stripe.Refund[] = [];
+    for await (const r of stripe.refunds.list({ charge: charge.id, limit: 100 })) refunds.push(r);
     const customerId = idOf((charge as unknown as { customer?: unknown }).customer);
     const invoiceId = idOf((charge as unknown as { invoice?: unknown }).invoice);
     const piId = idOf((charge as unknown as { payment_intent?: unknown }).payment_intent);
@@ -246,6 +253,7 @@ export async function POST(req: Request) {
       await recordPayment({
         kind: "refund",
         bt,
+        livemode: charge.livemode,
         originalAmountCents: typeof r.amount === "number" ? -r.amount : null, // signed to match settled
         originalCurrency: r.currency ?? charge.currency ?? null,
         chargeId: charge.id,
@@ -271,6 +279,7 @@ export async function POST(req: Request) {
       await recordPayment({
         kind: "dispute",
         bt,
+        livemode: dispute.livemode,
         originalAmountCents: null,
         originalCurrency: bt.currency ?? null,
         chargeId,

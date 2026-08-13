@@ -30,6 +30,10 @@ export const tsIso = (unix: number | null | undefined): string | null =>
 export interface PaymentCapture {
   kind: PaymentKind;
   bt: Stripe.BalanceTransaction | null;
+  // Stripe's test/live signal, taken from the SOURCE object (charge/refund/dispute)
+  // or the webhook event — NOT the balance transaction, which carries no `livemode`
+  // field (reading bt.livemode yields undefined and silently drops every capture).
+  livemode: boolean | null;
   originalAmountCents: number | null;
   originalCurrency: string | null;
   chargeId: string | null;
@@ -47,10 +51,12 @@ export interface PaymentCapture {
 export function buildPaymentRow(p: PaymentCapture, bt: Stripe.BalanceTransaction) {
   return {
     business_unit: "igy",
-    // Stripe's own test/live signal, stamped from the balance transaction so test
-    // artifacts (e.g. test clocks) can never silently count as revenue. The DEI
-    // ETL / rollup counts only livemode=true. (Migration 20260806000001.)
-    livemode: (bt as unknown as { livemode: boolean }).livemode,
+    // Stripe's own test/live signal, taken from the source object (see PaymentCapture).
+    // Balance transactions have no `livemode`, so it must be threaded in by the caller.
+    // Indeterminate (null) is treated as live so a real payment is never dropped; only
+    // an explicit test-mode signal is excluded (see the guard in upsertSubscriptionPayment).
+    // The DEI ETL / rollup counts only livemode=true. (Migration 20260806000001.)
+    livemode: p.livemode !== false,
     kind: p.kind,
     balance_transaction_id: bt.id,
     stripe_charge_id: p.chargeId,
@@ -95,7 +101,12 @@ export async function upsertSubscriptionPayment(
   // so this single gate keeps subscription_payments structurally free of test
   // artifacts. Previously test rows were inserted and merely excluded downstream
   // (the DEI ETL/rollup counts livemode=true only); this stops them existing at all.
-  if ((bt as unknown as { livemode?: boolean }).livemode !== true) {
+  //
+  // livemode comes from the SOURCE object (p.livemode), never bt.livemode — balance
+  // transactions carry no livemode field, so the old bt.livemode!==true check skipped
+  // EVERY payment (undefined!==true). Skip only on an EXPLICIT test signal; an
+  // indeterminate (null) livemode fails open to capture so a real payment is never lost.
+  if (p.livemode === false) {
     console.warn(`[subscription_payments] skipped test-mode (livemode=false) ${p.kind} bt=${bt.id}`);
     return { inserted: false };
   }
