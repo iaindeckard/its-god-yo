@@ -1,4 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// `server-only` is a Next.js import-boundary marker whose default Node entry
+// intentionally throws outside React's server condition. The unit under test is
+// server code, so mock only that marker; all attribution logic remains real.
+vi.mock("server-only", () => ({}));
+
 import {
   outreachAttributionToken,
   readOutreachAttributionCookie,
