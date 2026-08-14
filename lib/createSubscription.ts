@@ -116,6 +116,10 @@ export async function createSubscriptionForPendingSignup(pendingSignupId: string
       plan_key: ps.plan_key ?? "",
       // Church group enrollment attribution (Phase 1). Empty for organic signups.
       cornerstone_partner_id: ps.cornerstone_partner_id ?? "",
+      // Growth Engine Phase 1. This opaque server-issued UUID is enough for the
+      // webhook/reconciliation path to recover lead/campaign/touch from IGY's DB;
+      // no prospect PII is written to Stripe metadata.
+      outreach_attribution_session_id: ps.outreach_attribution_session_id ?? "",
     },
   };
 
