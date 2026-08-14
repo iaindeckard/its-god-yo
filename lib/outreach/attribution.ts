@@ -5,6 +5,7 @@ import { OUTREACH } from "./config";
 
 export const OUTREACH_ATTR_COOKIE = "igy_outreach_attr";
 export const OUTREACH_ATTR_COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
+export const OUTREACH_LINK_MAX_AGE = 60 * 60 * 24 * 45; // 45 days; touch 2 gets a fresh link
 
 export type OutreachTouch = 1 | 2;
 export type OutreachLanguage = "en" | "es";
@@ -21,20 +22,26 @@ function attributionSecret(): string | null {
     || null;
 }
 
-function tokenMessage(leadId: string, touch: OutreachTouch, language: OutreachLanguage): string {
-  return `v1:${leadId}:${touch}:${language}`;
+function tokenMessage(
+  leadId: string,
+  touch: OutreachTouch,
+  language: OutreachLanguage,
+  expiresUnix: number,
+): string {
+  return `v1:${leadId}:${touch}:${language}:${expiresUnix}`;
 }
 
 export function outreachAttributionToken(
   leadId: string,
   touch: OutreachTouch,
   language: OutreachLanguage = "en",
+  expiresUnix = Math.floor(Date.now() / 1000) + OUTREACH_LINK_MAX_AGE,
 ): string {
   const secret = attributionSecret();
   if (!secret) return "no-secret-set"; // dry-run only; verifier rejects it
   return crypto
     .createHmac("sha256", secret)
-    .update(tokenMessage(leadId, touch, language))
+    .update(tokenMessage(leadId, touch, language, expiresUnix))
     .digest("hex")
     .slice(0, 40);
 }
@@ -43,10 +50,16 @@ export function verifyOutreachAttributionToken(
   leadId: string,
   touch: OutreachTouch,
   language: OutreachLanguage,
+  expiresUnix: number,
   token: string,
+  nowUnix = Math.floor(Date.now() / 1000),
 ): boolean {
   if (!UUID_RE.test(leadId)) return false;
-  const expected = outreachAttributionToken(leadId, touch, language);
+  if (!Number.isSafeInteger(expiresUnix) || expiresUnix <= nowUnix) return false;
+  // Reject signatures with an implausibly distant expiry too. This makes the
+  // maximum validity a server policy rather than something the URL can extend.
+  if (expiresUnix > nowUnix + OUTREACH_LINK_MAX_AGE + 60) return false;
+  const expected = outreachAttributionToken(leadId, touch, language, expiresUnix);
   if (expected === "no-secret-set") return false;
   const a = Buffer.from(expected);
   const b = Buffer.from(token || "");
@@ -58,11 +71,13 @@ export function outreachEntryUrl(
   touch: OutreachTouch,
   language: OutreachLanguage = "en",
 ): string {
+  const expiresUnix = Math.floor(Date.now() / 1000) + OUTREACH_LINK_MAX_AGE;
   const url = new URL("/outreach/r", OUTREACH.appUrl);
   url.searchParams.set("lead", leadId);
   url.searchParams.set("touch", String(touch));
   url.searchParams.set("lang", language);
-  url.searchParams.set("t", outreachAttributionToken(leadId, touch, language));
+  url.searchParams.set("exp", String(expiresUnix));
+  url.searchParams.set("t", outreachAttributionToken(leadId, touch, language, expiresUnix));
   return url.toString();
 }
 
