@@ -4,6 +4,7 @@ import { OUTREACH } from "./config";
 import { SPANISH_ENABLED } from "../flags";
 import type { OutreachLead } from "./leads";
 import { resolveVariant, clampDiscountPercent, type MessageVariant } from "./templates";
+import { outreachEntryUrl } from "./attribution";
 
 /**
  * One-click unsubscribe token. HMAC over the lead id so the public unsubscribe
@@ -84,6 +85,10 @@ export function buildEmail(lead: OutreachLead, variant: MessageVariant = "defaul
   const org = lead.org_name;
   const link = unsubUrl(lead.id);
   const site = OUTREACH.appUrl;
+  // Campaign leads use a trusted signed entry URL. The visible label stays the
+  // ordinary site URL and the visitor still lands on the ordinary homepage; this
+  // changes attribution only, never the marketing claim or signup experience.
+  const entry = lead.campaign_id ? outreachEntryUrl(lead.id, 1, "en") : site;
   // Campaign-specific personal note (empty for null-campaign / unlisted campaigns).
   // Trailing space so it flows straight into the generic transition sentence.
   const personalIntro = (lead.campaign_id && CAMPAIGN_INTRO[lead.campaign_id]) ? `${CAMPAIGN_INTRO[lead.campaign_id]} ` : "";
@@ -113,7 +118,7 @@ export function buildEmail(lead: OutreachLead, variant: MessageVariant = "defaul
 
 I'm Iain, founder of It's God, Yo!, a daily Scripture text devotional built for teens, ${SPANISH_ENABLED ? "in English (KJV) and Spanish (Reina-Valera 1909)" : "in English (KJV)"}. One verse a day, rewritten in their language, real slang they use today so they actually understand it. There's always a link back to the full KJV text too. And thanks to a proprietary system, the slang is never stale.
 
-${personalIntro}${org} has an active youth ministry, and I thought this might be useful for the students you're already working with. You can see how it works and sign up at ${site}.
+${personalIntro}${org} has an active youth ministry, and I thought this might be useful for the students you're already working with. You can see how it works and sign up at ${entry}.
 
 No pressure here. Share it if it's a fit, ignore it if it's not. If you'd rather not hear from us again, the link below removes ${org} for good.
 
@@ -131,7 +136,7 @@ Unsubscribe (one click): ${link}`;
 `<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:#1a1a1a;max-width:600px;margin:0 auto;">
   <p>Hi ${esc(org)} team,</p>
   <p>I'm Iain, founder of <strong>It's God, Yo!</strong>, a daily Scripture text devotional built for teens, ${SPANISH_ENABLED ? "in English (KJV) and Spanish (Reina-Valera 1909)" : "in English (KJV)"}. One verse a day, rewritten in their language, real slang they use today so they actually understand it. There's always a link back to the full KJV text too. And thanks to a proprietary system, the slang is never stale.</p>
-  <p>${personalIntro}${esc(org)} has an active youth ministry, and I thought this might be useful for the students you're already working with. You can see how it works and sign up at <a href="${site}" style="color:#00ABBC;">${esc(site.replace(/^https?:\/\//, ""))}</a>.</p>
+  <p>${personalIntro}${esc(org)} has an active youth ministry, and I thought this might be useful for the students you're already working with. You can see how it works and sign up at <a href="${esc(entry)}" style="color:#00ABBC;">${esc(site.replace(/^https?:\/\//, ""))}</a>.</p>
   <p>No pressure here. Share it if it's a fit, ignore it if it's not. If you'd rather not hear from us again, the link below removes ${esc(org)} for good.</p>
   <p style="margin-bottom:2px;">Thanks for helping us get the Word of God to young people every day.</p>
   <p style="margin-bottom:2px;"><strong>Iain Deckard</strong> · It's God, Yo!</p>
@@ -177,6 +182,7 @@ export function buildFollowupEmail(
   const org = lead.org_name;
   const link = unsubUrl(lead.id);
   const site = OUTREACH.appUrl;
+  const entry = lead.campaign_id ? outreachEntryUrl(lead.id, 2, "en") : site;
   // Footer locality (mirrors email 1): city-based label, and the "local too" +
   // "local small business" claims render ONLY on a real local tie (a campaign with
   // a CAMPAIGN_INTRO note, or the Wichita-home KS fallback); dropped otherwise.
@@ -198,7 +204,7 @@ I reached out a few weeks back about It's God, Yo!, our daily Scripture text for
 
 If it might be a fit for the students at ${org}, here's a code for ${pct}% off any plan, on us:
 
-${promoCode} gets you ${pct}% off at ${site}
+${promoCode} gets you ${pct}% off at ${entry}
 
 Same as before: share it if it helps, ignore it if it's not for you. This is the last you'll hear from us unless you reach out. The link below removes ${org} for good.
 
@@ -218,7 +224,7 @@ Unsubscribe (one click): ${link}`;
   <p>I reached out a few weeks back about <strong>It's God, Yo!</strong>, our daily Scripture text for teens (${SPANISH_ENABLED ? "English KJV and Spanish Reina-Valera 1909" : "English KJV"}, rewritten into the slang they actually read). No worries if it slipped by.</p>
   <p>If it might be a fit for the students at ${esc(org)}, here's a code for <strong>${pct}% off</strong> any plan, on us:</p>
   <p style="background:#f4f7f7;border:1px solid #d7e2e2;border-radius:8px;padding:12px 16px;font-size:16px;">
-    <strong>${esc(promoCode)}</strong> gets you ${pct}% off at <a href="${site}" style="color:#00ABBC;">${esc(site.replace(/^https?:\/\//, ""))}</a>
+    <strong>${esc(promoCode)}</strong> gets you ${pct}% off at <a href="${esc(entry)}" style="color:#00ABBC;">${esc(site.replace(/^https?:\/\//, ""))}</a>
   </p>
   <p>Same as before: share it if it helps, ignore it if it's not for you. This is the last you'll hear from us unless you reach out. The link below removes ${esc(org)} for good.</p>
   <p style="margin-bottom:2px;">Thanks for everything you pour into young people.</p>
