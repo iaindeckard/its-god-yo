@@ -49,16 +49,20 @@ create index if not exists idx_pending_signups_outreach_attr_session
 -- admitted only when a promotion-code id belongs to exactly one campaign lead.
 create or replace view public.v_outreach_payment_attribution
 with (security_invoker = true) as
-with unique_promo_leads as (
-  select
-    promo_promotion_code_id,
-    min(id) as lead_id,
-    min(campaign_id) as campaign_id
+with unique_promo_ids as (
+  select promo_promotion_code_id
   from public.igy_outreach_leads
   where promo_promotion_code_id is not null
     and campaign_id is not null
   group by promo_promotion_code_id
   having count(*) = 1
+),
+unique_promo_leads as (
+  select l.promo_promotion_code_id, l.id as lead_id, l.campaign_id
+  from public.igy_outreach_leads l
+  join unique_promo_ids u
+    on u.promo_promotion_code_id = l.promo_promotion_code_id
+  where l.campaign_id is not null
 ),
 direct_payments as (
   select
