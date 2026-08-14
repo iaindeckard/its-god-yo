@@ -45,59 +45,73 @@ create index if not exists idx_pending_signups_outreach_attr_session
 -- this view only answers WHY a settled row is credited to an outreach campaign.
 -- Signed settled_net_cents preserves fees/refunds/chargebacks exactly as the
 -- payment ledger records them. Direct attribution has precedence over promo-code
--- attribution so the same payment can never be counted twice.
+-- attribution so the same payment can never be counted twice. Strong evidence is
+-- admitted only when a promotion-code id belongs to exactly one campaign lead.
 create or replace view public.v_outreach_payment_attribution
 with (security_invoker = true) as
-select
-  sp.id as payment_id,
-  ps.id as pending_signup_id,
-  s.id as attribution_session_id,
-  s.lead_id,
-  s.campaign_id,
-  s.touch,
-  s.language,
-  'direct'::text as confidence,
-  sp.stripe_subscription_id,
-  sp.stripe_created_at,
-  sp.kind,
-  sp.status,
-  sp.settled_currency,
-  sp.settled_net_cents
-from public.subscription_payments sp
-join public.pending_signups ps
-  on ps.stripe_subscription_id = sp.stripe_subscription_id
-join public.outreach_attribution_sessions s
-  on s.id = ps.outreach_attribution_session_id
-where sp.business_unit = 'igy'
-  and sp.livemode = true
-
+with unique_promo_leads as (
+  select
+    promo_promotion_code_id,
+    min(id) as lead_id,
+    min(campaign_id) as campaign_id
+  from public.igy_outreach_leads
+  where promo_promotion_code_id is not null
+    and campaign_id is not null
+  group by promo_promotion_code_id
+  having count(*) = 1
+),
+direct_payments as (
+  select
+    sp.id as payment_id,
+    ps.id as pending_signup_id,
+    s.id as attribution_session_id,
+    s.lead_id,
+    s.campaign_id,
+    s.touch,
+    s.language,
+    'direct'::text as confidence,
+    sp.stripe_subscription_id,
+    sp.stripe_created_at,
+    sp.kind,
+    sp.status,
+    sp.settled_currency,
+    sp.settled_net_cents
+  from public.subscription_payments sp
+  join public.pending_signups ps
+    on ps.stripe_subscription_id = sp.stripe_subscription_id
+  join public.outreach_attribution_sessions s
+    on s.id = ps.outreach_attribution_session_id
+  where sp.business_unit = 'igy'
+    and sp.livemode = true
+),
+strong_payments as (
+  select
+    sp.id as payment_id,
+    ps.id as pending_signup_id,
+    null::uuid as attribution_session_id,
+    upl.lead_id,
+    upl.campaign_id,
+    null::smallint as touch,
+    ps.language,
+    'strong'::text as confidence,
+    sp.stripe_subscription_id,
+    sp.stripe_created_at,
+    sp.kind,
+    sp.status,
+    sp.settled_currency,
+    sp.settled_net_cents
+  from public.subscription_payments sp
+  join public.pending_signups ps
+    on ps.stripe_subscription_id = sp.stripe_subscription_id
+  join unique_promo_leads upl
+    on upl.promo_promotion_code_id = ps.promo_promotion_code_id
+  where sp.business_unit = 'igy'
+    and sp.livemode = true
+    and ps.outreach_attribution_session_id is null
+)
+select * from direct_payments
 union all
-
-select
-  sp.id as payment_id,
-  ps.id as pending_signup_id,
-  null::uuid as attribution_session_id,
-  l.id as lead_id,
-  l.campaign_id,
-  null::smallint as touch,
-  ps.language,
-  'strong'::text as confidence,
-  sp.stripe_subscription_id,
-  sp.stripe_created_at,
-  sp.kind,
-  sp.status,
-  sp.settled_currency,
-  sp.settled_net_cents
-from public.subscription_payments sp
-join public.pending_signups ps
-  on ps.stripe_subscription_id = sp.stripe_subscription_id
-join public.igy_outreach_leads l
-  on l.promo_promotion_code_id = ps.promo_promotion_code_id
-where sp.business_unit = 'igy'
-  and sp.livemode = true
-  and ps.outreach_attribution_session_id is null
-  and ps.promo_promotion_code_id is not null
-  and l.campaign_id is not null;
+select * from strong_payments;
 
 comment on view public.v_outreach_payment_attribution is
-  'Growth Engine Phase 1 realized outreach payment attribution. Direct signed-session evidence wins; unique lead promo evidence is Strong. Uses signed settled_net_cents and excludes probable/unattributed guesses.';
+  'Growth Engine Phase 1 realized outreach payment attribution. Direct signed-session evidence wins; only uniquely mapped lead promo evidence is Strong. Uses signed settled_net_cents and excludes probable/unattributed guesses.';
