@@ -79,13 +79,19 @@ function apiKey(): string | null {
 // Nominatim usage policy is <=1 req/s. Space out the per-lead geocodes (same
 // 1.1s throttle the backfill script uses) so a large campaign stays polite.
 const GEOCODE_THROTTLE_MS = 1100;
+// Directory-first research visits an official locator and then separate
+// congregation-owned qualification pages. The former 90-second ceiling was
+// inherited from the single-pass search and aborted the first production proof
+// before OpenAI returned any result. Keep enough headroom below the route's
+// 180-second ceiling for geocoding and durable persistence.
+const DISCOVERY_REQUEST_TIMEOUT_MS = 135_000;
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 /** One OpenAI web-search discovery call. Returns parsed, minimally-valid leads
  *  (or [] if the model's output couldn't be parsed). Throws on API error. */
 async function requestLeads(key: string, prompt: string): Promise<DiscoveredLead[]> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 90_000);
+  const timer = setTimeout(() => controller.abort(), DISCOVERY_REQUEST_TIMEOUT_MS);
   const leadProperties = {
     org_name: { type: "string" }, city: { type: "string" }, state: { type: "string" },
     denomination_type: { type: ["string", "null"] }, contact_email: { type: "string" },
@@ -120,6 +126,11 @@ async function requestLeads(key: string, prompt: string): Promise<DiscoveredLead
       } } },
     }),
     });
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error(`openai_timeout_${DISCOVERY_REQUEST_TIMEOUT_MS / 1000}s`);
+    }
+    throw error;
   } finally {
     clearTimeout(timer);
   }

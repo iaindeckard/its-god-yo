@@ -9,9 +9,10 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 180;
 
 /**
- * Run geographic-scoped discovery for this campaign: loops the Claude web-search
+ * Run geographic-scoped discovery for this campaign: loops OpenAI web search
  * agent within the campaign radius, geocodes + size-tags results, and inserts them
- * 'staged' (never auto-send). No-op (ran:false) if ANTHROPIC_API_KEY isn't set.
+ * 'staged' (never auto-send). The route requires the normal outreach-manage RBAC
+ * permission and never promotes or sends a discovered lead.
  */
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
