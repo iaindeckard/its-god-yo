@@ -5,6 +5,11 @@ export function boundedDiscoveryMaxRounds(target: number, leadsPerRound: number,
   return Math.max(1, Math.min(20, Math.ceil(Math.max(0, target) / safeLeadsPerRound) + sourceLaneCount));
 }
 
+export function boundedProviderItems<T>(items: T[], limit: number | undefined): T[] {
+  if (limit == null) return items;
+  return items.slice(0, Math.max(0, Math.floor(limit)));
+}
+
 export function extractDiscoveryJson(text: string): { leads: DiscoveredLead[] } | null {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
   const candidate = fenced ?? text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1);
