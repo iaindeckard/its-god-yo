@@ -251,7 +251,7 @@ export default function OutreachManager({
         setDiscoveryRun(run);
         complete = run.status === "completed" || run.status === "failed";
         if (run.status === "failed") throw new Error(run.last_error || "discovery failed");
-        if (!complete) await new Promise((resolve) => setTimeout(resolve, 750));
+        if (!complete) await new Promise((resolve) => setTimeout(resolve, 2_000));
       }
       await openCampaign(selected);
       await refreshCampaigns();
@@ -547,7 +547,9 @@ export default function OutreachManager({
             <h3>2 · Discover</h3>
             <p className="muted">Search official denominational directories first, then confirm the public general email and active youth ministry on congregation-owned pages. General web search is secondary. Discovered leads land staged (found, not yet in the send pipeline) and are auto-verified.</p>
             {discoveryRun && <p className="hint" role="status">
-              {discoveryRun.status === "completed" ? (discoveryRun.last_error ? "Discovery complete with saved partial results" : "Discovery complete") : "Discovery in progress"}: round {discoveryRun.round_count} of {discoveryRun.max_rounds} · found {discoveryRun.found_count} · saved {discoveryRun.inserted_count} · already known/skipped {discoveryRun.skipped_count} · outside radius {discoveryRun.out_of_radius_count}
+              {discoveryRun.status === "completed"
+                ? (discoveryRun.last_error ? "Discovery complete with saved partial results" : "Discovery complete")
+                : discoveryRun.status === "failed" ? "Discovery failed" : "Discovery in progress"}: round {discoveryRun.round_count} of {discoveryRun.max_rounds} · found {discoveryRun.found_count} · saved {discoveryRun.inserted_count} · already known/skipped {discoveryRun.skipped_count} · outside radius {discoveryRun.out_of_radius_count}
             </p>}
             {canManage && (
               <button className="btn btn-primary" disabled={busy === "discover"} onClick={runDiscovery}>

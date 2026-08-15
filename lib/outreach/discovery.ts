@@ -5,7 +5,12 @@ import { verifyLeads } from "./verify";
 import { geocodeAddress } from "../geocode";
 import { haversineMiles, sizeBucket, updateCampaign, type Campaign } from "./campaigns";
 import { getSupabaseAdmin } from "../supabaseAdmin";
-import { discoveryErrorStatus, discoveryIsComplete, extractDiscoveryJson } from "./discovery-core";
+import {
+  discoveryErrorStatus,
+  discoveryIsComplete,
+  extractDiscoveryJson,
+  providerResponsePhase,
+} from "./discovery-core";
 import { applyDirectorySourcePolicy, directorySourcePrompt } from "./directory-sources";
 
 /**
@@ -59,6 +64,10 @@ function campaignPrompt(campaign: Campaign, target: number, exclude: string[]): 
 }
 
 interface OpenAIResponse {
+  id?: string;
+  status?: string;
+  error?: { message?: string; code?: string } | null;
+  incomplete_details?: { reason?: string } | null;
   output_text?: string;
   output?: Array<{ content?: Array<{ type?: string; text?: string }> }>;
 }
@@ -79,19 +88,14 @@ function apiKey(): string | null {
 // Nominatim usage policy is <=1 req/s. Space out the per-lead geocodes (same
 // 1.1s throttle the backfill script uses) so a large campaign stays polite.
 const GEOCODE_THROTTLE_MS = 1100;
-// Directory-first research visits an official locator and then separate
-// congregation-owned qualification pages. The former 90-second ceiling was
-// inherited from the single-pass search and aborted the first production proof
-// before OpenAI returned any result. Keep enough headroom below the route's
-// 180-second ceiling for geocoding and durable persistence.
+// The legacy monthly cron still performs one synchronous request. Campaign
+// discovery uses short background start/poll requests below so its provider work
+// is not coupled to a browser or Vercel request lifetime.
 const DISCOVERY_REQUEST_TIMEOUT_MS = 135_000;
+const BACKGROUND_REQUEST_TIMEOUT_MS = 15_000;
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-/** One OpenAI web-search discovery call. Returns parsed, minimally-valid leads
- *  (or [] if the model's output couldn't be parsed). Throws on API error. */
-async function requestLeads(key: string, prompt: string): Promise<DiscoveredLead[]> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), DISCOVERY_REQUEST_TIMEOUT_MS);
+function leadRequestBody(prompt: string, background = false): Record<string, unknown> {
   const leadProperties = {
     org_name: { type: "string" }, city: { type: "string" }, state: { type: "string" },
     denomination_type: { type: ["string", "null"] }, contact_email: { type: "string" },
@@ -103,32 +107,44 @@ async function requestLeads(key: string, prompt: string): Promise<DiscoveredLead
     discovery_confidence: { type: "string", enum: ["high", "medium", "low"] },
     estimated_attendance: { type: ["integer", "null"] }, attendance_source_url: { type: ["string", "null"] },
   };
+  return {
+    model: OUTREACH.openaiDiscoveryModel,
+    store: false,
+    background,
+    instructions: DISCOVERY_SYSTEM,
+    input: prompt,
+    tools: [{ type: "web_search", search_context_size: "medium" }],
+    text: { format: { type: "json_schema", name: "church_discovery", strict: true, schema: {
+      type: "object", additionalProperties: false, required: ["leads"], properties: {
+        leads: { type: "array", items: { type: "object", additionalProperties: false,
+          required: Object.keys(leadProperties), properties: leadProperties } },
+      },
+    } } },
+  };
+}
+
+async function openAIRequest(
+  key: string,
+  url: string,
+  init: RequestInit,
+  timeoutMs: number,
+): Promise<OpenAIResponse> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   let res: Response;
   try {
-    res = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${key}`,
-      "content-type": "application/json",
-    },
-    signal: controller.signal,
-    body: JSON.stringify({
-      model: OUTREACH.openaiDiscoveryModel,
-      store: false,
-      instructions: DISCOVERY_SYSTEM,
-      input: prompt,
-      tools: [{ type: "web_search", search_context_size: "medium" }],
-      text: { format: { type: "json_schema", name: "church_discovery", strict: true, schema: {
-        type: "object", additionalProperties: false, required: ["leads"], properties: {
-          leads: { type: "array", items: { type: "object", additionalProperties: false,
-            required: Object.keys(leadProperties), properties: leadProperties } },
-        },
-      } } },
-    }),
+    res = await fetch(url, {
+      ...init,
+      headers: {
+        authorization: `Bearer ${key}`,
+        "content-type": "application/json",
+        ...init.headers,
+      },
+      signal: controller.signal,
     });
   } catch (error) {
     if (controller.signal.aborted) {
-      throw new Error(`openai_timeout_${DISCOVERY_REQUEST_TIMEOUT_MS / 1000}s`);
+      throw new Error(`openai_timeout_${timeoutMs / 1000}s`);
     }
     throw error;
   } finally {
@@ -138,7 +154,10 @@ async function requestLeads(key: string, prompt: string): Promise<DiscoveredLead
     const detail = (await res.text()).slice(0, 400);
     throw new Error(`openai_${res.status}: ${detail}`);
   }
-  const data = (await res.json()) as OpenAIResponse;
+  return (await res.json()) as OpenAIResponse;
+}
+
+function parseResponseLeads(data: OpenAIResponse): DiscoveredLead[] {
   const text = data.output_text ?? (data.output ?? []).flatMap((item) => item.content ?? [])
     .filter((item) => item.type === "output_text").map((item) => item.text ?? "").join("\n");
   const parsed = extractDiscoveryJson(text);
@@ -147,6 +166,31 @@ async function requestLeads(key: string, prompt: string): Promise<DiscoveredLead
     .filter((l) => l && l.org_name && l.contact_email)
     .map(applyDirectorySourcePolicy)
     .filter((lead): lead is DiscoveredLead => Boolean(lead));
+}
+
+/** One synchronous OpenAI web-search call for the legacy monthly cron. */
+async function requestLeads(key: string, prompt: string): Promise<DiscoveredLead[]> {
+  const data = await openAIRequest(key, "https://api.openai.com/v1/responses", {
+    method: "POST",
+    body: JSON.stringify(leadRequestBody(prompt)),
+  }, DISCOVERY_REQUEST_TIMEOUT_MS);
+  return parseResponseLeads(data);
+}
+
+async function startBackgroundLeadRequest(key: string, prompt: string): Promise<OpenAIResponse> {
+  return openAIRequest(key, "https://api.openai.com/v1/responses", {
+    method: "POST",
+    body: JSON.stringify(leadRequestBody(prompt, true)),
+  }, BACKGROUND_REQUEST_TIMEOUT_MS);
+}
+
+async function retrieveBackgroundLeadRequest(key: string, responseId: string): Promise<OpenAIResponse> {
+  return openAIRequest(
+    key,
+    `https://api.openai.com/v1/responses/${encodeURIComponent(responseId)}`,
+    { method: "GET" },
+    BACKGROUND_REQUEST_TIMEOUT_MS,
+  );
 }
 
 /** Legacy global-geography discovery (the monthly cron). Non-campaign: leads land
@@ -176,6 +220,7 @@ export interface CampaignDiscoveryResult extends DiscoveryResult {
 export interface DiscoveryRun {
   id: string; campaign_id: string; status: "running" | "processing" | "completed" | "failed";
   provider: string; target_count: number; max_rounds: number; round_count: number;
+  provider_response_id: string | null; provider_status: string | null;
   found_count: number; inserted_count: number; skipped_count: number; out_of_radius_count: number;
   empty_streak: number; discovered_names: string[]; last_error: string | null;
   started_at: string; heartbeat_at: string; completed_at: string | null;
@@ -212,6 +257,20 @@ async function patchRun(id: string, patch: Record<string, unknown>): Promise<Dis
   return data as DiscoveryRun;
 }
 
+async function claimRun(run: DiscoveryRun): Promise<DiscoveryRun | null> {
+  const now = new Date().toISOString();
+  let query = getSupabaseAdmin().from(RUNS_TABLE)
+    .update({ status: "processing", last_error: null, heartbeat_at: now, updated_at: now })
+    .eq("id", run.id)
+    .eq("status", run.status);
+  if (run.status === "processing") {
+    query = query.lt("heartbeat_at", new Date(Date.now() - STALE_PROCESSING_MS).toISOString());
+  }
+  const { data, error } = await query.select("*").maybeSingle();
+  if (error) throw new Error(`discovery_run_claim_failed: ${error.message}`);
+  return data as DiscoveryRun | null;
+}
+
 /** Process exactly one durable discovery round. The browser can call this again
  * until complete; every accepted lead is persisted before the round returns. */
 export async function continueCampaignDiscovery(campaign: Campaign): Promise<DiscoveryRun> {
@@ -219,14 +278,45 @@ export async function continueCampaignDiscovery(campaign: Campaign): Promise<Dis
   if (!key) throw new Error("OPENAI_API_KEY is not configured");
   let run = await createDiscoveryRun(campaign);
   if (["completed", "failed"].includes(run.status)) return run;
-  if (run.status === "processing" && Date.now() - new Date(run.heartbeat_at).getTime() < STALE_PROCESSING_MS) return run;
-
-  run = await patchRun(run.id, { status: "processing", last_error: null });
+  const claimed = await claimRun(run);
+  if (!claimed) return (await latestDiscoveryRun(campaign.id)) ?? run;
+  run = claimed;
   const center = campaign.center_lat != null && campaign.center_lng != null
     ? { lat: campaign.center_lat, lng: campaign.center_lng } : null;
   try {
     const remaining = Math.max(1, run.target_count - run.found_count);
-    const batch = await requestLeads(key, campaignPrompt(campaign, Math.min(5, remaining), run.discovered_names));
+    let providerResponse: OpenAIResponse;
+    if (run.provider_response_id) {
+      providerResponse = await retrieveBackgroundLeadRequest(key, run.provider_response_id);
+    } else {
+      providerResponse = await startBackgroundLeadRequest(
+        key,
+        campaignPrompt(campaign, Math.min(5, remaining), run.discovered_names),
+      );
+      if (!providerResponse.id) throw new Error("openai_background_missing_id");
+      run = await patchRun(run.id, {
+        provider_response_id: providerResponse.id,
+        provider_status: providerResponse.status ?? null,
+      });
+    }
+
+    const phase = providerResponsePhase(providerResponse.status);
+    if (phase === "pending") {
+      return patchRun(run.id, {
+        status: "running",
+        provider_status: providerResponse.status ?? null,
+      });
+    }
+    if (phase === "failed") {
+      const detail = providerResponse.error?.message
+        ?? providerResponse.error?.code
+        ?? providerResponse.incomplete_details?.reason
+        ?? providerResponse.status
+        ?? "unknown";
+      throw new Error(`openai_background_${detail}`);
+    }
+
+    const batch = parseResponseLeads(providerResponse);
     let found = run.found_count, inserted = run.inserted_count, skipped = run.skipped_count;
     let outOfRadius = run.out_of_radius_count, added = 0;
     const names = [...run.discovered_names];
@@ -251,6 +341,7 @@ export async function continueCampaignDiscovery(campaign: Campaign): Promise<Dis
       status: done ? "completed" : "running", round_count: round, found_count: found,
       inserted_count: inserted, skipped_count: skipped, out_of_radius_count: outOfRadius,
       empty_streak: emptyStreak, discovered_names: names, completed_at: done ? new Date().toISOString() : null,
+      provider_response_id: null, provider_status: null,
     });
     if (done) await updateCampaign(campaign.id, { status: "ready" });
     return run;
