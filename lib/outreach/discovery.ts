@@ -6,6 +6,7 @@ import { geocodeAddress } from "../geocode";
 import { haversineMiles, sizeBucket, updateCampaign, type Campaign } from "./campaigns";
 import { getSupabaseAdmin } from "../supabaseAdmin";
 import {
+  boundedDiscoveryMaxRounds,
   discoveryErrorStatus,
   discoveryIsComplete,
   extractDiscoveryJson,
@@ -253,7 +254,10 @@ export interface DiscoveryRun {
 const RUNS_TABLE = "outreach_discovery_runs";
 const LEADS_PER_ROUND = 2;
 const SOURCE_LANE_COUNT = OFFICIAL_CHURCH_DIRECTORIES.length + 1;
-const MAX_ROUNDS = Math.ceil(OUTREACH.discoveryTarget / LEADS_PER_ROUND) + SOURCE_LANE_COUNT;
+// The persisted table enforces max_rounds between 1 and 20. Twenty bounded
+// two-lead rounds can still satisfy the default 35-lead target while leaving
+// two sparse rounds; larger configured targets finish safely at this ceiling.
+const MAX_ROUNDS = boundedDiscoveryMaxRounds(OUTREACH.discoveryTarget, LEADS_PER_ROUND, SOURCE_LANE_COUNT);
 const STALE_PROCESSING_MS = 2 * 60 * 1000;
 
 export async function latestDiscoveryRun(campaignId: string): Promise<DiscoveryRun | null> {

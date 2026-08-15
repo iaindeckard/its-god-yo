@@ -1,5 +1,10 @@
 import type { DiscoveredLead } from "./leads";
 
+export function boundedDiscoveryMaxRounds(target: number, leadsPerRound: number, sourceLaneCount: number): number {
+  const safeLeadsPerRound = Math.max(1, Math.floor(leadsPerRound));
+  return Math.max(1, Math.min(20, Math.ceil(Math.max(0, target) / safeLeadsPerRound) + sourceLaneCount));
+}
+
 export function extractDiscoveryJson(text: string): { leads: DiscoveredLead[] } | null {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
   const candidate = fenced ?? text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1);
