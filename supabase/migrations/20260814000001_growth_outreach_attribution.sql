@@ -33,6 +33,7 @@ create index if not exists idx_outreach_attr_sessions_expires
 alter table public.outreach_attribution_sessions enable row level security;
 -- No policies: service-role/server only. A browser never writes attribution.
 revoke all on table public.outreach_attribution_sessions from public, anon, authenticated;
+revoke all on table public.outreach_attribution_sessions from service_role;
 grant select, insert, update, delete on table public.outreach_attribution_sessions to service_role;
 
 alter table public.pending_signups
@@ -163,6 +164,7 @@ union all
 select * from strong_payments;
 
 revoke all on table public.v_outreach_payment_attribution from public, anon, authenticated;
+revoke all on table public.v_outreach_payment_attribution from service_role;
 grant select on table public.v_outreach_payment_attribution to service_role;
 
 comment on view public.v_outreach_payment_attribution is
