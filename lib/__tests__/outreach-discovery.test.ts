@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  boundedDiscoveryMaxRounds,
   discoveryErrorStatus,
   discoveryIsComplete,
   extractDiscoveryJson,
@@ -13,6 +14,12 @@ import {
 } from "../outreach/directory-sources";
 
 describe("outreach discovery core", () => {
+  it("keeps new run limits inside the persisted 1-to-20 constraint", () => {
+    expect(boundedDiscoveryMaxRounds(35, 2, 8)).toBe(20);
+    expect(boundedDiscoveryMaxRounds(10, 2, 8)).toBe(13);
+    expect(boundedDiscoveryMaxRounds(0, 0, 0)).toBe(1);
+  });
+
   it("parses strict and fenced lead payloads", () => {
     const payload = '{"leads":[{"org_name":"First Church","contact_email":"info@example.org"}]}';
     expect(extractDiscoveryJson(payload)?.leads).toHaveLength(1);
