@@ -11,11 +11,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const staff = await requirePermission("marketing.outreach.manage");
     const { id } = await params;
     const body = await req.json().catch(() => ({}));
-    if (typeof body.release_at !== "string" || typeof body.timezone !== "string") {
-      return NextResponse.json({ error: "release_at and timezone are required" }, { status: 400 });
+    const leadIds: string[] = Array.isArray(body.lead_ids)
+      ? Array.from(new Set<string>(body.lead_ids.filter((value: unknown): value is string => typeof value === "string"))).slice(0, 250)
+      : [];
+    if (typeof body.release_at !== "string" || typeof body.timezone !== "string" || !leadIds.length) {
+      return NextResponse.json({ error: "release_at, timezone, and lead_ids are required" }, { status: 400 });
     }
     const campaign = await scheduleCampaign(id, {
-      releaseAt: body.release_at, timezone: body.timezone, approvedBy: staff.userId,
+      releaseAt: body.release_at, timezone: body.timezone, approvedBy: staff.userId, leadIds,
     });
     return NextResponse.json({ ok: true, campaign });
   } catch (error) {

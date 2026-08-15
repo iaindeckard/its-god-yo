@@ -138,7 +138,8 @@ export default function OutreachManager({
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [discoveryRun, setDiscoveryRun] = useState<DiscoveryRun | null>(null);
   const [viewBucket, setViewBucket] = useState<"all" | SizeBucket>("all");
-  const [promoteSel, setPromoteSel] = useState<Set<SizeBucket>>(new Set());
+  const [promoteSel, setPromoteSel] = useState<Set<string>>(new Set());
+  const [audienceSel, setAudienceSel] = useState<Set<string>>(new Set());
   const [report, setReport] = useState<SendReport | null>(null);
   const [createName, setCreateName] = useState("");
   const [createDraft, setCreateDraft] = useState<CampaignMapChange | null>(null);
@@ -160,7 +161,7 @@ export default function OutreachManager({
   }
 
   async function openCampaign(c: Campaign) {
-    setSelected(c); setLeads([]); setDeliveries([]); setDiscoveryRun(null); setReport(null); setViewBucket("all"); setPromoteSel(new Set()); setDetailDraft(null); setOfferDraft(null);
+    setSelected(c); setLeads([]); setDeliveries([]); setDiscoveryRun(null); setReport(null); setViewBucket("all"); setPromoteSel(new Set()); setAudienceSel(new Set()); setDetailDraft(null); setOfferDraft(null);
     const res = await fetch(`/api/admin/outreach/campaigns/${c.id}`);
     const data = await res.json();
     if (res.ok) {
@@ -174,7 +175,7 @@ export default function OutreachManager({
   // mode switch; the single map remounts via key={selected?.id ?? "new"}.
   function newCampaign() {
     setSelected(null); setLeads([]); setDiscoveryRun(null); setReport(null);
-    setViewBucket("all"); setPromoteSel(new Set());
+    setViewBucket("all"); setPromoteSel(new Set()); setAudienceSel(new Set());
     setDetailDraft(null); setOfferDraft(null); setError(null);
     setCreateName(""); setCreateDraft(null);
   }
@@ -288,7 +289,7 @@ export default function OutreachManager({
     try {
       const res = await fetch(`/api/admin/outreach/campaigns/${selected.id}/promote`, {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ sizeBuckets: [...promoteSel] }),
+        body: JSON.stringify({ ids: [...promoteSel] }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "promote failed");
@@ -299,13 +300,14 @@ export default function OutreachManager({
   }
 
   async function send(live: boolean) {
-    if (!selected) return;
+    if (!selected || audienceSel.size === 0) return;
+    const selectedAudience = [...audienceSel];
     if (live && !confirm("Send LIVE to this campaign's active leads? This puts real email in front of real churches (subject to the send gate).")) return;
     setError(null); setBusy(live ? "send-live" : "send-dry"); setReport(null);
     try {
       const res = await fetch(`/api/admin/outreach/campaigns/${selected.id}/send`, {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ dry: !live }),
+        body: JSON.stringify({ dry: !live, leadIds: selectedAudience }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "send failed");
@@ -314,22 +316,23 @@ export default function OutreachManager({
       // it would be instantly clobbered (the "flash then vanish" bug). The report
       // is a persistent card that must stay until the next action.
       await openCampaign(selected);
+      setAudienceSel(new Set(selectedAudience));
       setReport(data.report);
     } catch (e) { setError(e instanceof Error ? e.message : "send failed"); }
     finally { setBusy(null); }
   }
 
   async function scheduleRelease() {
-    if (!selected || !releaseDraft) return;
+    if (!selected || !releaseDraft || audienceSel.size === 0) return;
     const release = new Date(releaseDraft);
     if (!Number.isFinite(release.getTime()) || release.getTime() <= Date.now()) { setError("Choose a future release date and time."); return; }
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Chicago";
-    if (!confirm(`Schedule this campaign for ${release.toLocaleString()} (${timezone})? The exact verified active audience and approved offer will be recorded.`)) return;
+    if (!confirm(`Schedule ${audienceSel.size} selected recipients for ${release.toLocaleString()} (${timezone})? The exact verified active audience and approved offer will be recorded.`)) return;
     setError(null); setBusy("schedule");
     try {
       const res = await fetch(`/api/admin/outreach/campaigns/${selected.id}/schedule`, {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ release_at: release.toISOString(), timezone }),
+        body: JSON.stringify({ release_at: release.toISOString(), timezone, lead_ids: [...audienceSel] }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "schedule failed");
@@ -382,7 +385,16 @@ export default function OutreachManager({
   }
 
   const shown = viewBucket === "all" ? leads : leads.filter((l) => l.size_bucket === viewBucket);
-  const stagedByBucket = (b: SizeBucket) => leads.filter((l) => l.size_bucket === b && l.status === "staged").length;
+  const verificationCurrent = (lead: Lead) => {
+    if (!lead.verified_at) return false;
+    if (lead.verification_status !== "passed" && lead.verification_status !== "manual_override") return false;
+    const ageDays = (Date.now() - new Date(lead.verified_at).getTime()) / 86_400_000;
+    return Number.isFinite(ageDays) && ageDays <= 90;
+  };
+  const promotable = (lead: Lead) => lead.status === "staged" && verificationCurrent(lead);
+  const releasable = (lead: Lead) => lead.status === "active" && verificationCurrent(lead);
+  const shownPromotable = shown.filter(promotable);
+  const shownReleasable = shown.filter(releasable);
 
   return (
     <div>
@@ -575,15 +587,23 @@ export default function OutreachManager({
             <div className="sim-scroll">
               <table className="table">
                 <thead><tr>
-                  <th>Church</th><th>Location</th><th>Size</th><th>Attendance</th><th>Confidence</th><th>Status</th><th>Verified</th><th>Sends</th>
+                  <th>Promote</th><th>Release</th><th>Church</th><th>Location</th><th>Size</th><th>Attendance</th><th>Confidence</th><th>Status</th><th>Verified</th><th>Sends</th>
                 </tr></thead>
                 <tbody>
-                  {shown.length === 0 && <tr><td colSpan={8} className="muted">No leads{viewBucket !== "all" ? " in this size bucket" : ""}.</td></tr>}
+                  {shown.length === 0 && <tr><td colSpan={10} className="muted">No leads{viewBucket !== "all" ? " in this size bucket" : ""}.</td></tr>}
                   {shown.map((l) => {
                     const reason = (l.verification_status !== "passed" && l.verification_status !== "manual_override")
                       ? verificationReason(l.verification_notes) : null;
                     return (
                       <tr key={l.id}>
+                        <td><input type="checkbox" aria-label={`Promote ${l.org_name}`} disabled={!promotable(l)}
+                          checked={promoteSel.has(l.id)} onChange={(e) => setPromoteSel((current) => {
+                            const next = new Set(current); if (e.target.checked) next.add(l.id); else next.delete(l.id); return next;
+                          })} /></td>
+                        <td><input type="checkbox" aria-label={`Release to ${l.org_name}`} disabled={!releasable(l)}
+                          checked={audienceSel.has(l.id)} onChange={(e) => setAudienceSel((current) => {
+                            const next = new Set(current); if (e.target.checked) next.add(l.id); else next.delete(l.id); return next;
+                          })} /></td>
                         <td>{l.website ? <a href={l.website} target="_blank" rel="noreferrer">{l.org_name}</a> : l.org_name}<div className="muted" style={{ fontSize: 12 }}>{l.contact_email}</div></td>
                         <td>{[l.city, l.state].filter(Boolean).join(", ") || "—"}</td>
                         <td><span className="pill">{l.size_bucket}</span></td>
@@ -638,21 +658,16 @@ export default function OutreachManager({
                 </div>
               )}
               <div style={{ margin: "6px 0", padding: "10px 12px", background: "#f6faff", borderRadius: 8 }}>
-                <strong style={{ fontSize: 13 }}>Promote staged leads → active (enters send pipeline)</strong>
-                <div style={{ display: "flex", gap: 12, flexWrap: "wrap", margin: "8px 0" }}>
-                  {BUCKETS.map((b) => {
-                    const n = stagedByBucket(b);
-                    return (
-                      <label key={b} style={{ fontSize: 13, opacity: n ? 1 : 0.4 }}>
-                        <input type="checkbox" disabled={!n} checked={promoteSel.has(b)}
-                          onChange={(e) => setPromoteSel((s) => { const n2 = new Set(s); if (e.target.checked) n2.add(b); else n2.delete(b); return n2; })} />
-                        {" "}{BUCKET_LABEL[b]} ({n} staged)
-                      </label>
-                    );
-                  })}
+                <strong style={{ fontSize: 13 }}>Promote exact staged leads → active (enters send pipeline)</strong>
+                <div className="row" style={{ gap: 8, margin: "8px 0", flexWrap: "wrap" }}>
+                  <button className="btn btn-ghost" disabled={shownPromotable.length === 0} onClick={() => setPromoteSel((current) => {
+                    const next = new Set(current); shownPromotable.forEach((lead) => next.add(lead.id)); return next;
+                  })}>Select eligible shown ({shownPromotable.length})</button>
+                  <button className="btn btn-ghost" disabled={promoteSel.size === 0} onClick={() => setPromoteSel(new Set())}>Clear selection</button>
                 </div>
+                <p className="hint">Selected {promoteSel.size}. Only freshly verified staged leads can be selected, and the server independently enforces the same gate.</p>
                 <button className="btn btn-primary" disabled={promoteSel.size === 0 || busy === "promote"} onClick={promote}>
-                  {busy === "promote" ? "Promoting…" : "Promote selected"}</button>
+                  {busy === "promote" ? "Promoting…" : `Promote selected (${promoteSel.size})`}</button>
               </div>
             </div>
           )}
@@ -661,8 +676,15 @@ export default function OutreachManager({
           {canManage && (
             <div className="card">
               <h3>5 · Preview + schedule</h3>
+              <div className="row" style={{ gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+                <button className="btn btn-ghost" disabled={shownReleasable.length === 0} onClick={() => setAudienceSel((current) => {
+                  const next = new Set(current); shownReleasable.forEach((lead) => next.add(lead.id)); return next;
+                })}>Select active shown ({shownReleasable.length})</button>
+                <button className="btn btn-ghost" disabled={audienceSel.size === 0} onClick={() => setAudienceSel(new Set())}>Clear release selection</button>
+                <span className="hint">Exact release audience: {audienceSel.size}</span>
+              </div>
               <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                <button className="btn btn-ghost" disabled={!!busy} onClick={() => send(false)}>
+                <button className="btn btn-ghost" disabled={!!busy || audienceSel.size === 0} onClick={() => send(false)}>
                   {busy === "send-dry" ? "Previewing…" : "Preview send (dry-run)"}</button>
               </div>
               <div style={{ marginTop: 14, padding: "12px", borderRadius: 8, background: "#f6faff" }}>
@@ -671,7 +693,7 @@ export default function OutreachManager({
                     <label>Release date and time</label>
                     <input type="datetime-local" value={releaseDraft} onChange={(e) => setReleaseDraft(e.target.value)} />
                   </div>
-                  <button className="btn btn-primary" disabled={!releaseDraft || !!busy} onClick={scheduleRelease}>
+                  <button className="btn btn-primary" disabled={!releaseDraft || audienceSel.size === 0 || !!busy} onClick={scheduleRelease}>
                     {busy === "schedule" ? "Scheduling…" : selected.status === "scheduled" ? "Reschedule campaign" : "Approve and schedule"}
                   </button>
                   {selected.status === "scheduled" && <button className="btn btn-ghost" disabled={!!busy} onClick={pauseRelease}>{busy === "pause" ? "Pausing…" : "Pause release"}</button>}

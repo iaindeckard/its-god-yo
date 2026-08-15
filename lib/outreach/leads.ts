@@ -77,23 +77,28 @@ export async function fetchCampaignLeads(campaignId: string): Promise<OutreachLe
 }
 
 /**
- * Promote a size-filtered subset of a campaign's STAGED leads into the send
+ * Promote a selected subset of a campaign's STAGED leads into the send
  * pipeline (staged -> active). This is the gate the spec requires: nothing in a
  * campaign sends until it is promoted here. Either promote specific ids, or all
- * staged leads in the given size buckets (buckets win if both are passed empty).
- * Only rows currently 'staged' in this campaign move — never a suppressed/
- * converted/already-active row. Returns the number promoted.
+ * staged leads in the given size buckets. Only freshly verified rows currently
+ * 'staged' in this campaign move — never a held, stale, suppressed, converted,
+ * or already-active row. Returns the number promoted.
  */
 export async function promoteLeads(
   campaignId: string,
   opts: { sizeBuckets?: string[]; ids?: string[] },
 ): Promise<number> {
   const admin = getSupabaseAdmin();
+  const freshAfter = new Date(Date.now() - 90 * 86_400_000).toISOString();
   let q = admin
     .from(TABLE)
     .update({ status: "active", updated_at: new Date().toISOString() })
     .eq("campaign_id", campaignId)
-    .eq("status", "staged");
+    .eq("status", "staged")
+    // Promotion is itself a safety boundary. A caller cannot move a failed,
+    // needs-manual, unverified, or stale lead into the active send pipeline.
+    .in("verification_status", ["passed", "manual_override"])
+    .gte("verified_at", freshAfter);
   if (opts.ids && opts.ids.length) {
     q = q.in("id", opts.ids);
   } else if (opts.sizeBuckets && opts.sizeBuckets.length) {

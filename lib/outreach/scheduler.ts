@@ -4,7 +4,7 @@ import { getCampaign, updateCampaign, type Campaign } from "./campaigns";
 import { fetchActiveLeads } from "./leads";
 import { isSendable } from "./verify";
 import { runSend, type SendReport } from "./run";
-import { nextReleaseAt, validTimeZone } from "./schedule-policy";
+import { hasAudienceBlocker, nextReleaseAt, validTimeZone } from "./schedule-policy";
 const TABLE = "outreach_campaigns";
 
 export interface ScheduleSnapshot extends Record<string, unknown> {
@@ -20,7 +20,7 @@ export interface ScheduleSnapshot extends Record<string, unknown> {
 /** Human approval boundary: capture the exact currently-active, verified audience. */
 export async function scheduleCampaign(
   campaignId: string,
-  input: { releaseAt: string; timezone: string; approvedBy: string | null },
+  input: { releaseAt: string; timezone: string; approvedBy: string | null; leadIds: string[] },
 ): Promise<Campaign> {
   const campaign = await getCampaign(campaignId);
   if (!campaign) throw new Error("campaign_not_found");
@@ -28,8 +28,10 @@ export async function scheduleCampaign(
   if (!Number.isFinite(release.getTime()) || release.getTime() <= Date.now()) throw new Error("release_must_be_in_future");
   if (!validTimeZone(input.timezone)) throw new Error("invalid_release_timezone");
 
-  const leads = (await fetchActiveLeads({ campaignId })).filter(isSendable);
+  if (!input.leadIds.length) throw new Error("select_release_recipients");
+  const leads = (await fetchActiveLeads({ campaignId, leadIds: input.leadIds })).filter(isSendable);
   if (!leads.length) throw new Error("no_verified_active_recipients");
+  if (leads.length !== input.leadIds.length) throw new Error("release_recipient_selection_changed");
   const approvedAt = new Date().toISOString();
   const snapshot: ScheduleSnapshot = {
     lead_ids: leads.map((lead) => lead.id),
@@ -103,6 +105,12 @@ export async function runScheduledCampaigns(now = new Date()): Promise<Array<{ c
       results.push({ campaign_id: campaign.id, report });
       if (report.mode !== "live") {
         await updateCampaign(campaign.id, { status: "scheduled", last_release_report: report as unknown as Record<string, unknown> });
+        continue;
+      }
+      if (hasAudienceBlocker(report.items)) {
+        // A mismatched allowlist or newly-stale verification means the approved
+        // snapshot was not fully attempted. Pause instead of advancing cadence.
+        await updateCampaign(campaign.id, { status: "paused", last_release_report: report as unknown as Record<string, unknown> });
         continue;
       }
       const hasFirstTouch = report.items.some((item) => item.outcome === "sent" && item.touch === 1);
