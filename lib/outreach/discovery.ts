@@ -93,6 +93,9 @@ const GEOCODE_THROTTLE_MS = 1100;
 // is not coupled to a browser or Vercel request lifetime.
 const DISCOVERY_REQUEST_TIMEOUT_MS = 135_000;
 const BACKGROUND_REQUEST_TIMEOUT_MS = 15_000;
+// A five-lead structured payload is small. Capping output prevents OpenAI from
+// reserving the model's much larger default maximum against organization TPM.
+const DISCOVERY_MAX_OUTPUT_TOKENS = 16_000;
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 function leadRequestBody(prompt: string, background = false): Record<string, unknown> {
@@ -113,6 +116,7 @@ function leadRequestBody(prompt: string, background = false): Record<string, unk
     background,
     instructions: DISCOVERY_SYSTEM,
     input: prompt,
+    max_output_tokens: DISCOVERY_MAX_OUTPUT_TOKENS,
     tools: [{ type: "web_search", search_context_size: "medium" }],
     text: { format: { type: "json_schema", name: "church_discovery", strict: true, schema: {
       type: "object", additionalProperties: false, required: ["leads"], properties: {
@@ -288,6 +292,7 @@ export async function continueCampaignDiscovery(campaign: Campaign): Promise<Dis
     let providerResponse: OpenAIResponse;
     if (run.provider_response_id) {
       providerResponse = await retrieveBackgroundLeadRequest(key, run.provider_response_id);
+      run = await patchRun(run.id, { provider_status: providerResponse.status ?? null });
     } else {
       providerResponse = await startBackgroundLeadRequest(
         key,
