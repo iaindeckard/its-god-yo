@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   boundedDiscoveryMaxRounds,
+  boundedProviderItems,
   discoveryErrorStatus,
   discoveryIsComplete,
   extractDiscoveryJson,
@@ -18,6 +19,12 @@ describe("outreach discovery core", () => {
     expect(boundedDiscoveryMaxRounds(35, 2, 8)).toBe(20);
     expect(boundedDiscoveryMaxRounds(10, 2, 8)).toBe(13);
     expect(boundedDiscoveryMaxRounds(0, 0, 0)).toBe(1);
+  });
+
+  it("mechanically caps provider items even when the model exceeds its prompt", () => {
+    expect(boundedProviderItems([1, 2, 3, 4], 2)).toEqual([1, 2]);
+    expect(boundedProviderItems([1, 2], undefined)).toEqual([1, 2]);
+    expect(boundedProviderItems([1, 2], -1)).toEqual([]);
   });
 
   it("parses strict and fenced lead payloads", () => {

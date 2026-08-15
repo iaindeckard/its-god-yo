@@ -7,6 +7,7 @@ import { haversineMiles, sizeBucket, updateCampaign, type Campaign } from "./cam
 import { getSupabaseAdmin } from "../supabaseAdmin";
 import {
   boundedDiscoveryMaxRounds,
+  boundedProviderItems,
   discoveryErrorStatus,
   discoveryIsComplete,
   extractDiscoveryJson,
@@ -114,6 +115,7 @@ function leadRequestBody(
   prompt: string,
   background = false,
   directory?: OfficialChurchDirectory | null,
+  maxLeads?: number,
 ): Record<string, unknown> {
   const leadProperties = {
     org_name: { type: "string" }, city: { type: "string" }, state: { type: "string" },
@@ -137,7 +139,8 @@ function leadRequestBody(
     tools: [{ type: "web_search", search_context_size: "low" }],
     text: { format: { type: "json_schema", name: "church_discovery", strict: true, schema: {
       type: "object", additionalProperties: false, required: ["leads"], properties: {
-        leads: { type: "array", items: { type: "object", additionalProperties: false,
+        leads: { type: "array", ...(maxLeads == null ? {} : { maxItems: maxLeads }),
+          items: { type: "object", additionalProperties: false,
           required: Object.keys(leadProperties), properties: leadProperties } },
       },
     } } },
@@ -178,12 +181,12 @@ async function openAIRequest(
   return (await res.json()) as OpenAIResponse;
 }
 
-function parseResponseLeads(data: OpenAIResponse): DiscoveredLead[] {
+function parseResponseLeads(data: OpenAIResponse, maxLeads?: number): DiscoveredLead[] {
   const text = data.output_text ?? (data.output ?? []).flatMap((item) => item.content ?? [])
     .filter((item) => item.type === "output_text").map((item) => item.text ?? "").join("\n");
   const parsed = extractDiscoveryJson(text);
   if (!parsed) return [];
-  return parsed.leads
+  return boundedProviderItems(parsed.leads, maxLeads)
     .filter((l) => l && l.org_name && l.contact_email)
     .map(applyDirectorySourcePolicy)
     .filter((lead): lead is DiscoveredLead => Boolean(lead));
@@ -202,10 +205,11 @@ async function startBackgroundLeadRequest(
   key: string,
   prompt: string,
   directory: OfficialChurchDirectory | null,
+  maxLeads: number,
 ): Promise<OpenAIResponse> {
   return openAIRequest(key, "https://api.openai.com/v1/responses", {
     method: "POST",
-    body: JSON.stringify(leadRequestBody(prompt, true, directory)),
+    body: JSON.stringify(leadRequestBody(prompt, true, directory, maxLeads)),
   }, BACKGROUND_REQUEST_TIMEOUT_MS);
 }
 
@@ -325,6 +329,7 @@ export async function continueCampaignDiscovery(campaign: Campaign): Promise<Dis
         key,
         campaignPrompt(campaign, Math.min(LEADS_PER_ROUND, remaining), run.discovered_names, lane.label),
         lane.directory,
+        Math.min(LEADS_PER_ROUND, remaining),
       );
       if (!providerResponse.id) throw new Error("openai_background_missing_id");
       run = await patchRun(run.id, {
@@ -349,7 +354,7 @@ export async function continueCampaignDiscovery(campaign: Campaign): Promise<Dis
       throw new Error(`openai_background_${detail}`);
     }
 
-    const batch = parseResponseLeads(providerResponse);
+    const batch = parseResponseLeads(providerResponse, LEADS_PER_ROUND);
     let found = run.found_count, inserted = run.inserted_count, skipped = run.skipped_count;
     let outOfRadius = run.out_of_radius_count, added = 0;
     const names = [...run.discovered_names];
