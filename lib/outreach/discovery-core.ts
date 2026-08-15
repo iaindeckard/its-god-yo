@@ -12,8 +12,11 @@ export function extractDiscoveryJson(text: string): { leads: DiscoveredLead[] } 
 
 export function discoveryIsComplete(input: {
   found: number; target: number; round: number; maxRounds: number; emptyStreak: number;
+  emptyStreakLimit?: number;
 }): boolean {
-  return input.found >= input.target || input.round >= input.maxRounds || input.emptyStreak >= 2;
+  return input.found >= input.target
+    || input.round >= input.maxRounds
+    || input.emptyStreak >= (input.emptyStreakLimit ?? 2);
 }
 
 export function discoveryErrorStatus(found: number): "completed" | "failed" {

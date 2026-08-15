@@ -11,7 +11,13 @@ import {
   extractDiscoveryJson,
   providerResponsePhase,
 } from "./discovery-core";
-import { applyDirectorySourcePolicy, directorySourcePrompt } from "./directory-sources";
+import {
+  OFFICIAL_CHURCH_DIRECTORIES,
+  applyDirectorySourcePolicy,
+  directorySourcePrompt,
+  discoverySourceLane,
+  type OfficialChurchDirectory,
+} from "./directory-sources";
 
 /**
  * Monthly discovery (spec §4). Calls the OpenAI Responses API with web search and
@@ -29,8 +35,13 @@ import { applyDirectorySourcePolicy, directorySourcePrompt } from "./directory-s
  * needs_review and refuses to resurrect any already-known (incl. suppressed) org.
  */
 
-const DISCOVERY_SYSTEM =
-`You are a careful research assistant building an outreach lead list of churches and youth organizations. You must follow these NON-NEGOTIABLE rules:
+function discoverySystem(directory: OfficialChurchDirectory | null | undefined): string {
+  const sourceInstructions = directory
+    ? `THIS REQUEST'S ONLY CANDIDATE DIRECTORY:\n- ${directory.denomination}: ${directory.entryUrl}\nSearch this directory only for candidates. Do not search the other national directories in this request.`
+    : directory === null
+      ? "THIS REQUEST IS THE SECONDARY-WEB FALLBACK. Find candidates from traditions not covered by the configured national directories. Set directory_source_url to null and discovery_method to secondary_web."
+      : `OFFICIAL DIRECTORY STARTING POINTS:\n${directorySourcePrompt()}`;
+  return `You are a careful research assistant building an outreach lead list of churches and youth organizations. You must follow these NON-NEGOTIABLE rules:
 
 1. Only include an organization that has BOTH (a) a publicly posted, currently-active youth or student ministry, AND (b) a publicly posted GENERAL/OFFICE contact email (e.g. info@, office@, church@). NEVER a personal or individual staff member's email. NEVER an email you guessed or inferred from a pattern — it must appear verbatim on a public page or a search result snippet.
 2. Respect robots.txt. If a site disallows automated access, do NOT try to fetch it directly — use only the search-indexed snippet, and lower your confidence for that lead.
@@ -42,11 +53,11 @@ const DISCOVERY_SYSTEM =
 8. Prefer quality over quantity. It is correct to return fewer, well-sourced leads than to pad the list. If youth-ministry evidence is weak, stale, or only inferred, mark confidence "low" and say why in youth_ministry_signal.
 9. Church SIZE: if a public page states a weekly attendance / average worship-service size (an "about"/"who we are"/news/annual-report page), capture it as estimated_attendance (an integer) and attendance_source_url (the page it came from). NEVER guess or infer attendance from building size, staff count, or denomination — if no public figure is stated, return estimated_attendance: null and attendance_source_url: null.
 
-OFFICIAL DIRECTORY STARTING POINTS:
-${directorySourcePrompt()}
+${sourceInstructions}
 
 Return ONLY a JSON object, no prose, of the form:
 {"leads":[{"org_name","city","state","denomination_type","contact_email","phone","website","youth_ministry_signal","directory_source_url":"..." or null,"contact_source_url":"...","youth_source_url":"...","discovery_method":"official_directory|secondary_web","source_urls":["..."],"discovery_confidence":"high|medium|low","estimated_attendance":123 or null,"attendance_source_url":"..." or null}]}`;
+}
 
 /** Legacy global-geography prompt (the monthly cron, non-campaign). */
 function userPrompt(): string {
@@ -56,11 +67,11 @@ function userPrompt(): string {
 /** Campaign-scoped prompt: search within a radius of the campaign's center, and
  *  exclude organizations already found in earlier loop rounds so each round adds
  *  new leads instead of repeating. */
-function campaignPrompt(campaign: Campaign, target: number, exclude: string[]): string {
+function campaignPrompt(campaign: Campaign, target: number, exclude: string[], sourceLabel: string): string {
   const excludeLine = exclude.length
     ? ` Do NOT include any of these organizations already found: ${exclude.slice(0, 60).join("; ")}.`
     : "";
-  return `Find up to ${target} churches or youth organizations located within ${campaign.radius_miles} miles of ${campaign.center_label}. Start with the listed official directories, then qualify each candidate on congregation-owned sources. Follow every rule and return every required evidence field.${excludeLine}`;
+  return `Find up to ${target} churches or youth organizations located within ${campaign.radius_miles} miles of ${campaign.center_label}. Use only this candidate source lane: ${sourceLabel}. Qualify each candidate on congregation-owned sources. Follow every rule and return every required evidence field.${excludeLine}`;
 }
 
 interface OpenAIResponse {
@@ -93,12 +104,16 @@ const GEOCODE_THROTTLE_MS = 1100;
 // is not coupled to a browser or Vercel request lifetime.
 const DISCOVERY_REQUEST_TIMEOUT_MS = 135_000;
 const BACKGROUND_REQUEST_TIMEOUT_MS = 15_000;
-// A five-lead structured payload is small. Capping output prevents OpenAI from
+// A two-lead structured payload is small. Capping output prevents OpenAI from
 // reserving the model's much larger default maximum against organization TPM.
-const DISCOVERY_MAX_OUTPUT_TOKENS = 16_000;
+const DISCOVERY_MAX_OUTPUT_TOKENS = 4_000;
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-function leadRequestBody(prompt: string, background = false): Record<string, unknown> {
+function leadRequestBody(
+  prompt: string,
+  background = false,
+  directory?: OfficialChurchDirectory | null,
+): Record<string, unknown> {
   const leadProperties = {
     org_name: { type: "string" }, city: { type: "string" }, state: { type: "string" },
     denomination_type: { type: ["string", "null"] }, contact_email: { type: "string" },
@@ -114,10 +129,11 @@ function leadRequestBody(prompt: string, background = false): Record<string, unk
     model: OUTREACH.openaiDiscoveryModel,
     store: false,
     background,
-    instructions: DISCOVERY_SYSTEM,
+    instructions: discoverySystem(directory),
     input: prompt,
     max_output_tokens: DISCOVERY_MAX_OUTPUT_TOKENS,
-    tools: [{ type: "web_search", search_context_size: "medium" }],
+    reasoning: { effort: "low" },
+    tools: [{ type: "web_search", search_context_size: "low" }],
     text: { format: { type: "json_schema", name: "church_discovery", strict: true, schema: {
       type: "object", additionalProperties: false, required: ["leads"], properties: {
         leads: { type: "array", items: { type: "object", additionalProperties: false,
@@ -181,10 +197,14 @@ async function requestLeads(key: string, prompt: string): Promise<DiscoveredLead
   return parseResponseLeads(data);
 }
 
-async function startBackgroundLeadRequest(key: string, prompt: string): Promise<OpenAIResponse> {
+async function startBackgroundLeadRequest(
+  key: string,
+  prompt: string,
+  directory: OfficialChurchDirectory | null,
+): Promise<OpenAIResponse> {
   return openAIRequest(key, "https://api.openai.com/v1/responses", {
     method: "POST",
-    body: JSON.stringify(leadRequestBody(prompt, true)),
+    body: JSON.stringify(leadRequestBody(prompt, true, directory)),
   }, BACKGROUND_REQUEST_TIMEOUT_MS);
 }
 
@@ -231,7 +251,9 @@ export interface DiscoveryRun {
 }
 
 const RUNS_TABLE = "outreach_discovery_runs";
-const MAX_ROUNDS = 8;
+const LEADS_PER_ROUND = 2;
+const SOURCE_LANE_COUNT = OFFICIAL_CHURCH_DIRECTORIES.length + 1;
+const MAX_ROUNDS = Math.ceil(OUTREACH.discoveryTarget / LEADS_PER_ROUND) + SOURCE_LANE_COUNT;
 const STALE_PROCESSING_MS = 2 * 60 * 1000;
 
 export async function latestDiscoveryRun(campaignId: string): Promise<DiscoveryRun | null> {
@@ -294,9 +316,11 @@ export async function continueCampaignDiscovery(campaign: Campaign): Promise<Dis
       providerResponse = await retrieveBackgroundLeadRequest(key, run.provider_response_id);
       run = await patchRun(run.id, { provider_status: providerResponse.status ?? null });
     } else {
+      const lane = discoverySourceLane(run.round_count);
       providerResponse = await startBackgroundLeadRequest(
         key,
-        campaignPrompt(campaign, Math.min(5, remaining), run.discovered_names),
+        campaignPrompt(campaign, Math.min(LEADS_PER_ROUND, remaining), run.discovered_names, lane.label),
+        lane.directory,
       );
       if (!providerResponse.id) throw new Error("openai_background_missing_id");
       run = await patchRun(run.id, {
@@ -341,7 +365,14 @@ export async function continueCampaignDiscovery(campaign: Campaign): Promise<Dis
     }
     const round = run.round_count + 1;
     const emptyStreak = added === 0 ? run.empty_streak + 1 : 0;
-    const done = discoveryIsComplete({ found, target: run.target_count, round, maxRounds: run.max_rounds, emptyStreak });
+    const done = discoveryIsComplete({
+      found,
+      target: run.target_count,
+      round,
+      maxRounds: run.max_rounds,
+      emptyStreak,
+      emptyStreakLimit: SOURCE_LANE_COUNT,
+    });
     run = await patchRun(run.id, {
       status: done ? "completed" : "running", round_count: round, found_count: found,
       inserted_count: inserted, skipped_count: skipped, out_of_radius_count: outOfRadius,

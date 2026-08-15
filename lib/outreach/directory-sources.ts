@@ -88,6 +88,26 @@ export function directorySourcePrompt(): string {
     .join("\n");
 }
 
+export interface DiscoverySourceLane {
+  directory: OfficialChurchDirectory | null;
+  label: string;
+}
+
+/**
+ * Keep each provider request on one bounded source lane. Seven rounds cover the
+ * official national directories; the eighth is a secondary-web fallback for
+ * traditions without a listed national locator. Subsequent rounds repeat the
+ * cycle while the exclusion list prevents duplicate organizations.
+ */
+export function discoverySourceLane(roundCount: number): DiscoverySourceLane {
+  const index = Math.max(0, Math.floor(roundCount)) % (OFFICIAL_CHURCH_DIRECTORIES.length + 1);
+  const directory = OFFICIAL_CHURCH_DIRECTORIES[index] ?? null;
+  return {
+    directory,
+    label: directory ? `${directory.denomination}: ${directory.entryUrl}` : "secondary web fallback",
+  };
+}
+
 /**
  * Convert the model's role-specific citations into the existing source_urls
  * evidence trail. A false "official_directory" claim is downgraded rather than
