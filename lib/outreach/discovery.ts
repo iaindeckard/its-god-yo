@@ -6,17 +6,19 @@ import { geocodeAddress } from "../geocode";
 import { haversineMiles, sizeBucket, updateCampaign, type Campaign } from "./campaigns";
 import { getSupabaseAdmin } from "../supabaseAdmin";
 import { discoveryErrorStatus, discoveryIsComplete, extractDiscoveryJson } from "./discovery-core";
+import { applyDirectorySourcePolicy, directorySourcePrompt } from "./directory-sources";
 
 /**
- * Monthly discovery (spec §4). Calls the Claude API with the web-search tool and
+ * Monthly discovery (spec §4). Calls the OpenAI Responses API with web search and
  * asks for STRUCTURED JSON — a defined search-and-extract pass, not a free-text
  * scrape. The guardrails below are part of the prompt, not left implicit:
  *   - public general/office contact email ONLY — never a personal/staff email,
  *     never a guessed address pattern
  *   - respect robots.txt: if a site blocks automated fetch, rely on the
  *     search-indexed snippet only, don't force it
- *   - no purchased/third-party contact-list data — org sites + their own socials
- *   - every lead cites the source URL(s) that actually show the email + youth signal
+ *   - official denominational directories are the primary candidate source
+ *   - congregation-owned pages qualify the email and active youth signal
+ *   - general web search is secondary and can never produce high confidence alone
  *
  * insertDiscovered() then maps confidence + address shape to active vs
  * needs_review and refuses to resurrect any already-known (incl. suppressed) org.
@@ -27,17 +29,23 @@ const DISCOVERY_SYSTEM =
 
 1. Only include an organization that has BOTH (a) a publicly posted, currently-active youth or student ministry, AND (b) a publicly posted GENERAL/OFFICE contact email (e.g. info@, office@, church@). NEVER a personal or individual staff member's email. NEVER an email you guessed or inferred from a pattern — it must appear verbatim on a public page or a search result snippet.
 2. Respect robots.txt. If a site disallows automated access, do NOT try to fetch it directly — use only the search-indexed snippet, and lower your confidence for that lead.
-3. Use only the organization's own public website/social pages and general web search. Do NOT use any purchased, scraped, or third-party contact-list data.
-4. Every lead MUST cite the specific source URL(s) that show the email and the youth-ministry signal. No un-sourced entries. If email and youth signal are on different pages, cite both.
-5. Prefer quality over quantity. It is correct to return fewer, well-sourced leads than to pad the list. If youth-ministry evidence is weak, stale, or only inferred, mark confidence "low" and say why in youth_ministry_signal.
-6. Church SIZE: if a public page states a weekly attendance / average worship-service size (an "about"/"who we are"/news/annual-report page), capture it as estimated_attendance (an integer) and attendance_source_url (the page it came from). NEVER guess or infer attendance from building size, staff count, or denomination — if no public figure is stated, return estimated_attendance: null and attendance_source_url: null.
+3. DISCOVER CANDIDATES FROM OFFICIAL DIRECTORIES FIRST. Search the official national church-body locators listed below before using general web search. An official directory establishes candidate identity and denomination only; it does NOT establish an active youth ministry or contact permission.
+4. QUALIFY EACH CANDIDATE ON CONGREGATION-OWNED SOURCES. The public general/office email and current youth-ministry signal must each be supported by the congregation's own website or official social page. Return their URLs separately as contact_source_url and youth_source_url. Never treat a directory entry alone as youth/contact proof.
+5. General web search is SECONDARY: use it to locate congregation-owned qualification pages or to find candidates only after the listed official directories do not cover that tradition. For a secondary-web candidate, set directory_source_url to null and discovery_method to "secondary_web". Secondary-web candidates can be at most medium confidence.
+6. Do NOT use purchased, scraped, aggregator, map/review, or third-party contact-list data. Respect robots.txt. If a congregation blocks automated access, use only its search-indexed snippet and lower confidence.
+7. Every lead MUST cite the specific pages actually used. No un-sourced entries.
+8. Prefer quality over quantity. It is correct to return fewer, well-sourced leads than to pad the list. If youth-ministry evidence is weak, stale, or only inferred, mark confidence "low" and say why in youth_ministry_signal.
+9. Church SIZE: if a public page states a weekly attendance / average worship-service size (an "about"/"who we are"/news/annual-report page), capture it as estimated_attendance (an integer) and attendance_source_url (the page it came from). NEVER guess or infer attendance from building size, staff count, or denomination — if no public figure is stated, return estimated_attendance: null and attendance_source_url: null.
+
+OFFICIAL DIRECTORY STARTING POINTS:
+${directorySourcePrompt()}
 
 Return ONLY a JSON object, no prose, of the form:
-{"leads":[{"org_name","city","state","denomination_type","contact_email","phone","website","youth_ministry_signal","source_urls":["..."],"discovery_confidence":"high|medium|low","estimated_attendance":123 or null,"attendance_source_url":"..." or null}]}`;
+{"leads":[{"org_name","city","state","denomination_type","contact_email","phone","website","youth_ministry_signal","directory_source_url":"..." or null,"contact_source_url":"...","youth_source_url":"...","discovery_method":"official_directory|secondary_web","source_urls":["..."],"discovery_confidence":"high|medium|low","estimated_attendance":123 or null,"attendance_source_url":"..." or null}]}`;
 
 /** Legacy global-geography prompt (the monthly cron, non-campaign). */
 function userPrompt(): string {
-  return `Find up to ${OUTREACH.discoveryTarget} churches or youth organizations in ${OUTREACH.geography} that have an active youth/student ministry and a public general contact email. Follow every rule. For each, capture the general email, phone, website, a short youth_ministry_signal quoting what you found and where, the source URL(s), a confidence rating, and (only if publicly stated) estimated_attendance + attendance_source_url.`;
+  return `Find up to ${OUTREACH.discoveryTarget} churches or youth organizations in ${OUTREACH.geography}. Start with the listed official directories, then qualify each candidate on congregation-owned sources. Follow every rule and return every required evidence field.`;
 }
 
 /** Campaign-scoped prompt: search within a radius of the campaign's center, and
@@ -47,7 +55,7 @@ function campaignPrompt(campaign: Campaign, target: number, exclude: string[]): 
   const excludeLine = exclude.length
     ? ` Do NOT include any of these organizations already found: ${exclude.slice(0, 60).join("; ")}.`
     : "";
-  return `Find up to ${target} churches or youth organizations located within ${campaign.radius_miles} miles of ${campaign.center_label} that have an active youth/student ministry and a public general contact email. Follow every rule. For each, capture city and state, the general email, phone, website, a short youth_ministry_signal quoting what you found and where, the source URL(s), a confidence rating, and (only if publicly stated) estimated_attendance + attendance_source_url.${excludeLine}`;
+  return `Find up to ${target} churches or youth organizations located within ${campaign.radius_miles} miles of ${campaign.center_label}. Start with the listed official directories, then qualify each candidate on congregation-owned sources. Follow every rule and return every required evidence field.${excludeLine}`;
 }
 
 interface OpenAIResponse {
@@ -83,6 +91,9 @@ async function requestLeads(key: string, prompt: string): Promise<DiscoveredLead
     denomination_type: { type: ["string", "null"] }, contact_email: { type: "string" },
     phone: { type: ["string", "null"] }, website: { type: ["string", "null"] },
     youth_ministry_signal: { type: "string" }, source_urls: { type: "array", items: { type: "string" } },
+    directory_source_url: { type: ["string", "null"] }, contact_source_url: { type: "string" },
+    youth_source_url: { type: "string" },
+    discovery_method: { type: "string", enum: ["official_directory", "secondary_web"] },
     discovery_confidence: { type: "string", enum: ["high", "medium", "low"] },
     estimated_attendance: { type: ["integer", "null"] }, attendance_source_url: { type: ["string", "null"] },
   };
@@ -121,7 +132,10 @@ async function requestLeads(key: string, prompt: string): Promise<DiscoveredLead
     .filter((item) => item.type === "output_text").map((item) => item.text ?? "").join("\n");
   const parsed = extractDiscoveryJson(text);
   if (!parsed) return [];
-  return parsed.leads.filter((l) => l && l.org_name && l.contact_email);
+  return parsed.leads
+    .filter((l) => l && l.org_name && l.contact_email)
+    .map(applyDirectorySourcePolicy)
+    .filter((lead): lead is DiscoveredLead => Boolean(lead));
 }
 
 /** Legacy global-geography discovery (the monthly cron). Non-campaign: leads land

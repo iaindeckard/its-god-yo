@@ -218,6 +218,13 @@ export interface DiscoveredLead {
   website?: string | null;
   youth_ministry_signal?: string | null;
   source_urls?: string[];
+  // Candidate provenance is separate from qualification evidence. An official
+  // denominational directory establishes that the congregation exists; its own
+  // public pages must still establish the office email and active youth ministry.
+  directory_source_url?: string | null;
+  contact_source_url?: string | null;
+  youth_source_url?: string | null;
+  discovery_method?: "official_directory" | "secondary_web";
   discovery_confidence?: "high" | "medium" | "low";
   // Attendance-based sizing (from the discovery pass; null/unknown when a public
   // figure isn't found — never guessed).
