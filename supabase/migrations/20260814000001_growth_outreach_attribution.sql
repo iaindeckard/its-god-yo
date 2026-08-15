@@ -32,6 +32,8 @@ create index if not exists idx_outreach_attr_sessions_expires
 
 alter table public.outreach_attribution_sessions enable row level security;
 -- No policies: service-role/server only. A browser never writes attribution.
+revoke all on table public.outreach_attribution_sessions from public, anon, authenticated;
+grant select, insert, update, delete on table public.outreach_attribution_sessions to service_role;
 
 alter table public.pending_signups
   add column if not exists outreach_attribution_session_id uuid
@@ -49,7 +51,50 @@ create index if not exists idx_pending_signups_outreach_attr_session
 -- admitted only when a promotion-code id belongs to exactly one campaign lead.
 create or replace view public.v_outreach_payment_attribution
 with (security_invoker = true) as
-with unique_promo_ids as (
+with unique_charge_subscriptions as (
+  -- Refund/dispute ledger rows intentionally carry no subscription id. Recover it
+  -- only from an unambiguous settled charge row sharing the same Stripe charge.
+  select stripe_charge_id, min(stripe_subscription_id) as stripe_subscription_id
+  from public.subscription_payments
+  where stripe_charge_id is not null
+    and stripe_subscription_id is not null
+  group by stripe_charge_id
+  having count(distinct stripe_subscription_id) = 1
+),
+unique_invoice_subscriptions as (
+  select stripe_invoice_id, min(stripe_subscription_id) as stripe_subscription_id
+  from public.subscription_payments
+  where stripe_invoice_id is not null
+    and stripe_subscription_id is not null
+  group by stripe_invoice_id
+  having count(distinct stripe_subscription_id) = 1
+),
+unique_payment_intent_subscriptions as (
+  select stripe_payment_intent_id, min(stripe_subscription_id) as stripe_subscription_id
+  from public.subscription_payments
+  where stripe_payment_intent_id is not null
+    and stripe_subscription_id is not null
+  group by stripe_payment_intent_id
+  having count(distinct stripe_subscription_id) = 1
+),
+payment_lineage as (
+  select
+    sp.*,
+    coalesce(
+      sp.stripe_subscription_id,
+      ucs.stripe_subscription_id,
+      uis.stripe_subscription_id,
+      upis.stripe_subscription_id
+    ) as attributed_subscription_id
+  from public.subscription_payments sp
+  left join unique_charge_subscriptions ucs
+    on ucs.stripe_charge_id = sp.stripe_charge_id
+  left join unique_invoice_subscriptions uis
+    on uis.stripe_invoice_id = sp.stripe_invoice_id
+  left join unique_payment_intent_subscriptions upis
+    on upis.stripe_payment_intent_id = sp.stripe_payment_intent_id
+),
+unique_promo_ids as (
   select promo_promotion_code_id
   from public.igy_outreach_leads
   where promo_promotion_code_id is not null
@@ -80,9 +125,9 @@ direct_payments as (
     sp.status,
     sp.settled_currency,
     sp.settled_net_cents
-  from public.subscription_payments sp
+  from payment_lineage sp
   join public.pending_signups ps
-    on ps.stripe_subscription_id = sp.stripe_subscription_id
+    on ps.stripe_subscription_id = sp.attributed_subscription_id
   join public.outreach_attribution_sessions s
     on s.id = ps.outreach_attribution_session_id
   where sp.business_unit = 'igy'
@@ -104,9 +149,9 @@ strong_payments as (
     sp.status,
     sp.settled_currency,
     sp.settled_net_cents
-  from public.subscription_payments sp
+  from payment_lineage sp
   join public.pending_signups ps
-    on ps.stripe_subscription_id = sp.stripe_subscription_id
+    on ps.stripe_subscription_id = sp.attributed_subscription_id
   join unique_promo_leads upl
     on upl.promo_promotion_code_id = ps.promo_promotion_code_id
   where sp.business_unit = 'igy'
@@ -116,6 +161,9 @@ strong_payments as (
 select * from direct_payments
 union all
 select * from strong_payments;
+
+revoke all on table public.v_outreach_payment_attribution from public, anon, authenticated;
+grant select on table public.v_outreach_payment_attribution to service_role;
 
 comment on view public.v_outreach_payment_attribution is
   'Growth Engine Phase 1 realized outreach payment attribution. Direct signed-session evidence wins; only uniquely mapped lead promo evidence is Strong. Uses signed settled_net_cents and excludes probable/unattributed guesses.';

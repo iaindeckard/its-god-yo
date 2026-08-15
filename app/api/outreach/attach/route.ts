@@ -49,12 +49,30 @@ export async function POST(req: Request) {
       return NextResponse.json({ attached: false, reason: "signup_too_old" }, { status: 409 });
     }
 
-    const { error: updateError } = await admin
+    const { data: updated, error: updateError } = await admin
       .from("pending_signups")
       .update({ outreach_attribution_session_id: session.id })
       .eq("id", pendingSignupId)
-      .is("outreach_attribution_session_id", null);
+      .is("outreach_attribution_session_id", null)
+      .select("outreach_attribution_session_id")
+      .maybeSingle();
     if (updateError) return NextResponse.json({ attached: false, reason: "update_failed" }, { status: 500 });
+    if (!updated) {
+      // A concurrent request may have won between the read and conditional update.
+      // Read back the winner instead of reporting attribution that was not stored.
+      const { data: current, error: currentError } = await admin
+        .from("pending_signups")
+        .select("outreach_attribution_session_id")
+        .eq("id", pendingSignupId)
+        .maybeSingle();
+      if (currentError || !current) {
+        return NextResponse.json({ attached: false, reason: "concurrent_update_unknown" }, { status: 409 });
+      }
+      return NextResponse.json({
+        attached: current.outreach_attribution_session_id === session.id,
+        reason: "concurrent_update",
+      }, { status: current.outreach_attribution_session_id === session.id ? 200 : 409 });
+    }
 
     return NextResponse.json({ attached: true });
   } catch {
