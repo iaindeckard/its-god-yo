@@ -8,6 +8,7 @@ import {
 import {
   OFFICIAL_CHURCH_DIRECTORIES,
   applyDirectorySourcePolicy,
+  discoverySourceLane,
   officialDirectoryForUrl,
 } from "../outreach/directory-sources";
 
@@ -28,6 +29,15 @@ describe("outreach discovery core", () => {
     expect(discoveryIsComplete({ found: 5, target: 35, round: 3, maxRounds: 8, emptyStreak: 2 })).toBe(true);
   });
 
+  it("can require a full source cycle before stopping on empty rounds", () => {
+    expect(discoveryIsComplete({
+      found: 0, target: 35, round: 7, maxRounds: 26, emptyStreak: 7, emptyStreakLimit: 8,
+    })).toBe(false);
+    expect(discoveryIsComplete({
+      found: 0, target: 35, round: 8, maxRounds: 26, emptyStreak: 8, emptyStreakLimit: 8,
+    })).toBe(true);
+  });
+
   it("keeps durable results when a later provider round times out", () => {
     expect(discoveryErrorStatus(15)).toBe("completed");
     expect(discoveryErrorStatus(0)).toBe("failed");
@@ -45,6 +55,13 @@ describe("outreach discovery core", () => {
     expect(OFFICIAL_CHURCH_DIRECTORIES.length).toBeGreaterThanOrEqual(7);
     expect(officialDirectoryForUrl("https://churches.sbc.net/church/123")?.id).toBe("sbc");
     expect(officialDirectoryForUrl("https://example.com/churches")).toBeNull();
+  });
+
+  it("assigns one official directory per round, then a secondary fallback", () => {
+    expect(discoverySourceLane(0).directory?.id).toBe("usccb");
+    expect(discoverySourceLane(6).directory?.id).toBe("lcms");
+    expect(discoverySourceLane(7).directory).toBeNull();
+    expect(discoverySourceLane(8).directory?.id).toBe("usccb");
   });
 
   it("preserves truthful contact-first evidence plus official-directory provenance", () => {
