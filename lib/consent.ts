@@ -75,6 +75,26 @@ export async function submitConsent(payload: ConsentPayload): Promise<ConsentRes
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.error || `submit failed (${res.status})`);
+
+  // Growth Engine Phase 1: if this browser arrived through a trusted outreach
+  // entry link, the Next.js server holds an HTTP-only attribution cookie. Attach
+  // that server-trusted session to the pending signup immediately after the Edge
+  // Function creates it. This is deliberately best-effort: attribution must never
+  // turn a valid signup into a failed signup.
+  const pendingSignupId = typeof data?.pending_signup_id === "string" ? data.pending_signup_id : null;
+  if (pendingSignupId) {
+    try {
+      await fetch("/api/outreach/attach", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pending_signup_id: pendingSignupId }),
+      });
+    } catch {
+      // Non-blocking measurement path. The promotion-code path can still provide
+      // Strong attribution later when applicable.
+    }
+  }
+
   return data as ConsentResult;
 }
 
