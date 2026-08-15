@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { discoveryErrorStatus, discoveryIsComplete, extractDiscoveryJson } from "../outreach/discovery-core";
+import {
+  discoveryErrorStatus,
+  discoveryIsComplete,
+  extractDiscoveryJson,
+  providerResponsePhase,
+} from "../outreach/discovery-core";
 import {
   OFFICIAL_CHURCH_DIRECTORIES,
   applyDirectorySourcePolicy,
@@ -26,6 +31,14 @@ describe("outreach discovery core", () => {
   it("keeps durable results when a later provider round times out", () => {
     expect(discoveryErrorStatus(15)).toBe("completed");
     expect(discoveryErrorStatus(0)).toBe("failed");
+  });
+
+  it("classifies background provider response states", () => {
+    expect(providerResponsePhase("queued")).toBe("pending");
+    expect(providerResponsePhase("in_progress")).toBe("pending");
+    expect(providerResponsePhase("completed")).toBe("completed");
+    expect(providerResponsePhase("failed")).toBe("failed");
+    expect(providerResponsePhase("cancelled")).toBe("failed");
   });
 
   it("recognizes official national directory subdomains", () => {

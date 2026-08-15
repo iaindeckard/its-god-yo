@@ -19,3 +19,9 @@ export function discoveryIsComplete(input: {
 export function discoveryErrorStatus(found: number): "completed" | "failed" {
   return found > 0 ? "completed" : "failed";
 }
+
+export function providerResponsePhase(status: string | null | undefined): "pending" | "completed" | "failed" {
+  if (status === "queued" || status === "in_progress") return "pending";
+  if (status === "completed") return "completed";
+  return "failed";
+}
