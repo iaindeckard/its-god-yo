@@ -335,7 +335,7 @@ export default function OutreachManager({
   const [contactEdit, setContactEdit] = useState<{ leadId: string; email: string; sourceUrl: string; manuallyConfirmed: boolean } | null>(null);
   const [analystForm, setAnalystForm] = useState({
     objective: "church_enrollment", audience: "Church youth leaders and parents",
-    budget_level: "small_test", preferred_window: "", constraints: "Avoid Dallas and do not use New Iberia until its discovery issue is resolved.",
+    budget_level: "small_test", preferred_window: "", constraints: "",
   });
   const [proposal, setProposal] = useState<MarketingProposal | null>(null);
   const [aiUsage, setAiUsage] = useState(initialAiUsage);
@@ -659,7 +659,7 @@ export default function OutreachManager({
                 <input value={analystForm.preferred_window} placeholder="Let the analyst recommend" onChange={(e) => setAnalystForm((form) => ({ ...form, preferred_window: e.target.value }))} />
               </div>
               <div className="field" style={{ margin: 0, minWidth: 280, flex: 1 }}><label>Constraints</label>
-                <input value={analystForm.constraints} onChange={(e) => setAnalystForm((form) => ({ ...form, constraints: e.target.value }))} />
+                <input value={analystForm.constraints} placeholder="Add any optional limits or exclusions" onChange={(e) => setAnalystForm((form) => ({ ...form, constraints: e.target.value }))} />
               </div>
               <button className="btn btn-primary" disabled={!!busy || !analystForm.audience.trim()} onClick={runAnalyst}>
                 {busy === "analyst" ? "Researching markets..." : "Recommend my next campaign"}
