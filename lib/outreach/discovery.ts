@@ -22,6 +22,7 @@ import {
   type OfficialChurchDirectory,
 } from "./directory-sources";
 import { applyAttendanceSourcePolicy, sizeSourcePrompt } from "./size-sources";
+import { DISCOVERY_LEGACY_MAX_COST_MICROUSD, DISCOVERY_ROUND_MAX_COST_MICROUSD, attachAiProviderResponse, completeAiUsage, completeAiUsageByProviderResponse, failAiUsage, failAiUsageByProviderResponse, reserveAiUsage } from "../ai-usage";
 
 /**
  * Monthly discovery (spec §4). Calls the OpenAI Responses API with web search and
@@ -89,7 +90,8 @@ interface OpenAIResponse {
   error?: { message?: string; code?: string } | null;
   incomplete_details?: { reason?: string } | null;
   output_text?: string;
-  output?: Array<{ content?: Array<{ type?: string; text?: string }> }>;
+  output?: Array<{ type?: string; content?: Array<{ type?: string; text?: string }> }>;
+  usage?: { input_tokens?: number; output_tokens?: number; input_tokens_details?: { cached_tokens?: number }; output_tokens_details?: { reasoning_tokens?: number } };
 }
 
 export interface DiscoveryResult {
@@ -142,6 +144,7 @@ function leadRequestBody(
     instructions: discoverySystem(directory),
     input: prompt,
     max_output_tokens: DISCOVERY_MAX_OUTPUT_TOKENS,
+    max_tool_calls: background ? 5 : 15,
     reasoning: { effort: "low" },
     tools: [{ type: "web_search", search_context_size: "low" }],
     text: { format: { type: "json_schema", name: "church_discovery", strict: true, schema: {
@@ -202,11 +205,18 @@ function parseResponseLeads(data: OpenAIResponse, maxLeads?: number): Discovered
 
 /** One synchronous OpenAI web-search call for the legacy monthly cron. */
 async function requestLeads(key: string, prompt: string): Promise<DiscoveredLead[]> {
-  const data = await openAIRequest(key, "https://api.openai.com/v1/responses", {
-    method: "POST",
-    body: JSON.stringify(leadRequestBody(prompt)),
-  }, DISCOVERY_REQUEST_TIMEOUT_MS);
-  return parseResponseLeads(data);
+  const usageEvent = await reserveAiUsage({ feature: "outreach_discovery", requestKey: `outreach_discovery:legacy:${crypto.randomUUID()}`, model: OUTREACH.openaiDiscoveryModel, maxCostMicrousd: DISCOVERY_LEGACY_MAX_COST_MICROUSD });
+  try {
+    const data = await openAIRequest(key, "https://api.openai.com/v1/responses", {
+      method: "POST",
+      body: JSON.stringify(leadRequestBody(prompt)),
+    }, DISCOVERY_REQUEST_TIMEOUT_MS);
+    await completeAiUsage(usageEvent.id, data);
+    return parseResponseLeads(data);
+  } catch (error) {
+    await failAiUsage(usageEvent.id, error);
+    throw error;
+  }
 }
 
 async function startBackgroundLeadRequest(
@@ -334,13 +344,24 @@ export async function continueCampaignDiscovery(campaign: Campaign): Promise<Dis
       run = await patchRun(run.id, { provider_status: providerResponse.status ?? null });
     } else {
       const lane = discoverySourceLane(run.round_count, campaign.denomination_filter);
-      providerResponse = await startBackgroundLeadRequest(
-        key,
-        campaignPrompt(campaign, Math.min(LEADS_PER_ROUND, remaining), run.discovered_names, lane.label),
-        lane.directory,
-        Math.min(LEADS_PER_ROUND, remaining),
-      );
-      if (!providerResponse.id) throw new Error("openai_background_missing_id");
+      const usageEvent = await reserveAiUsage({ feature: "outreach_discovery", requestKey: `outreach_discovery:${run.id}:round:${run.round_count}`, model: OUTREACH.openaiDiscoveryModel, maxCostMicrousd: DISCOVERY_ROUND_MAX_COST_MICROUSD, metadata: { campaign_id: campaign.id, run_id: run.id, round: run.round_count } });
+      try {
+        providerResponse = await startBackgroundLeadRequest(
+          key,
+          campaignPrompt(campaign, Math.min(LEADS_PER_ROUND, remaining), run.discovered_names, lane.label),
+          lane.directory,
+          Math.min(LEADS_PER_ROUND, remaining),
+        );
+      } catch (error) {
+        await failAiUsage(usageEvent.id, error);
+        throw error;
+      }
+      if (!providerResponse.id) {
+        const missingId = new Error("openai_background_missing_id");
+        await failAiUsage(usageEvent.id, missingId);
+        throw missingId;
+      }
+      await attachAiProviderResponse(usageEvent.id, providerResponse.id);
       run = await patchRun(run.id, {
         provider_response_id: providerResponse.id,
         provider_status: providerResponse.status ?? null,
@@ -360,8 +381,12 @@ export async function continueCampaignDiscovery(campaign: Campaign): Promise<Dis
         ?? providerResponse.incomplete_details?.reason
         ?? providerResponse.status
         ?? "unknown";
-      throw new Error(`openai_background_${detail}`);
+      const providerError = new Error(`openai_background_${detail}`);
+      if (run.provider_response_id) await failAiUsageByProviderResponse(run.provider_response_id, providerError);
+      throw providerError;
     }
+
+    if (providerResponse.id) await completeAiUsageByProviderResponse(providerResponse.id, providerResponse);
 
     const batch = parseResponseLeads(providerResponse, LEADS_PER_ROUND);
     let found = run.found_count, inserted = run.inserted_count, skipped = run.skipped_count;
