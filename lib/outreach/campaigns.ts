@@ -22,7 +22,10 @@ export interface Campaign {
   center_lat: number | null;
   center_lng: number | null;
   radius_miles: number;
+  geography_type: "radius" | "state";
+  state_code: string | null;
   size_filter: string[] | null;
+  denomination_filter: string[] | null;
   discount_percent: number;
   message_variant: string | null;
   status: CampaignStatus;
@@ -71,7 +74,10 @@ export interface CreateCampaignInput {
   name: string;
   centerLabel: string;
   radiusMiles: number;
+  geographyType?: "radius" | "state";
+  stateCode?: string | null;
   sizeFilter?: string[] | null;
+  denominationFilter?: string[] | null;
   createdBy?: string | null;
   // When the map picker already resolved coordinates, pass them to skip the
   // server-side geocode. Omit (Phase 1 / text-only create) to geocode centerLabel.
@@ -87,7 +93,9 @@ export interface CreateCampaignInput {
 export async function createCampaign(input: CreateCampaignInput): Promise<Campaign> {
   const admin = getSupabaseAdmin();
   const hasCoords = input.centerLat != null && input.centerLng != null;
-  const center = hasCoords
+  const center = input.geographyType === "state"
+    ? null
+    : hasCoords
     ? { lat: input.centerLat as number, lng: input.centerLng as number }
     : await geocodeAddress({ address: input.centerLabel, country: "United States" });
   const row = {
@@ -96,7 +104,10 @@ export async function createCampaign(input: CreateCampaignInput): Promise<Campai
     center_lat: center?.lat ?? null,
     center_lng: center?.lng ?? null,
     radius_miles: input.radiusMiles,
+    geography_type: input.geographyType ?? "radius",
+    state_code: input.geographyType === "state" ? input.stateCode?.toUpperCase() ?? null : null,
     size_filter: input.sizeFilter ?? null,
+    denomination_filter: input.denominationFilter?.length ? input.denominationFilter : null,
     created_by: input.createdBy ?? null,
   };
   const { data, error } = await admin.from(TABLE).insert(row).select("*").single();
@@ -121,7 +132,10 @@ export interface CampaignPatch {
   name?: string;
   status?: CampaignStatus;
   size_filter?: string[] | null;
+  denomination_filter?: string[] | null;
   radius_miles?: number;
+  geography_type?: "radius" | "state";
+  state_code?: string | null;
   center_label?: string;
   center_lat?: number | null;
   center_lng?: number | null;

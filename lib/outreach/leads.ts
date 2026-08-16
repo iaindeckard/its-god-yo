@@ -191,6 +191,38 @@ export async function getLead(id: string): Promise<OutreachLead | null> {
   return (data as OutreachLead) ?? null;
 }
 
+export async function replaceLeadContactEmail(
+  lead: OutreachLead,
+  input: { email: string; sourceUrl: string; actorUserId: string },
+): Promise<void> {
+  if (!lead.campaign_id || !["staged", "active", "needs_review"].includes(lead.status)) {
+    throw new Error("contact_email_edit_not_allowed");
+  }
+  const now = new Date().toISOString();
+  const priorNotes = lead.verification_notes ?? {};
+  const priorEdits = Array.isArray(priorNotes.contact_email_edits) ? priorNotes.contact_email_edits : [];
+  const sourceUrls = [input.sourceUrl, ...(Array.isArray(lead.source_urls) ? lead.source_urls : [])];
+  const { error } = await getSupabaseAdmin().from(TABLE).update({
+    contact_email: input.email,
+    source_urls: [...new Set(sourceUrls)],
+    verification_status: "unverified",
+    verified_at: null,
+    verification_notes: {
+      ...priorNotes,
+      contact_email_edits: [...priorEdits, {
+        from: lead.contact_email,
+        to: input.email,
+        source_url: input.sourceUrl,
+        changed_by: input.actorUserId,
+        changed_at: now,
+      }],
+    },
+    updated_at: now,
+  }).eq("id", lead.id);
+  if (error?.code === "23505") throw new Error("contact_email_already_exists");
+  if (error) throw new Error(`contact_email_update_failed: ${error.message}`);
+}
+
 /** Conversion (spec §5). Matched by the Stripe promotion_code id we stored at
  *  mint time. Idempotent: only the first matching redemption sticks. */
 export async function markConvertedByPromotionCodeId(

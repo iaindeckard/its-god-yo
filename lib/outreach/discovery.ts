@@ -12,12 +12,13 @@ import {
   discoveryIsComplete,
   extractDiscoveryJson,
   providerResponsePhase,
+  normalizeUsStateCode,
 } from "./discovery-core";
 import {
-  OFFICIAL_CHURCH_DIRECTORIES,
   applyDirectorySourcePolicy,
   directorySourcePrompt,
   discoverySourceLane,
+  discoverySourceLaneCount,
   type OfficialChurchDirectory,
 } from "./directory-sources";
 
@@ -73,7 +74,10 @@ function campaignPrompt(campaign: Campaign, target: number, exclude: string[], s
   const excludeLine = exclude.length
     ? ` Do NOT include any of these organizations already found: ${exclude.slice(0, 60).join("; ")}.`
     : "";
-  return `Find up to ${target} churches or youth organizations located within ${campaign.radius_miles} miles of ${campaign.center_label}. Use only this candidate source lane: ${sourceLabel}. Qualify each candidate on congregation-owned sources. Follow every rule and return every required evidence field.${excludeLine}`;
+  const geography = campaign.geography_type === "state"
+    ? `in the state of ${campaign.center_label} (${campaign.state_code})`
+    : `within ${campaign.radius_miles} miles of ${campaign.center_label}`;
+  return `Find up to ${target} churches or youth organizations located ${geography}. Use only this candidate source lane: ${sourceLabel}. Qualify each candidate on congregation-owned sources. Follow every rule and return every required evidence field.${excludeLine}`;
 }
 
 interface OpenAIResponse {
@@ -257,11 +261,9 @@ export interface DiscoveryRun {
 
 const RUNS_TABLE = "outreach_discovery_runs";
 const LEADS_PER_ROUND = 2;
-const SOURCE_LANE_COUNT = OFFICIAL_CHURCH_DIRECTORIES.length + 1;
 // The persisted table enforces max_rounds between 1 and 20. Twenty bounded
 // two-lead rounds can still satisfy the default 35-lead target while leaving
 // two sparse rounds; larger configured targets finish safely at this ceiling.
-const MAX_ROUNDS = boundedDiscoveryMaxRounds(OUTREACH.discoveryTarget, LEADS_PER_ROUND, SOURCE_LANE_COUNT);
 const STALE_PROCESSING_MS = 2 * 60 * 1000;
 
 export async function latestDiscoveryRun(campaignId: string): Promise<DiscoveryRun | null> {
@@ -275,8 +277,11 @@ async function createDiscoveryRun(campaign: Campaign): Promise<DiscoveryRun> {
   const admin = getSupabaseAdmin();
   const prior = await latestDiscoveryRun(campaign.id);
   if (prior && ["running", "processing"].includes(prior.status)) return prior;
+  const sourceLaneCount = discoverySourceLaneCount(campaign.denomination_filter);
   const { data, error } = await admin.from(RUNS_TABLE).insert({
-    campaign_id: campaign.id, target_count: OUTREACH.discoveryTarget, max_rounds: MAX_ROUNDS,
+    campaign_id: campaign.id,
+    target_count: OUTREACH.discoveryTarget,
+    max_rounds: boundedDiscoveryMaxRounds(OUTREACH.discoveryTarget, LEADS_PER_ROUND, sourceLaneCount),
   }).select("*").single();
   if (error) throw new Error(`discovery_run_create_failed: ${error.message}`);
   await updateCampaign(campaign.id, { status: "discovering" });
@@ -324,7 +329,7 @@ export async function continueCampaignDiscovery(campaign: Campaign): Promise<Dis
       providerResponse = await retrieveBackgroundLeadRequest(key, run.provider_response_id);
       run = await patchRun(run.id, { provider_status: providerResponse.status ?? null });
     } else {
-      const lane = discoverySourceLane(run.round_count);
+      const lane = discoverySourceLane(run.round_count, campaign.denomination_filter);
       providerResponse = await startBackgroundLeadRequest(
         key,
         campaignPrompt(campaign, Math.min(LEADS_PER_ROUND, remaining), run.discovered_names, lane.label),
@@ -363,7 +368,10 @@ export async function continueCampaignDiscovery(campaign: Campaign): Promise<Dis
       names.push(lead.org_name);
       const coords = await geocodeAddress({ city: lead.city, state: lead.state, country: "United States" });
       await sleep(GEOCODE_THROTTLE_MS);
-      if (coords && center && haversineMiles(center, coords) > Number(campaign.radius_miles)) { outOfRadius++; continue; }
+      const outsideTarget = campaign.geography_type === "state"
+        ? normalizeUsStateCode(lead.state) !== campaign.state_code
+        : Boolean(coords && center && haversineMiles(center, coords) > Number(campaign.radius_miles));
+      if (outsideTarget) { outOfRadius++; continue; }
       const enriched = { ...lead, latitude: coords?.lat ?? null, longitude: coords?.lng ?? null,
         size_bucket: sizeBucket(lead.estimated_attendance) };
       const saved = await insertDiscovered([enriched], campaign.id);
@@ -380,7 +388,7 @@ export async function continueCampaignDiscovery(campaign: Campaign): Promise<Dis
       round,
       maxRounds: run.max_rounds,
       emptyStreak,
-      emptyStreakLimit: SOURCE_LANE_COUNT,
+      emptyStreakLimit: discoverySourceLaneCount(campaign.denomination_filter),
     });
     run = await patchRun(run.id, {
       status: done ? "completed" : "running", round_count: round, found_count: found,

@@ -93,15 +93,37 @@ export interface DiscoverySourceLane {
   label: string;
 }
 
+export function validDirectoryIds(ids: string[] | null | undefined): string[] {
+  if (!ids?.length) return [];
+  const allowed = new Set(OFFICIAL_CHURCH_DIRECTORIES.map((directory) => directory.id));
+  return [...new Set(ids.map((id) => id.trim()).filter((id) => allowed.has(id)))];
+}
+
+export function selectedDirectories(ids: string[] | null | undefined): OfficialChurchDirectory[] {
+  const selected = new Set(validDirectoryIds(ids));
+  return selected.size === 0
+    ? [...OFFICIAL_CHURCH_DIRECTORIES]
+    : OFFICIAL_CHURCH_DIRECTORIES.filter((directory) => selected.has(directory.id));
+}
+
+export function discoverySourceLaneCount(ids: string[] | null | undefined): number {
+  const selected = validDirectoryIds(ids);
+  return selected.length || OFFICIAL_CHURCH_DIRECTORIES.length + 1;
+}
+
 /**
  * Keep each provider request on one bounded source lane. Seven rounds cover the
  * official national directories; the eighth is a secondary-web fallback for
  * traditions without a listed national locator. Subsequent rounds repeat the
  * cycle while the exclusion list prevents duplicate organizations.
  */
-export function discoverySourceLane(roundCount: number): DiscoverySourceLane {
-  const index = Math.max(0, Math.floor(roundCount)) % (OFFICIAL_CHURCH_DIRECTORIES.length + 1);
-  const directory = OFFICIAL_CHURCH_DIRECTORIES[index] ?? null;
+export function discoverySourceLane(roundCount: number, denominationFilter?: string[] | null): DiscoverySourceLane {
+  const selected = validDirectoryIds(denominationFilter);
+  const lanes: Array<OfficialChurchDirectory | null> = selected.length
+    ? selectedDirectories(selected)
+    : [...OFFICIAL_CHURCH_DIRECTORIES, null];
+  const index = Math.max(0, Math.floor(roundCount)) % lanes.length;
+  const directory = lanes[index];
   return {
     directory,
     label: directory ? `${directory.denomination}: ${directory.entryUrl}` : "secondary web fallback",

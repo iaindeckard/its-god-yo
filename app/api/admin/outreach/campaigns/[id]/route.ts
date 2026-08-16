@@ -6,6 +6,7 @@ import { fetchCampaignLeads } from "@/lib/outreach/leads";
 import { clampDiscountPercent, isApprovedVariant } from "@/lib/outreach/templates";
 import { listCampaignDeliveries } from "@/lib/outreach/deliveries";
 import { latestDiscoveryRun } from "@/lib/outreach/discovery";
+import { validDirectoryIds } from "@/lib/outreach/directory-sources";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +41,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       patch.status = body.status;
     }
     if (body.size_filter === null || Array.isArray(body.size_filter)) patch.size_filter = body.size_filter;
+    if (body.denomination_filter === null || Array.isArray(body.denomination_filter)) {
+      if (await latestDiscoveryRun(id)) {
+        return NextResponse.json({ error: "Denomination targeting is locked after discovery starts." }, { status: 409 });
+      }
+      patch.denomination_filter = Array.isArray(body.denomination_filter)
+        ? validDirectoryIds(body.denomination_filter)
+        : null;
+    }
     if (body.radius_miles !== undefined) patch.radius_miles = Number(body.radius_miles);
     if (body.center_lat !== undefined) patch.center_lat = body.center_lat === null ? null : Number(body.center_lat);
     if (body.center_lng !== undefined) patch.center_lng = body.center_lng === null ? null : Number(body.center_lng);
