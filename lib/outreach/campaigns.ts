@@ -28,6 +28,11 @@ export interface Campaign {
   denomination_filter: string[] | null;
   discount_percent: number;
   message_variant: string | null;
+  investment_cents: number;
+  allocated_budget_cents: number;
+  reinvested_net_revenue_cents: number;
+  reinvestment_source_campaign_id: string | null;
+  reinvestment_proposal_id: string | null;
   status: CampaignStatus;
   created_by: string | null;
   created_at: string;
@@ -141,6 +146,7 @@ export interface CampaignPatch {
   center_lng?: number | null;
   discount_percent?: number;
   message_variant?: string | null;
+  investment_cents?: number;
   release_at?: string | null;
   release_timezone?: string | null;
   scheduled_at?: string | null;
