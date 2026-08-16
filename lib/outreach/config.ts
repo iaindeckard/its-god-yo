@@ -23,7 +23,6 @@ export const OUTREACH = {
   ageOutSends: 6,
   promoPrefix: process.env.OUTREACH_PROMO_PREFIX || "IGY",
   // Discovery (§4)
-  discoveryModel: process.env.OUTREACH_DISCOVERY_MODEL || "claude-sonnet-5",
   openaiDiscoveryModel: process.env.OUTREACH_OPENAI_MODEL || "gpt-5-mini",
   geography: process.env.OUTREACH_GEOGRAPHY || "the Wichita, Kansas metro area",
   discoveryTarget: Number(process.env.OUTREACH_DISCOVERY_TARGET_COUNT || 35),

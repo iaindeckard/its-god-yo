@@ -5,6 +5,8 @@ import { getStripe } from "./stripe";
 import { subscriptionMonthlyValueCents } from "./referral";
 import type { Staff } from "./rbac";
 import { earnedEmail, notFirstEmail, rejectedEmail, cappedEmail, snagEmail, alreadyCorrectedEmail, sendBountyEmail } from "./bountyEmails";
+import { BOUNTY_MAX_COST_MICROUSD, BOUNTY_MAX_OUTPUT_TOKENS, completeAiUsage, failAiUsage, reserveAiUsage } from "./ai-usage";
+import { createOpenAIResponse, responseText } from "./openai-responses";
 
 /**
  * Translation/reword error bounty — v2 (spec IGY-Translation-Error-Bounty-Spec-
@@ -299,9 +301,7 @@ export async function resolveSlot(r: {
 
 // ─── AI assessment (Phase B, on-demand) ─────────────────────────────────────
 
-/** Assessment model — a CURRENT Claude by default (not the older sonnet-4-6 the
- *  verse generator still pins). Override via env. Single-model: the human is the gate. */
-const ASSESS_MODEL = process.env.BOUNTY_ASSESS_MODEL || "claude-sonnet-5";
+const ASSESS_MODEL = process.env.BOUNTY_OPENAI_MODEL || "gpt-5-mini";
 
 /** Stand-in reviewer id for the deferred-login phase — no FK on corrected_by /
  *  reviewer_id, so any uuid is fine; matches lib/reviewFunctions' fallback. */
@@ -335,27 +335,21 @@ async function fetchSourceVerse(verseRef: string, lang: "en" | "es"): Promise<st
 
 interface AssessDraft { is_error: boolean; assessment: string; proposed_fix: string | null }
 
-/** Single Claude call → structured verdict. Throws if ANTHROPIC_API_KEY is unset
- *  (assessment is admin-triggered; a clear error beats a silent no-op here). */
-async function callAssessLLM(prompt: string): Promise<AssessDraft> {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) throw new Error("assessment_unavailable: ANTHROPIC_API_KEY is not set");
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-    body: JSON.stringify({ model: ASSESS_MODEL, max_tokens: 800, messages: [{ role: "user", content: prompt }] }),
-  });
-  if (!res.ok) throw new Error(`assess_llm_${res.status}: ${(await res.text()).slice(0, 200)}`);
-  const body = (await res.json()) as { content?: Array<{ text?: string }> };
-  const raw = body.content?.map((c) => c.text ?? "").join("") ?? "";
+async function callAssessLLM(prompt: string, requestKey: string): Promise<AssessDraft> {
+  const usageEvent = await reserveAiUsage({ feature: "bounty_assessment", requestKey, model: ASSESS_MODEL, maxCostMicrousd: BOUNTY_MAX_COST_MICROUSD });
+  try {
+    const response = await createOpenAIResponse({ model: ASSESS_MODEL, input: prompt, max_output_tokens: BOUNTY_MAX_OUTPUT_TOKENS, reasoning: { effort: "low" } });
+    const raw = responseText(response);
   const s = raw.indexOf("{"), e = raw.lastIndexOf("}");
   if (s === -1 || e === -1 || e < s) throw new Error("assess_parse_failed: no JSON object in model output");
   const parsed = JSON.parse(raw.slice(s, e + 1)) as Partial<AssessDraft>;
-  return {
-    is_error: Boolean(parsed.is_error),
-    assessment: String(parsed.assessment ?? "").trim(),
-    proposed_fix: parsed.proposed_fix ? String(parsed.proposed_fix).trim() : null,
-  };
+    const draft = { is_error: Boolean(parsed.is_error), assessment: String(parsed.assessment ?? "").trim(), proposed_fix: parsed.proposed_fix ? String(parsed.proposed_fix).trim() : null };
+    await completeAiUsage(usageEvent.id, response);
+    return draft;
+  } catch (error) {
+    await failAiUsage(usageEvent.id, error);
+    throw error;
+  }
 }
 
 function buildAssessPrompt(lang: "en" | "es", verseRef: string, currentText: string | null, source: string | null, reportedText: string | null, description: string): string {
@@ -389,7 +383,7 @@ export interface AssessResult {
 
 /**
  * On-demand AI assessment of a pending group (spec §8 Step 3): resolve the slot,
- * ground on the canonical source + current text, ask Claude whether it's really an
+ * ground on the canonical source + current text, ask OpenAI whether it's really an
  * error and (if so) draft a fix, and persist the verdict on the group's pending
  * rows. NEVER publishes — a human approves in Phase C.
  */
@@ -422,7 +416,7 @@ export async function assessReport(gkey: string): Promise<AssessResult> {
   }
 
   const source = await fetchSourceVerse(rep.verse_ref, lang);
-  const draft = await callAssessLLM(buildAssessPrompt(lang, rep.verse_ref, slot.slot.currentText, source, rep.reported_text, rep.description));
+  const draft = await callAssessLLM(buildAssessPrompt(lang, rep.verse_ref, slot.slot.currentText, source, rep.reported_text, rep.description), `bounty_assessment:${gkey}`);
   await persist({ ai_is_error: draft.is_error, ai_assessment: draft.assessment, ai_proposed_fix: draft.proposed_fix, ai_target_slot_id: slot.slot.slotId });
   return { group_key: gkey, ai_is_error: draft.is_error, ai_assessment: draft.assessment, ai_proposed_fix: draft.proposed_fix, ai_target_slot_id: slot.slot.slotId };
 }

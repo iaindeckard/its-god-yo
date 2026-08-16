@@ -96,6 +96,7 @@ interface MarketingProposal {
   id: string; status: "draft" | "approved" | "rejected";
   analysis: { executive_summary: string; next_action: string; data_limitations: string[]; recommendations: MarketRecommendation[] };
 }
+interface AiUsageSummary { month: string; spentMicrousd: number; reservedMicrousd: number; budgetMicrousd: number }
 interface DiscoveryRun {
   status: "running" | "processing" | "completed" | "failed"; round_count: number; max_rounds: number;
   found_count: number; inserted_count: number; skipped_count: number; out_of_radius_count: number;
@@ -309,8 +310,8 @@ function CampaignBrowser({ campaigns, selectedId, onOpen }: {
 }
 
 export default function OutreachManager({
-  initialCampaigns, canManage, canOverride,
-}: { initialCampaigns: Campaign[]; canManage: boolean; canOverride: boolean }) {
+  initialCampaigns, canManage, canOverride, initialAiUsage,
+}: { initialCampaigns: Campaign[]; canManage: boolean; canOverride: boolean; initialAiUsage: AiUsageSummary }) {
   const [campaigns, setCampaigns] = useState<Campaign[]>(initialCampaigns);
   const [selected, setSelected] = useState<Campaign | null>(null);
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -337,6 +338,7 @@ export default function OutreachManager({
     budget_level: "small_test", preferred_window: "", constraints: "Avoid Dallas and do not use New Iberia until its discovery issue is resolved.",
   });
   const [proposal, setProposal] = useState<MarketingProposal | null>(null);
+  const [aiUsage, setAiUsage] = useState(initialAiUsage);
 
   async function refreshCampaigns() {
     const res = await fetch("/api/admin/outreach/campaigns");
@@ -564,14 +566,17 @@ export default function OutreachManager({
   }
 
   async function runAnalyst() {
+    if (!confirm("Run OpenAI market research? This request is capped at an estimated maximum of $0.10 and counts toward the monthly AI budget.")) return;
     setError(null); setBusy("analyst"); setProposal(null);
     try {
+      const requestId = crypto.randomUUID();
       const res = await fetch("/api/admin/outreach/analyst", {
-        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(analystForm),
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...analystForm, request_id: requestId }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "marketing analysis failed");
       setProposal(data.proposal);
+      if (data.aiUsage) setAiUsage(data.aiUsage);
     } catch (e) { setError(e instanceof Error ? e.message : "marketing analysis failed"); }
     finally { setBusy(null); }
   }
@@ -660,7 +665,7 @@ export default function OutreachManager({
                 {busy === "analyst" ? "Researching markets..." : "Recommend my next campaign"}
               </button>
             </div>
-            <p className="hint" style={{ marginBottom: 0 }}>The analyst uses current public web sources plus the constraints you provide. It labels assumptions and does not send, schedule, promote, or change campaign gates.</p>
+            <p className="hint" style={{ marginBottom: 0 }}>OpenAI uses current public web sources plus the constraints you provide. Maximum reserved cost per run: $0.10. {aiUsage.month} tracked usage: ${(aiUsage.spentMicrousd / 1_000_000).toFixed(2)} spent, ${(aiUsage.reservedMicrousd / 1_000_000).toFixed(2)} active reservations, ${(aiUsage.budgetMicrousd / 1_000_000).toFixed(2)} monthly cap. It does not send, schedule, promote, or change campaign gates.</p>
           </div>
         ) : <p className="muted">You can view campaigns, but marketing.outreach.manage is required to generate or approve a proposal.</p>}
 

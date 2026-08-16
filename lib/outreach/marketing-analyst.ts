@@ -2,6 +2,8 @@ import "server-only";
 import { getSupabaseAdmin } from "../supabaseAdmin";
 import { OUTREACH } from "./config";
 import { parseMarketingAnalysis, type MarketingAnalysis, type MarketingAnalysisInput } from "./marketing-analysis";
+import { ANALYST_MAX_COST_MICROUSD, ANALYST_MAX_OUTPUT_TOKENS, ANALYST_MAX_WEB_SEARCHES, completeAiUsage, failAiUsage, reserveAiUsage } from "../ai-usage";
+import { createOpenAIResponse, responseText } from "../openai-responses";
 
 const SYSTEM = `You are the marketing analyst for It's God, Yo!, a paid daily Bible-text product for families and teens. Recommend careful, small, evidence-backed US geographic outreach tests.
 
@@ -19,34 +21,32 @@ Return ONLY JSON with this shape:
 
 Scores are transparent prioritization aids, not predictions.`;
 
-interface AnthropicResponse { content?: Array<{ type: string; text?: string }> }
-
 function extractObject(text: string): unknown {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
   const candidate = fenced ?? text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1);
   return JSON.parse(candidate);
 }
 
-export async function generateMarketingAnalysis(input: MarketingAnalysisInput): Promise<MarketingAnalysis> {
-  const key = process.env.ANTHROPIC_API_KEY || process.env.OUTREACH_ANTHROPIC_KEY;
-  if (!key) throw new Error("analyst_unavailable: ANTHROPIC_API_KEY is not set");
+export async function generateMarketingAnalysis(input: MarketingAnalysisInput, requestKey: string): Promise<MarketingAnalysis> {
+  const model = process.env.OUTREACH_OPENAI_MODEL || OUTREACH.openaiDiscoveryModel;
+  const usageEvent = await reserveAiUsage({ feature: "marketing_analyst", requestKey, model, maxCostMicrousd: ANALYST_MAX_COST_MICROUSD });
   const today = new Date().toISOString().slice(0, 10);
   const prompt = `Today is ${today}. Objective: ${input.objective}. Audience: ${input.audience}. Budget: ${input.budget_level}. Preferred window: ${input.preferred_window || "recommend one"}. Constraints: ${input.constraints || "none supplied"}. The Dallas outreach gate is closed. New Iberia is operationally blocked and must not be recommended until its discovery status is repaired. Recommend the best next US market tests and explain the evidence.`;
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-    body: JSON.stringify({
-      model: process.env.OUTREACH_ANALYST_MODEL || OUTREACH.discoveryModel,
-      max_tokens: 8000,
-      system: SYSTEM,
-      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 15 }],
-      messages: [{ role: "user", content: prompt }],
-    }),
-  });
-  if (!response.ok) throw new Error(`analyst_api_${response.status}: ${(await response.text()).slice(0, 400)}`);
-  const body = (await response.json()) as AnthropicResponse;
-  const text = (body.content ?? []).filter((part) => part.type === "text").map((part) => part.text ?? "").join("\n");
-  return parseMarketingAnalysis(extractObject(text));
+  try {
+    const response = await createOpenAIResponse({
+      model, instructions: SYSTEM, input: prompt,
+      max_output_tokens: ANALYST_MAX_OUTPUT_TOKENS,
+      max_tool_calls: ANALYST_MAX_WEB_SEARCHES,
+      reasoning: { effort: "low" },
+      tools: [{ type: "web_search", search_context_size: "low" }],
+    });
+    const analysis = parseMarketingAnalysis(extractObject(responseText(response)));
+    await completeAiUsage(usageEvent.id, response);
+    return analysis;
+  } catch (error) {
+    await failAiUsage(usageEvent.id, error);
+    throw error;
+  }
 }
 
 export interface MarketingProposalRow extends MarketingAnalysisInput {
