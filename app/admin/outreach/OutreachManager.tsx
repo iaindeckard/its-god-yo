@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import CampaignMap, { type CampaignMapChange, type MapLead } from "./CampaignMap";
 
@@ -128,6 +128,124 @@ function verificationReason(notes: Record<string, unknown> | null): string | nul
 
 const toMapLeads = (ls: Lead[]): MapLead[] =>
   ls.map((l) => ({ id: l.id, org_name: l.org_name, status: l.status, latitude: l.latitude, longitude: l.longitude, size_bucket: l.size_bucket }));
+
+const launchDate = (campaign: Campaign): Date | null => {
+  const value = campaign.release_started_at ?? campaign.release_completed_at;
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const calendarKey = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+
+function CampaignBrowser({ campaigns, selectedId, onOpen }: {
+  campaigns: Campaign[];
+  selectedId: string | null;
+  onOpen: (campaign: Campaign) => void;
+}) {
+  const [view, setView] = useState<"locations" | "calendar">("locations");
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const latestLaunch = campaigns.map(launchDate).filter((date): date is Date => date !== null).sort((a, b) => b.getTime() - a.getTime())[0];
+  const [visibleMonth, setVisibleMonth] = useState(() => {
+    const date = latestLaunch ?? new Date();
+    return new Date(date.getFullYear(), date.getMonth(), 1);
+  });
+  const launchesByDay = useMemo(() => {
+    const map = new Map<string, Campaign[]>();
+    campaigns.forEach((campaign) => {
+      const date = launchDate(campaign);
+      if (!date) return;
+      const key = calendarKey(date);
+      map.set(key, [...(map.get(key) ?? []), campaign]);
+    });
+    return map;
+  }, [campaigns]);
+  const locationGroups = useMemo(() => {
+    const map = new Map<string, Campaign[]>();
+    campaigns.forEach((campaign) => {
+      const label = campaign.center_label.trim() || "Location not set";
+      map.set(label, [...(map.get(label) ?? []), campaign]);
+    });
+    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
+  }, [campaigns]);
+  const monthStartDay = visibleMonth.getDay();
+  const daysInMonth = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 0).getDate();
+  const calendarCells = Array.from({ length: monthStartDay + daysInMonth }, (_, index) => index < monthStartDay ? null : index - monthStartDay + 1);
+
+  return (
+    <details>
+      <summary style={{ cursor: "pointer", listStyle: "none", display: "flex", alignItems: "center", gap: 8 }}>
+        <span aria-hidden="true">▸</span>
+        <strong>Campaign history</strong>
+        <span className="muted">{campaigns.length} {campaigns.length === 1 ? "campaign" : "campaigns"}</span>
+      </summary>
+      <div style={{ paddingTop: 14 }}>
+        <div role="group" aria-label="Campaign history view" style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+          <button className={view === "locations" ? "btn btn-primary" : "btn btn-ghost"} onClick={() => setView("locations")}>Locations</button>
+          <button className={view === "calendar" ? "btn btn-primary" : "btn btn-ghost"} onClick={() => setView("calendar")}>Calendar</button>
+        </div>
+
+        {view === "locations" ? (
+          <div style={{ display: "grid", gap: 10 }}>
+            {locationGroups.map(([location, items]) => (
+              <div key={location} style={{ borderTop: "1px solid var(--border, #e5e7eb)", paddingTop: 10 }}>
+                <strong style={{ fontSize: 13 }}>{location}</strong>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 7 }}>
+                  {items.map((campaign) => (
+                    <button key={campaign.id} className="btn btn-ghost" style={{ fontWeight: selectedId === campaign.id ? 700 : 400 }} onClick={() => onOpen(campaign)}>
+                      {campaign.name} <span className={statusPill(campaign.status)} style={{ marginLeft: 4 }}>{campaign.status}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ maxWidth: 560 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+              <button className="btn btn-ghost" aria-label="Previous month" onClick={() => { setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() - 1, 1)); setSelectedDay(null); }}>←</button>
+              <strong>{visibleMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</strong>
+              <button className="btn btn-ghost" aria-label="Next month" onClick={() => { setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1)); setSelectedDay(null); }}>→</button>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: 4, textAlign: "center" }}>
+              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => <span key={day} className="muted" style={{ fontSize: 12, padding: 4 }}>{day}</span>)}
+              {calendarCells.map((day, index) => {
+                if (day === null) return <span key={`empty-${index}`} />;
+                const date = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), day);
+                const launched = launchesByDay.get(calendarKey(date)) ?? [];
+                const isActive = launched.length > 0;
+                return (
+                  <button
+                    key={day}
+                    className={isActive ? "btn btn-primary" : "btn btn-ghost"}
+                    disabled={!isActive}
+                    aria-label={isActive ? `${date.toLocaleDateString()}: ${launched.length} launched ${launched.length === 1 ? "campaign" : "campaigns"}` : date.toLocaleDateString()}
+                    title={isActive ? launched.map((campaign) => campaign.name).join(", ") : undefined}
+                    onClick={() => isActive && setSelectedDay(calendarKey(date))}
+                    style={{ minWidth: 0, padding: "8px 4px", fontWeight: isActive ? 700 : 400, opacity: 1 }}
+                  >
+                    {day}
+                  </button>
+                );
+              })}
+            </div>
+            {selectedDay && launchesByDay.has(selectedDay) && (
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+                {(launchesByDay.get(selectedDay) ?? []).map((campaign) => (
+                  <button key={campaign.id} className="btn btn-ghost" style={{ fontWeight: selectedId === campaign.id ? 700 : 400 }} onClick={() => onOpen(campaign)}>
+                    {campaign.name} <span className={statusPill(campaign.status)} style={{ marginLeft: 4 }}>{campaign.status}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <p className="hint" style={{ marginBottom: 0 }}>Highlighted dates have a recorded campaign launch. Choose a date, then a campaign; ordinary dates are intentionally inactive.</p>
+          </div>
+        )}
+      </div>
+    </details>
+  );
+}
 
 export default function OutreachManager({
   initialCampaigns, canManage, canOverride,
@@ -484,17 +602,13 @@ export default function OutreachManager({
         )}
       </section>
 
-      {/* Campaign picker + New campaign (deselect => Step 1 create mode) */}
-      <div className="card" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        <strong style={{ fontSize: 13, marginRight: 4 }}>Campaign:</strong>
-        {campaigns.length === 0 && <span className="muted">none yet</span>}
-        {campaigns.map((c) => (
-          <button key={c.id} className="btn btn-ghost" style={{ fontWeight: selected?.id === c.id ? 700 : 400 }} onClick={() => openCampaign(c)}>
-            {c.name} <span className={statusPill(c.status)} style={{ marginLeft: 4 }}>{c.status}</span>
-          </button>
-        ))}
+      {/* Compact campaign history + persistent create action. */}
+      <div className="card" style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "start" }}>
+        {campaigns.length === 0
+          ? <span className="muted">No campaigns yet.</span>
+          : <div style={{ flex: "1 1 320px", minWidth: 0 }}><CampaignBrowser campaigns={campaigns} selectedId={selected?.id ?? null} onOpen={openCampaign} /></div>}
         {canManage && (
-          <button className="btn btn-primary" style={{ marginLeft: "auto" }} onClick={newCampaign} disabled={!selected && !createName && !createDraft}>
+          <button className="btn btn-primary" onClick={newCampaign} disabled={!selected && !createName && !createDraft}>
             + New campaign
           </button>
         )}
