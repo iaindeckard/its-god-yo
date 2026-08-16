@@ -322,7 +322,7 @@ export default function OutreachManager({
   const [releaseDraft, setReleaseDraft] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [contactEdit, setContactEdit] = useState<{ leadId: string; email: string; sourceUrl: string } | null>(null);
+  const [contactEdit, setContactEdit] = useState<{ leadId: string; email: string; sourceUrl: string; manuallyConfirmed: boolean } | null>(null);
   const [analystForm, setAnalystForm] = useState({
     objective: "church_enrollment", audience: "Church youth leaders and parents",
     budget_level: "small_test", preferred_window: "", constraints: "Avoid Dallas and do not use New Iberia until its discovery issue is resolved.",
@@ -474,7 +474,7 @@ export default function OutreachManager({
     try {
       const res = await fetch(`/api/admin/outreach/leads/${contactEdit.leadId}/contact-email`, {
         method: "PATCH", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email: contactEdit.email, source_url: contactEdit.sourceUrl }),
+        body: JSON.stringify({ email: contactEdit.email, source_url: contactEdit.sourceUrl, manually_confirmed: contactEdit.manuallyConfirmed }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "email update failed");
@@ -829,7 +829,7 @@ export default function OutreachManager({
                           <div className="muted" style={{ fontSize: 12 }}>{l.contact_email}</div>
                           {canOverride && contactEdit?.leadId !== l.id && (
                             <button className="btn btn-ghost" style={{ marginTop: 4, padding: "2px 6px", fontSize: 11 }}
-                              onClick={() => setContactEdit({ leadId: l.id, email: l.contact_email, sourceUrl: l.website ?? "" })}>
+                              onClick={() => setContactEdit({ leadId: l.id, email: l.contact_email, sourceUrl: l.website ?? "", manuallyConfirmed: false })}>
                               Update public email
                             </button>
                           )}
@@ -841,14 +841,18 @@ export default function OutreachManager({
                               <label style={{ fontSize: 11 }}>Church webpage showing that email
                                 <input type="url" value={contactEdit.sourceUrl} placeholder="https://church.org/contact" onChange={(event) => setContactEdit({ ...contactEdit, sourceUrl: event.target.value })} />
                               </label>
+                              <label style={{ display: "flex", gap: 6, alignItems: "flex-start", fontSize: 11 }}>
+                                <input type="checkbox" checked={contactEdit.manuallyConfirmed} onChange={(event) => setContactEdit({ ...contactEdit, manuallyConfirmed: event.target.checked })} />
+                                I personally confirmed this general inbox on the linked church page.
+                              </label>
                               <div style={{ display: "flex", gap: 6 }}>
                                 <button className="btn btn-primary" style={{ padding: "3px 7px", fontSize: 11 }}
-                                  disabled={busy === `contact:${l.id}` || !contactEdit.email.trim() || !contactEdit.sourceUrl.trim()} onClick={updateContactEmail}>
+                                  disabled={busy === `contact:${l.id}` || !contactEdit.email.trim() || !contactEdit.sourceUrl.trim() || !contactEdit.manuallyConfirmed} onClick={updateContactEmail}>
                                   {busy === `contact:${l.id}` ? "Checking…" : "Verify and update"}
                                 </button>
                                 <button className="btn btn-ghost" style={{ padding: "3px 7px", fontSize: 11 }} onClick={() => setContactEdit(null)}>Cancel</button>
                               </div>
-                              <span className="hint">The replacement must appear on the church-owned page. It is re-verified before promotion or release.</span>
+                              <span className="hint">The replacement is re-verified. If the page blocks the automated check, it remains needs_manual until you use Override.</span>
                             </div>
                           )}
                         </td>
