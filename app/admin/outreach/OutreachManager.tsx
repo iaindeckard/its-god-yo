@@ -12,11 +12,34 @@ const BUCKET_LABEL: Record<SizeBucket, string> = {
   small: "Small (<100)", medium: "Medium (100–499)", large: "Large (500–1,999)",
   mega: "Mega (2,000+)", unknown: "Unknown",
 };
+const DENOMINATIONS = [
+  { id: "usccb", label: "Roman Catholic" },
+  { id: "episcopal", label: "Episcopal" },
+  { id: "umc", label: "United Methodist" },
+  { id: "elca", label: "ELCA Lutheran" },
+  { id: "pcusa", label: "Presbyterian Church (U.S.A.)" },
+  { id: "sbc", label: "Southern Baptist" },
+  { id: "lcms", label: "Lutheran Church-Missouri Synod" },
+] as const;
+const US_STATES = [
+  ["AL", "Alabama"], ["AK", "Alaska"], ["AZ", "Arizona"], ["AR", "Arkansas"], ["CA", "California"],
+  ["CO", "Colorado"], ["CT", "Connecticut"], ["DE", "Delaware"], ["DC", "District of Columbia"], ["FL", "Florida"],
+  ["GA", "Georgia"], ["HI", "Hawaii"], ["ID", "Idaho"], ["IL", "Illinois"], ["IN", "Indiana"], ["IA", "Iowa"],
+  ["KS", "Kansas"], ["KY", "Kentucky"], ["LA", "Louisiana"], ["ME", "Maine"], ["MD", "Maryland"],
+  ["MA", "Massachusetts"], ["MI", "Michigan"], ["MN", "Minnesota"], ["MS", "Mississippi"], ["MO", "Missouri"],
+  ["MT", "Montana"], ["NE", "Nebraska"], ["NV", "Nevada"], ["NH", "New Hampshire"], ["NJ", "New Jersey"],
+  ["NM", "New Mexico"], ["NY", "New York"], ["NC", "North Carolina"], ["ND", "North Dakota"], ["OH", "Ohio"],
+  ["OK", "Oklahoma"], ["OR", "Oregon"], ["PA", "Pennsylvania"], ["RI", "Rhode Island"], ["SC", "South Carolina"],
+  ["SD", "South Dakota"], ["TN", "Tennessee"], ["TX", "Texas"], ["UT", "Utah"], ["VT", "Vermont"],
+  ["VA", "Virginia"], ["WA", "Washington"], ["WV", "West Virginia"], ["WI", "Wisconsin"], ["WY", "Wyoming"],
+] as const;
 
 interface Campaign {
   id: string; name: string; center_label: string;
   center_lat: number | null; center_lng: number | null;
   radius_miles: number; size_filter: string[] | null;
+  denomination_filter: string[] | null;
+  geography_type: "radius" | "state"; state_code: string | null;
   status: string; created_at: string;
   discount_percent: number; message_variant: string | null;
   release_at: string | null; release_timezone: string | null;
@@ -128,6 +151,35 @@ function verificationReason(notes: Record<string, unknown> | null): string | nul
 
 const toMapLeads = (ls: Lead[]): MapLead[] =>
   ls.map((l) => ({ id: l.id, org_name: l.org_name, status: l.status, latitude: l.latitude, longitude: l.longitude, size_bucket: l.size_bucket }));
+
+function DenominationPicker({ value, onChange, disabled = false }: {
+  value: string[];
+  onChange: (value: string[]) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <fieldset disabled={disabled} style={{ border: 0, padding: 0, margin: "12px 0" }}>
+      <legend style={{ fontWeight: 600, fontSize: 13, marginBottom: 7 }}>Denominations</legend>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 14px" }}>
+        {DENOMINATIONS.map((denomination) => (
+          <label key={denomination.id} style={{ display: "inline-flex", gap: 6, alignItems: "center", fontSize: 13 }}>
+            <input type="checkbox" checked={value.includes(denomination.id)} onChange={(event) => {
+              onChange(event.target.checked
+                ? [...value, denomination.id]
+                : value.filter((id) => id !== denomination.id));
+            }} />
+            {denomination.label}
+          </label>
+        ))}
+      </div>
+      <p className="hint" style={{ margin: "7px 0 0" }}>
+        {value.length
+          ? "Discovery will use only the selected denominations' official directories."
+          : "No selection means all configured official directories, followed by the secondary-web fallback."}
+      </p>
+    </fieldset>
+  );
+}
 
 const launchDate = (campaign: Campaign): Date | null => {
   const value = campaign.release_started_at ?? campaign.release_completed_at;
@@ -260,12 +312,17 @@ export default function OutreachManager({
   const [audienceSel, setAudienceSel] = useState<Set<string>>(new Set());
   const [report, setReport] = useState<SendReport | null>(null);
   const [createName, setCreateName] = useState("");
+  const [createGeographyType, setCreateGeographyType] = useState<"radius" | "state">("radius");
+  const [createStateCode, setCreateStateCode] = useState("FL");
+  const [createDenominations, setCreateDenominations] = useState<string[]>([]);
   const [createDraft, setCreateDraft] = useState<CampaignMapChange | null>(null);
   const [detailDraft, setDetailDraft] = useState<CampaignMapChange | null>(null);
+  const [denominationDraft, setDenominationDraft] = useState<string[]>([]);
   const [offerDraft, setOfferDraft] = useState<{ discount_percent: string; message_variant: string } | null>(null);
   const [releaseDraft, setReleaseDraft] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [contactEdit, setContactEdit] = useState<{ leadId: string; email: string; sourceUrl: string } | null>(null);
   const [analystForm, setAnalystForm] = useState({
     objective: "church_enrollment", audience: "Church youth leaders and parents",
     budget_level: "small_test", preferred_window: "", constraints: "Avoid Dallas and do not use New Iberia until its discovery issue is resolved.",
@@ -279,11 +336,12 @@ export default function OutreachManager({
   }
 
   async function openCampaign(c: Campaign) {
-    setSelected(c); setLeads([]); setDeliveries([]); setDiscoveryRun(null); setReport(null); setViewBucket("all"); setPromoteSel(new Set()); setAudienceSel(new Set()); setDetailDraft(null); setOfferDraft(null);
+    setSelected(c); setLeads([]); setDeliveries([]); setDiscoveryRun(null); setReport(null); setViewBucket("all"); setPromoteSel(new Set()); setAudienceSel(new Set()); setDetailDraft(null); setOfferDraft(null); setContactEdit(null);
     const res = await fetch(`/api/admin/outreach/campaigns/${c.id}`);
     const data = await res.json();
     if (res.ok) {
       setSelected(data.campaign); setLeads(data.leads); setDeliveries(data.deliveries ?? []); setDiscoveryRun(data.discoveryRun ?? null);
+      setDenominationDraft(data.campaign.denomination_filter ?? []);
       setReleaseDraft(data.campaign.release_at ? toDateTimeLocal(data.campaign.release_at) : "");
       setOfferDraft({ discount_percent: String(data.campaign.discount_percent ?? 10), message_variant: data.campaign.message_variant ?? "default" });
     } else setError(data.error || "failed to load campaign");
@@ -295,42 +353,51 @@ export default function OutreachManager({
     setSelected(null); setLeads([]); setDiscoveryRun(null); setReport(null);
     setViewBucket("all"); setPromoteSel(new Set()); setAudienceSel(new Set());
     setDetailDraft(null); setOfferDraft(null); setError(null);
-    setCreateName(""); setCreateDraft(null);
+    setCreateName(""); setCreateDraft(null); setCreateGeographyType("radius"); setCreateStateCode("FL"); setCreateDenominations([]); setDenominationDraft([]); setContactEdit(null);
   }
 
   async function createCampaign() {
     setError(null);
     if (!createName.trim()) { setError("Name is required."); return; }
-    if (!createDraft) { setError("Pick a center on the map (click, drag, or search)."); return; }
+    if (createGeographyType === "radius" && !createDraft) { setError("Pick a center on the map (click, drag, or search)."); return; }
     setBusy("create");
     try {
       const res = await fetch("/api/admin/outreach/campaigns", {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({
           name: createName,
-          center_label: createDraft.center_label || createName,
-          center_lat: createDraft.center_lat, center_lng: createDraft.center_lng,
-          radius_miles: createDraft.radius_miles,
+          center_label: createGeographyType === "state"
+            ? US_STATES.find(([code]) => code === createStateCode)?.[1] ?? createStateCode
+            : createDraft?.center_label || createName,
+          center_lat: createGeographyType === "radius" ? createDraft?.center_lat : null,
+          center_lng: createGeographyType === "radius" ? createDraft?.center_lng : null,
+          radius_miles: createGeographyType === "radius" ? createDraft?.radius_miles : 1,
+          geography_type: createGeographyType,
+          state_code: createGeographyType === "state" ? createStateCode : null,
+          denomination_filter: createDenominations,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "create failed");
-      setCreateName(""); setCreateDraft(null);
+      setCreateName(""); setCreateDraft(null); setCreateGeographyType("radius"); setCreateStateCode("FL"); setCreateDenominations([]);
       await refreshCampaigns();
       await openCampaign(data.campaign);
     } catch (e) { setError(e instanceof Error ? e.message : "create failed"); }
     finally { setBusy(null); }
   }
 
-  async function saveCenter() {
-    if (!selected || !detailDraft) return;
+  async function saveTargeting() {
+    if (!selected) return;
     setError(null); setBusy("save-center");
     try {
       const res = await fetch(`/api/admin/outreach/campaigns/${selected.id}`, {
         method: "PATCH", headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          center_lat: detailDraft.center_lat, center_lng: detailDraft.center_lng,
-          radius_miles: detailDraft.radius_miles, center_label: detailDraft.center_label,
+          ...(detailDraft ? {
+            center_lat: detailDraft.center_lat, center_lng: detailDraft.center_lng,
+            radius_miles: detailDraft.radius_miles, center_label: detailDraft.center_label,
+          } : {}),
+          ...(!discoveryRun ? { denomination_filter: denominationDraft } : {}),
         }),
       });
       const data = await res.json();
@@ -398,6 +465,22 @@ export default function OutreachManager({
       if (!res.ok) throw new Error(data.error || "override failed");
       if (selected) await openCampaign(selected);
     } catch (e) { setError(e instanceof Error ? e.message : "override failed"); }
+    finally { setBusy(null); }
+  }
+
+  async function updateContactEmail() {
+    if (!selected || !contactEdit) return;
+    setError(null); setBusy(`contact:${contactEdit.leadId}`);
+    try {
+      const res = await fetch(`/api/admin/outreach/leads/${contactEdit.leadId}/contact-email`, {
+        method: "PATCH", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: contactEdit.email, source_url: contactEdit.sourceUrl }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "email update failed");
+      setContactEdit(null);
+      await openCampaign(selected);
+    } catch (e) { setError(e instanceof Error ? e.message : "email update failed"); }
     finally { setBusy(null); }
   }
 
@@ -631,16 +714,39 @@ export default function OutreachManager({
         <h3>1 · Define area</h3>
         {!selected
           ? <p className="muted">Draw a search area for a new campaign: name it, then click the map, drag the pin, or search a place to set the center, and use the slider for the radius.</p>
-          : <p className="muted">{selected.center_label} · {Number(selected.radius_miles)}mi · {leads.length} leads · <span className={statusPill(selected.status)}>{selected.status}</span></p>}
+          : <p className="muted">{selected.center_label}{selected.geography_type === "radius" ? ` · ${Number(selected.radius_miles)}mi` : " · statewide"} · {leads.length} leads · <span className={statusPill(selected.status)}>{selected.status}</span></p>}
 
         {!selected && canManage && (
-          <div className="field" style={{ maxWidth: 360 }}>
-            <label>Name</label>
-            <input value={createName} onChange={(e) => setCreateName(e.target.value)} placeholder="Dallas Metro 50mi" />
-          </div>
+          <>
+            <div className="field" style={{ maxWidth: 360 }}>
+              <label>Name</label>
+              <input value={createName} onChange={(e) => setCreateName(e.target.value)} placeholder="Dallas Metro 50mi" />
+            </div>
+            <div className="field" style={{ maxWidth: 360 }}>
+              <label>Area type</label>
+              <select value={createGeographyType} onChange={(event) => setCreateGeographyType(event.target.value as "radius" | "state")}>
+                <option value="radius">Around a location</option>
+                <option value="state">Entire state</option>
+              </select>
+            </div>
+            {createGeographyType === "state" && (
+              <div className="field" style={{ maxWidth: 360 }}>
+                <label>State</label>
+                <select value={createStateCode} onChange={(event) => setCreateStateCode(event.target.value)}>
+                  {US_STATES.map(([code, name]) => <option key={code} value={code}>{name}</option>)}
+                </select>
+              </div>
+            )}
+            <DenominationPicker value={createDenominations} onChange={setCreateDenominations} />
+          </>
         )}
 
-        <div style={{ marginTop: 10 }}>
+        {selected && canManage && (
+          <DenominationPicker value={denominationDraft} onChange={setDenominationDraft} disabled={!!discoveryRun} />
+        )}
+        {selected && discoveryRun && <p className="hint">Denomination targeting is locked after discovery begins so one campaign cannot mix targeting rules.</p>}
+
+        {(selected?.geography_type !== "state" && (!selected ? createGeographyType === "radius" : true)) && <div style={{ marginTop: 10 }}>
           <CampaignMap
             key={selected?.id ?? "new"}
             editable={canManage}
@@ -649,18 +755,18 @@ export default function OutreachManager({
             leads={selected ? toMapLeads(leads) : undefined}
             onChange={selected ? (canManage ? setDetailDraft : undefined) : (canManage ? setCreateDraft : undefined)}
           />
-        </div>
+        </div>}
 
         {!selected && canManage && (
           <div style={{ marginTop: 10 }}>
             <button className="btn btn-primary" disabled={busy === "create"} onClick={createCampaign}>
               {busy === "create" ? "Creating…" : "Create campaign"}</button>
-            <span className="hint" style={{ marginLeft: 10 }}>Click the map, drag the pin, or search a place to set the center; the slider sets the radius.</span>
+            <span className="hint" style={{ marginLeft: 10 }}>{createGeographyType === "state" ? "Discovery will cover the selected state." : "Click the map, drag the pin, or search a place to set the center; the slider sets the radius."}</span>
           </div>
         )}
-        {selected && canManage && detailDraft && (
-          <button className="btn btn-primary" style={{ marginTop: 8 }} disabled={busy === "save-center"} onClick={saveCenter}>
-            {busy === "save-center" ? "Saving…" : "Save center / radius"}</button>
+        {selected && canManage && (detailDraft || (!discoveryRun && denominationDraft.join(',') !== (selected.denomination_filter ?? []).join(','))) && (
+          <button className="btn btn-primary" style={{ marginTop: 8 }} disabled={busy === "save-center"} onClick={saveTargeting}>
+            {busy === "save-center" ? "Saving…" : "Save targeting"}</button>
         )}
       </div>
 
@@ -671,11 +777,11 @@ export default function OutreachManager({
           {/* STEP 2 — Discover */}
           <div className="card">
             <h3>2 · Discover</h3>
-            <p className="muted">Search official denominational directories first, then confirm the public general email and active youth ministry on congregation-owned pages. General web search is secondary. Discovered leads land staged (found, not yet in the send pipeline) and are auto-verified.</p>
+            <p className="muted">Search the selected denominations' official directories first, then confirm the public general email and active youth ministry on congregation-owned pages. General web search is used only when no denomination is selected. Discovered leads land staged (found, not yet in the send pipeline) and are auto-verified.</p>
             {discoveryRun && <p className="hint" role="status">
               {discoveryRun.status === "completed"
                 ? (discoveryRun.last_error ? "Discovery complete with saved partial results" : "Discovery complete")
-                : discoveryRun.status === "failed" ? "Discovery failed" : "Discovery in progress"}: round {discoveryRun.round_count} of {discoveryRun.max_rounds} · found {discoveryRun.found_count} · saved {discoveryRun.inserted_count} · already known/skipped {discoveryRun.skipped_count} · outside radius {discoveryRun.out_of_radius_count}
+                : discoveryRun.status === "failed" ? "Discovery failed" : "Discovery in progress"}: round {discoveryRun.round_count} of {discoveryRun.max_rounds} · found {discoveryRun.found_count} · saved {discoveryRun.inserted_count} · already known/skipped {discoveryRun.skipped_count} · outside target area {discoveryRun.out_of_radius_count}
             </p>}
             {canManage && (
               <button className="btn btn-primary" disabled={busy === "discover"} onClick={runDiscovery}>
@@ -718,7 +824,34 @@ export default function OutreachManager({
                           checked={audienceSel.has(l.id)} onChange={(e) => setAudienceSel((current) => {
                             const next = new Set(current); if (e.target.checked) next.add(l.id); else next.delete(l.id); return next;
                           })} /></td>
-                        <td>{l.website ? <a href={l.website} target="_blank" rel="noreferrer">{l.org_name}</a> : l.org_name}<div className="muted" style={{ fontSize: 12 }}>{l.contact_email}</div></td>
+                        <td>
+                          {l.website ? <a href={l.website} target="_blank" rel="noreferrer">{l.org_name}</a> : l.org_name}
+                          <div className="muted" style={{ fontSize: 12 }}>{l.contact_email}</div>
+                          {canOverride && contactEdit?.leadId !== l.id && (
+                            <button className="btn btn-ghost" style={{ marginTop: 4, padding: "2px 6px", fontSize: 11 }}
+                              onClick={() => setContactEdit({ leadId: l.id, email: l.contact_email, sourceUrl: l.website ?? "" })}>
+                              Update public email
+                            </button>
+                          )}
+                          {canOverride && contactEdit?.leadId === l.id && (
+                            <div style={{ display: "grid", gap: 6, marginTop: 7, minWidth: 240 }}>
+                              <label style={{ fontSize: 11 }}>Public general or office email
+                                <input type="email" value={contactEdit.email} onChange={(event) => setContactEdit({ ...contactEdit, email: event.target.value })} />
+                              </label>
+                              <label style={{ fontSize: 11 }}>Church webpage showing that email
+                                <input type="url" value={contactEdit.sourceUrl} placeholder="https://church.org/contact" onChange={(event) => setContactEdit({ ...contactEdit, sourceUrl: event.target.value })} />
+                              </label>
+                              <div style={{ display: "flex", gap: 6 }}>
+                                <button className="btn btn-primary" style={{ padding: "3px 7px", fontSize: 11 }}
+                                  disabled={busy === `contact:${l.id}` || !contactEdit.email.trim() || !contactEdit.sourceUrl.trim()} onClick={updateContactEmail}>
+                                  {busy === `contact:${l.id}` ? "Checking…" : "Verify and update"}
+                                </button>
+                                <button className="btn btn-ghost" style={{ padding: "3px 7px", fontSize: 11 }} onClick={() => setContactEdit(null)}>Cancel</button>
+                              </div>
+                              <span className="hint">The replacement must appear on the church-owned page. It is re-verified before promotion or release.</span>
+                            </div>
+                          )}
+                        </td>
                         <td>{[l.city, l.state].filter(Boolean).join(", ") || "—"}</td>
                         <td><span className="pill">{l.size_bucket}</span></td>
                         <td>{l.estimated_attendance != null

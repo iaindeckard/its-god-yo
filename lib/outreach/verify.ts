@@ -2,6 +2,7 @@ import "server-only";
 import { promises as dns } from "dns";
 import { getSupabaseAdmin } from "../supabaseAdmin";
 import type { OutreachLead } from "./leads";
+import { isGeneralAddress } from "./config";
 
 /**
  * Pre-send verification for outreach leads. Before a lead can be included in a
@@ -87,6 +88,9 @@ function normalize(s: string): string {
 
 function htmlToText(html: string): string {
   return html
+    .replace(/mailto:([^"'?\s>]+)/gi, " $1 ")
+    .replace(/&#64;|&#x40;|&commat;/gi, "@")
+    .replace(/&#46;|&#x2e;/gi, ".")
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
     .replace(/<[^>]+>/g, " ")
@@ -168,6 +172,48 @@ async function checkEmailDomain(email: string): Promise<{
     if (aaaa && aaaa.length) return { format_ok: true, mx_ok: true, host: domain, reason: "implicit_mx_aaaa_record" };
   } catch { /* none */ }
   return { format_ok: true, mx_ok: false, host: null, reason: "no_mx_or_a_record" };
+}
+
+function pageHostname(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  try { return new URL(raw).hostname.toLowerCase().replace(/^www\./, ""); } catch { return null; }
+}
+
+function relatedHostname(a: string, b: string): boolean {
+  return a === b || a.endsWith(`.${b}`) || b.endsWith(`.${a}`);
+}
+
+export async function validateReplacementContactEmail(
+  lead: Pick<OutreachLead, "org_name" | "website">,
+  email: string,
+  sourceUrl: string,
+): Promise<{ email: string; sourceUrl: string }> {
+  const cleanEmail = email.trim().toLowerCase();
+  if (!EMAIL_RE.test(cleanEmail)) throw new Error("Enter a valid email address.");
+  if (!isGeneralAddress(cleanEmail)) {
+    throw new Error("Use a public general or office inbox, not an individual staff address.");
+  }
+  let normalizedSource: string;
+  try {
+    const parsed = new URL(sourceUrl.trim());
+    if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error("invalid");
+    normalizedSource = parsed.toString();
+  } catch {
+    throw new Error("Enter the public church webpage where this email is displayed.");
+  }
+  const sourceHost = pageHostname(normalizedSource);
+  const websiteHost = pageHostname(lead.website);
+  const emailHost = cleanEmail.split('@')[1];
+  if (websiteHost && sourceHost && !relatedHostname(sourceHost, websiteHost) && !relatedHostname(sourceHost, emailHost)) {
+    throw new Error("The source must be on the church website or the email domain.");
+  }
+  const page = await fetchPageText(normalizedSource);
+  if (!page.text) throw new Error(`The source page could not be verified (${page.reason ?? "unavailable"}).`);
+  if (!orgMatches(lead.org_name, page.text)) throw new Error("The source page does not clearly identify this church.");
+  if (!page.text.includes(cleanEmail)) throw new Error("The replacement email is not displayed on the source page.");
+  const mx = await checkEmailDomain(cleanEmail);
+  if (!mx.format_ok || !mx.mx_ok) throw new Error("The replacement email domain does not currently accept mail.");
+  return { email: cleanEmail, sourceUrl: normalizedSource };
 }
 
 // ---- Per-lead verification ------------------------------------------------

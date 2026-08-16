@@ -6,11 +6,14 @@ import {
   discoveryIsComplete,
   extractDiscoveryJson,
   providerResponsePhase,
+  normalizeUsStateCode,
 } from "../outreach/discovery-core";
 import {
   OFFICIAL_CHURCH_DIRECTORIES,
   applyDirectorySourcePolicy,
   discoverySourceLane,
+  discoverySourceLaneCount,
+  validDirectoryIds,
   officialDirectoryForUrl,
 } from "../outreach/directory-sources";
 
@@ -65,6 +68,13 @@ describe("outreach discovery core", () => {
     expect(providerResponsePhase("cancelled")).toBe("failed");
   });
 
+  it("normalizes state names and abbreviations for statewide targeting", () => {
+    expect(normalizeUsStateCode("Florida")).toBe("FL");
+    expect(normalizeUsStateCode("fl")).toBe("FL");
+    expect(normalizeUsStateCode("District of Columbia")).toBe("DC");
+    expect(normalizeUsStateCode("not a state")).toBeNull();
+  });
+
   it("recognizes official national directory subdomains", () => {
     expect(OFFICIAL_CHURCH_DIRECTORIES.length).toBeGreaterThanOrEqual(7);
     expect(officialDirectoryForUrl("https://churches.sbc.net/church/123")?.id).toBe("sbc");
@@ -76,6 +86,14 @@ describe("outreach discovery core", () => {
     expect(discoverySourceLane(6).directory?.id).toBe("lcms");
     expect(discoverySourceLane(7).directory).toBeNull();
     expect(discoverySourceLane(8).directory?.id).toBe("usccb");
+  });
+
+  it("restricts targeted campaigns to their selected official directories", () => {
+    expect(validDirectoryIds(["episcopal", "bogus", "episcopal"])).toEqual(["episcopal"]);
+    expect(discoverySourceLaneCount(["episcopal"])).toBe(1);
+    expect(discoverySourceLane(0, ["episcopal"]).directory?.id).toBe("episcopal");
+    expect(discoverySourceLane(4, ["episcopal"]).directory?.id).toBe("episcopal");
+    expect(discoverySourceLane(0, ["episcopal"]).label).toContain("episcopalchurch.org");
   });
 
   it("preserves truthful contact-first evidence plus official-directory provenance", () => {

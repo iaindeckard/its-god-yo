@@ -1,5 +1,25 @@
 import type { DiscoveredLead } from "./leads";
 
+const US_STATE_CODES: Record<string, string> = {
+  alabama: "AL", alaska: "AK", arizona: "AZ", arkansas: "AR", california: "CA", colorado: "CO",
+  connecticut: "CT", delaware: "DE", florida: "FL", georgia: "GA", hawaii: "HI", idaho: "ID",
+  illinois: "IL", indiana: "IN", iowa: "IA", kansas: "KS", kentucky: "KY", louisiana: "LA",
+  maine: "ME", maryland: "MD", massachusetts: "MA", michigan: "MI", minnesota: "MN",
+  mississippi: "MS", missouri: "MO", montana: "MT", nebraska: "NE", nevada: "NV",
+  "new hampshire": "NH", "new jersey": "NJ", "new mexico": "NM", "new york": "NY",
+  "north carolina": "NC", "north dakota": "ND", ohio: "OH", oklahoma: "OK", oregon: "OR",
+  pennsylvania: "PA", "rhode island": "RI", "south carolina": "SC", "south dakota": "SD",
+  tennessee: "TN", texas: "TX", utah: "UT", vermont: "VT", virginia: "VA", washington: "WA",
+  "west virginia": "WV", wisconsin: "WI", wyoming: "WY", "district of columbia": "DC",
+};
+
+export function normalizeUsStateCode(value: string | null | undefined): string | null {
+  const clean = value?.trim();
+  if (!clean) return null;
+  if (/^[a-z]{2}$/i.test(clean)) return clean.toUpperCase();
+  return US_STATE_CODES[clean.toLowerCase()] ?? null;
+}
+
 export function boundedDiscoveryMaxRounds(target: number, leadsPerRound: number, sourceLaneCount: number): number {
   const safeLeadsPerRound = Math.max(1, Math.floor(leadsPerRound));
   return Math.max(1, Math.min(20, Math.ceil(Math.max(0, target) / safeLeadsPerRound) + sourceLaneCount));
