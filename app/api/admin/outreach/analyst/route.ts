@@ -4,6 +4,7 @@ import { apiError } from "@/lib/apiError";
 import { MARKETING_OBJECTIVES, type MarketingAnalysisInput } from "@/lib/outreach/marketing-analysis";
 import { generateMarketingAnalysis, saveMarketingProposal } from "@/lib/outreach/marketing-analyst";
 import { getAiUsageSummary } from "@/lib/ai-usage";
+import { createMarketIntelligenceDrafts, getVerifiedMarketSnapshot } from "@/lib/outreach/market-intelligence";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,10 +27,12 @@ export async function POST(req: Request) {
       preferred_window: typeof body.preferred_window === "string" ? body.preferred_window.trim().slice(0, 120) : "",
       constraints: typeof body.constraints === "string" ? body.constraints.trim().slice(0, 1000) : "",
     };
+    const snapshot = await getVerifiedMarketSnapshot();
     const analysis = await generateMarketingAnalysis(input, `marketing_analyst:${requestId}`);
     const proposal = await saveMarketingProposal(input, analysis, staff?.userId ?? null);
+    const generatedDrafts = await createMarketIntelligenceDrafts({ proposal, analysis, snapshot, createdBy: staff?.userId ?? null });
     const aiUsage = await getAiUsageSummary();
-    return NextResponse.json({ proposal, aiUsage });
+    return NextResponse.json({ proposal: { ...proposal, generated_drafts: generatedDrafts }, aiUsage });
   } catch (error) {
     return apiError(error);
   }

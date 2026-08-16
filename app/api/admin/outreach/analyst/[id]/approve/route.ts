@@ -13,6 +13,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const { id } = await params;
     const proposal = await getMarketingProposal(id);
     if (!proposal) return NextResponse.json({ error: "not_found" }, { status: 404 });
+    if (proposal.auto_drafts_created_at) return NextResponse.json({ error: "Draft campaigns were already created automatically for this analysis." }, { status: 409 });
     if (proposal.status !== "draft") return NextResponse.json({ error: "proposal_already_decided" }, { status: 409 });
     const body = await req.json().catch(() => ({}));
     const marketIndex = Number(body.market_index);

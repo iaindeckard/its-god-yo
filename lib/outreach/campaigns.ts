@@ -26,6 +26,7 @@ export interface Campaign {
   state_code: string | null;
   size_filter: string[] | null;
   denomination_filter: string[] | null;
+  discovery_target_count: number | null;
   discount_percent: number;
   message_variant: string | null;
   investment_cents: number;
@@ -83,6 +84,7 @@ export interface CreateCampaignInput {
   stateCode?: string | null;
   sizeFilter?: string[] | null;
   denominationFilter?: string[] | null;
+  discoveryTargetCount?: number | null;
   createdBy?: string | null;
   // When the map picker already resolved coordinates, pass them to skip the
   // server-side geocode. Omit (Phase 1 / text-only create) to geocode centerLabel.
@@ -113,6 +115,7 @@ export async function createCampaign(input: CreateCampaignInput): Promise<Campai
     state_code: input.geographyType === "state" ? input.stateCode?.toUpperCase() ?? null : null,
     size_filter: input.sizeFilter ?? null,
     denomination_filter: input.denominationFilter?.length ? input.denominationFilter : null,
+    discovery_target_count: input.discoveryTargetCount ?? null,
     created_by: input.createdBy ?? null,
   };
   const { data, error } = await admin.from(TABLE).insert(row).select("*").single();
@@ -138,6 +141,7 @@ export interface CampaignPatch {
   status?: CampaignStatus;
   size_filter?: string[] | null;
   denomination_filter?: string[] | null;
+  discovery_target_count?: number | null;
   radius_miles?: number;
   geography_type?: "radius" | "state";
   state_code?: string | null;

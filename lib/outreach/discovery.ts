@@ -292,10 +292,11 @@ async function createDiscoveryRun(campaign: Campaign): Promise<DiscoveryRun> {
   const prior = await latestDiscoveryRun(campaign.id);
   if (prior && ["running", "processing"].includes(prior.status)) return prior;
   const sourceLaneCount = discoverySourceLaneCount(campaign.denomination_filter);
+  const targetCount = campaign.discovery_target_count ?? OUTREACH.discoveryTarget;
   const { data, error } = await admin.from(RUNS_TABLE).insert({
     campaign_id: campaign.id,
-    target_count: OUTREACH.discoveryTarget,
-    max_rounds: boundedDiscoveryMaxRounds(OUTREACH.discoveryTarget, LEADS_PER_ROUND, sourceLaneCount),
+    target_count: targetCount,
+    max_rounds: boundedDiscoveryMaxRounds(targetCount, LEADS_PER_ROUND, sourceLaneCount),
   }).select("*").single();
   if (error) throw new Error(`discovery_run_create_failed: ${error.message}`);
   await updateCampaign(campaign.id, { status: "discovering" });

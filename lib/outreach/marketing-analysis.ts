@@ -12,6 +12,26 @@ export type MarketingObjective = (typeof MARKETING_OBJECTIVES)[number];
 export interface MarketingEvidence {
   claim: string;
   url: string;
+  category?: string;
+  publisher?: string;
+}
+
+export interface MarketIntelligenceProfile {
+  area_demographics: Record<string, unknown>;
+  congregation_landscape: Record<string, unknown>;
+  attendee_profile: { sourced_segments: string[]; limitations: string[] };
+  economics: Record<string, unknown>;
+  public_outreach: { signals: string[]; opportunities: string[] };
+}
+
+export interface CampaignStrategy {
+  campaign_type: string;
+  denomination_filters: string[];
+  size_filters: string[];
+  discount_percent: number;
+  investment_cents: number;
+  message_variant: "default";
+  rationale: string;
 }
 
 export interface MarketRecommendation {
@@ -36,6 +56,8 @@ export interface MarketRecommendation {
   risks: string[];
   assumptions: string[];
   evidence: MarketingEvidence[];
+  profile: MarketIntelligenceProfile;
+  campaign_strategy: CampaignStrategy;
 }
 
 export interface MarketingAnalysis {
@@ -62,7 +84,7 @@ export function parseMarketingAnalysis(value: unknown, generatedAt = new Date().
   const raw = value as Record<string, unknown>;
   if (!Array.isArray(raw.recommendations)) throw new Error("analyst_missing_recommendations");
 
-  const recommendations = raw.recommendations.slice(0, 5).map((entry, index) => {
+  const recommendations = raw.recommendations.slice(0, 3).map((entry, index) => {
     if (!entry || typeof entry !== "object") throw new Error(`analyst_invalid_market_${index}`);
     const item = entry as Record<string, unknown>;
     const timing = (item.timing && typeof item.timing === "object" ? item.timing : {}) as Record<string, unknown>;
@@ -70,12 +92,18 @@ export function parseMarketingAnalysis(value: unknown, generatedAt = new Date().
     const evidence = Array.isArray(item.evidence)
       ? item.evidence.map((row) => {
           const evidenceRow = (row && typeof row === "object" ? row : {}) as Record<string, unknown>;
-          return { claim: safeString(evidenceRow.claim), url: safeString(evidenceRow.url) };
+          return { claim: safeString(evidenceRow.claim), url: safeString(evidenceRow.url), category: safeString(evidenceRow.category), publisher: safeString(evidenceRow.publisher) };
         }).filter((row) => row.claim && /^https?:\/\//.test(row.url))
       : [];
     const marketName = safeString(item.market_name);
     const centerLabel = safeString(item.center_label);
     if (!marketName || !centerLabel || evidence.length === 0) throw new Error(`analyst_ungrounded_market_${index}`);
+    const profile = (item.profile && typeof item.profile === "object" ? item.profile : {}) as Record<string, unknown>;
+    const attendee = (profile.attendee_profile && typeof profile.attendee_profile === "object" ? profile.attendee_profile : {}) as Record<string, unknown>;
+    const outreach = (profile.public_outreach && typeof profile.public_outreach === "object" ? profile.public_outreach : {}) as Record<string, unknown>;
+    const strategy = (item.campaign_strategy && typeof item.campaign_strategy === "object" ? item.campaign_strategy : {}) as Record<string, unknown>;
+    const denominationFilters = safeStrings(strategy.denomination_filters).filter((value) => ["usccb","episcopal","umc","elca","pcusa","sbc","lcms"].includes(value));
+    const sizeFilters = safeStrings(strategy.size_filters).filter((value) => ["small","medium","large","mega","unknown"].includes(value));
     return {
       market_name: marketName,
       state: safeString(item.state),
@@ -98,6 +126,22 @@ export function parseMarketingAnalysis(value: unknown, generatedAt = new Date().
       risks: safeStrings(item.risks),
       assumptions: safeStrings(item.assumptions),
       evidence,
+      profile: {
+        area_demographics: (profile.area_demographics && typeof profile.area_demographics === "object" ? profile.area_demographics : {}) as Record<string, unknown>,
+        congregation_landscape: (profile.congregation_landscape && typeof profile.congregation_landscape === "object" ? profile.congregation_landscape : {}) as Record<string, unknown>,
+        attendee_profile: { sourced_segments: safeStrings(attendee.sourced_segments), limitations: safeStrings(attendee.limitations) },
+        economics: (profile.economics && typeof profile.economics === "object" ? profile.economics : {}) as Record<string, unknown>,
+        public_outreach: { signals: safeStrings(outreach.signals), opportunities: safeStrings(outreach.opportunities) },
+      },
+      campaign_strategy: {
+        campaign_type: safeString(strategy.campaign_type) || "controlled_church_outreach_test",
+        denomination_filters: denominationFilters,
+        size_filters: sizeFilters,
+        discount_percent: Math.min(25, Math.max(0, Math.round(Number(strategy.discount_percent) || 10))),
+        investment_cents: Math.max(0, Math.round(Number(strategy.investment_cents) || 0)),
+        message_variant: "default" as const,
+        rationale: safeString(strategy.rationale),
+      },
     };
   });
   if (recommendations.length === 0) throw new Error("analyst_no_grounded_markets");

@@ -48,6 +48,7 @@ interface Campaign {
   center_lat: number | null; center_lng: number | null;
   radius_miles: number; size_filter: string[] | null;
   denomination_filter: string[] | null;
+  discovery_target_count: number | null;
   geography_type: "radius" | "state"; state_code: string | null;
   status: string; created_at: string;
   discount_percent: number; message_variant: string | null;
@@ -91,10 +92,20 @@ interface MarketRecommendation {
   message: { theme: string; value_proposition: string; call_to_action: string; subject_line: string; opening: string };
   success_metrics: string[]; risks: string[]; assumptions: string[];
   evidence: { claim: string; url: string }[];
+  profile: MarketProfile;
+  campaign_strategy: Record<string, unknown>;
 }
 interface MarketingProposal {
   id: string; status: "draft" | "approved" | "rejected";
   analysis: { executive_summary: string; next_action: string; data_limitations: string[]; recommendations: MarketRecommendation[] };
+  generated_drafts?: Array<{ recommendation_index: number; profile_id: string; campaign: Campaign }>;
+}
+interface MarketProfile {
+  area_demographics: Record<string, unknown>; congregation_landscape: Record<string, unknown>;
+  attendee_profile: { sourced_segments?: string[]; limitations?: string[] };
+  economics: Record<string, unknown>; public_outreach: { signals?: string[]; opportunities?: string[] };
+  campaign_strategy: Record<string, unknown>; evidence: Array<{ category?: string; publisher?: string; claim: string; url: string }>;
+  data_limitations: string[];
 }
 interface AiUsageSummary { month: string; spentMicrousd: number; reservedMicrousd: number; budgetMicrousd: number }
 interface DiscoveryRun {
@@ -339,6 +350,7 @@ export default function OutreachManager({
   });
   const [proposal, setProposal] = useState<MarketingProposal | null>(null);
   const [aiUsage, setAiUsage] = useState(initialAiUsage);
+  const [marketProfile, setMarketProfile] = useState<MarketProfile | null>(null);
 
   async function refreshCampaigns() {
     const res = await fetch("/api/admin/outreach/campaigns");
@@ -347,11 +359,12 @@ export default function OutreachManager({
   }
 
   async function openCampaign(c: Campaign) {
-    setSelected(c); setLeads([]); setDeliveries([]); setDiscoveryRun(null); setReport(null); setViewBucket("all"); setPromoteSel(new Set()); setAudienceSel(new Set()); setDetailDraft(null); setOfferDraft(null); setContactEdit(null);
+    setSelected(c); setLeads([]); setDeliveries([]); setDiscoveryRun(null); setMarketProfile(null); setReport(null); setViewBucket("all"); setPromoteSel(new Set()); setAudienceSel(new Set()); setDetailDraft(null); setOfferDraft(null); setContactEdit(null);
     const res = await fetch(`/api/admin/outreach/campaigns/${c.id}`);
     const data = await res.json();
     if (res.ok) {
       setSelected(data.campaign); setLeads(data.leads); setDeliveries(data.deliveries ?? []); setDiscoveryRun(data.discoveryRun ?? null);
+      setMarketProfile(data.marketProfile ?? null);
       setDenominationDraft(data.campaign.denomination_filter ?? []);
       setReleaseDraft(data.campaign.release_at ? toDateTimeLocal(data.campaign.release_at) : "");
       setOfferDraft({ discount_percent: String(data.campaign.discount_percent ?? 10), message_variant: data.campaign.message_variant ?? "default" });
@@ -566,7 +579,7 @@ export default function OutreachManager({
   }
 
   async function runAnalyst() {
-    if (!confirm("Run OpenAI market research? This request is capped at an estimated maximum of $0.10 and counts toward the monthly AI budget.")) return;
+    if (!confirm("Run sourced market research and automatically create up to three DRAFT campaigns? This request is capped at an estimated maximum of $0.10 and counts toward the monthly AI budget. Nothing will be discovered, promoted, scheduled, or sent.")) return;
     setError(null); setBusy("analyst"); setProposal(null);
     try {
       const requestId = crypto.randomUUID();
@@ -581,22 +594,11 @@ export default function OutreachManager({
     finally { setBusy(null); }
   }
 
-  async function approveMarket(marketIndex: number) {
-    if (!proposal) return;
-    const market = proposal.analysis.recommendations[marketIndex];
-    if (!confirm(`Approve the ${market.market_name} plan and create a DRAFT campaign? This will not discover leads, promote contacts, open the send gate, or send anything.`)) return;
-    setError(null); setBusy(`approve:${marketIndex}`);
-    try {
-      const res = await fetch(`/api/admin/outreach/analyst/${proposal.id}/approve`, {
-        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ market_index: marketIndex }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "approval failed");
-      setProposal((current) => current ? { ...current, status: "approved" } : current);
-      await refreshCampaigns();
-      await openCampaign(data.campaign);
-    } catch (e) { setError(e instanceof Error ? e.message : "approval failed"); }
-    finally { setBusy(null); }
+  async function openGeneratedDraft(marketIndex: number) {
+    const draft = proposal?.generated_drafts?.find((row) => row.recommendation_index === marketIndex);
+    if (!draft) return;
+    await refreshCampaigns();
+    await openCampaign(draft.campaign);
   }
 
   const shown = viewBucket === "all" ? leads : leads.filter((l) => l.size_bucket === viewBucket);
@@ -629,7 +631,7 @@ export default function OutreachManager({
             <div className="pill pill-on" style={{ marginBottom: 8 }}>AI decision support</div>
             <h2 style={{ margin: 0 }}>Marketing analyst</h2>
             <p className="muted" style={{ marginBottom: 0 }}>
-              Get evidence-backed recommendations for where, when, and how to run the next controlled outreach test. Every result is a draft. You choose a market before a campaign is created, and all existing lead, copy, legal, and send gates remain in force.
+              Build evidence-backed market profiles and draft campaigns using authoritative public research plus locally aggregated verified IGY data. Drafts are created automatically, while all existing discovery, lead, copy, legal, schedule, and send gates remain in force.
             </p>
           </div>
           <div className="pill pill-warn">Manual approval required</div>
@@ -698,10 +700,10 @@ export default function OutreachManager({
                     </div>
                   </details>
                   <div style={{ marginTop: 12, padding: "10px 12px", borderRadius: 8, background: "#fff8ec" }}>
-                    <strong>Approval boundary:</strong> approving creates a draft geographic campaign only. Draft copy stays advisory and cannot enter the send system until separately reviewed and added as an approved message variant.
+                    <strong>Draft created automatically:</strong> verified IGY data is combined locally with the cited public profile. Draft copy stays advisory and cannot enter the send system until separately reviewed and added as an approved message variant.
                   </div>
-                  <button className="btn btn-primary" style={{ marginTop: 12 }} disabled={proposal.status !== "draft" || !!busy} onClick={() => approveMarket(index)}>
-                    {busy === `approve:${index}` ? "Creating draft..." : proposal.status === "approved" ? "Proposal already approved" : "Approve plan and create draft campaign"}
+                  <button className="btn btn-primary" style={{ marginTop: 12 }} disabled={!proposal.generated_drafts?.some((row) => row.recommendation_index === index) || !!busy} onClick={() => openGeneratedDraft(index)}>
+                    Open generated draft campaign
                   </button>
                 </article>
               ))}
@@ -710,6 +712,25 @@ export default function OutreachManager({
           </div>
         )}
       </section>
+
+      {selected && marketProfile && (
+        <section className="card" style={{ borderColor: "#8aa9ca", background: "#f7fbff" }}>
+          <h3 style={{ marginTop: 0 }}>Verified market intelligence behind this draft</h3>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
+            <div><strong>Area demographics</strong><pre style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>{JSON.stringify(marketProfile.area_demographics, null, 2)}</pre></div>
+            <div><strong>Congregation landscape</strong><pre style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>{JSON.stringify(marketProfile.congregation_landscape, null, 2)}</pre></div>
+            <div><strong>Economics</strong><pre style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>{JSON.stringify(marketProfile.economics, null, 2)}</pre></div>
+            <div><strong>Campaign strategy</strong><pre style={{ whiteSpace: "pre-wrap", fontSize: 12 }}>{JSON.stringify(marketProfile.campaign_strategy, null, 2)}</pre></div>
+          </div>
+          <p><strong>Published attendee segments:</strong> {marketProfile.attendee_profile?.sourced_segments?.join("; ") || "Unknown. No congregation-specific published evidence."}</p>
+          <p><strong>Public outreach:</strong> {marketProfile.public_outreach?.signals?.join("; ") || "No sourced signals recorded."}</p>
+          <details><summary><strong>Sources and limitations</strong></summary>
+            <ul>{marketProfile.evidence.map((source) => <li key={source.url}><a href={source.url} target="_blank" rel="noreferrer">{source.publisher ? `${source.publisher}: ` : ""}{source.claim}</a></li>)}</ul>
+            <p className="hint">{marketProfile.data_limitations.join("; ")}</p>
+          </details>
+          <p className="hint" style={{ marginBottom: 0 }}>This profile created a draft only. Discovery, contact promotion, copy approval, legal approval, scheduling, and sending remain separate human-controlled steps.</p>
+        </section>
+      )}
 
       {/* Compact campaign history + persistent create action. */}
       <div className="card" style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "start" }}>
@@ -728,7 +749,7 @@ export default function OutreachManager({
         <h3>1 · Define area</h3>
         {!selected
           ? <p className="muted">Draw a search area for a new campaign: name it, then click the map, drag the pin, or search a place to set the center, and use the slider for the radius.</p>
-          : <p className="muted">{selected.center_label}{selected.geography_type === "radius" ? ` · ${Number(selected.radius_miles)}mi` : " · statewide"} · {leads.length} leads · <span className={statusPill(selected.status)}>{selected.status}</span></p>}
+          : <p className="muted">{selected.center_label}{selected.geography_type === "radius" ? ` · ${Number(selected.radius_miles)}mi` : " · statewide"} · target {selected.discovery_target_count ?? 35} verified contacts · {leads.length} leads · <span className={statusPill(selected.status)}>{selected.status}</span></p>}
 
         {!selected && canManage && (
           <>
