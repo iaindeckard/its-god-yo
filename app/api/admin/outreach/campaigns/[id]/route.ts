@@ -50,6 +50,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         : null;
     }
     if (body.radius_miles !== undefined) patch.radius_miles = Number(body.radius_miles);
+    if (body.investment_cents !== undefined) {
+      const investment = Number(body.investment_cents);
+      if (!Number.isSafeInteger(investment) || investment < 0) {
+        return NextResponse.json({ error: "investment_cents must be a non-negative integer" }, { status: 400 });
+      }
+      patch.investment_cents = investment;
+    }
     if (body.center_lat !== undefined) patch.center_lat = body.center_lat === null ? null : Number(body.center_lat);
     if (body.center_lng !== undefined) patch.center_lng = body.center_lng === null ? null : Number(body.center_lng);
     if (typeof body.center_label === "string") patch.center_label = body.center_label.trim();
