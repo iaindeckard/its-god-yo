@@ -21,6 +21,7 @@ import {
   discoverySourceLaneCount,
   type OfficialChurchDirectory,
 } from "./directory-sources";
+import { applyAttendanceSourcePolicy, sizeSourcePrompt } from "./size-sources";
 
 /**
  * Monthly discovery (spec §4). Calls the OpenAI Responses API with web search and
@@ -54,7 +55,9 @@ function discoverySystem(directory: OfficialChurchDirectory | null | undefined):
 6. Do NOT use purchased, scraped, aggregator, map/review, or third-party contact-list data. Respect robots.txt. If a congregation blocks automated access, use only its search-indexed snippet and lower confidence.
 7. Every lead MUST cite the specific pages actually used. No un-sourced entries.
 8. Prefer quality over quantity. It is correct to return fewer, well-sourced leads than to pad the list. If youth-ministry evidence is weak, stale, or only inferred, mark confidence "low" and say why in youth_ministry_signal.
-9. Church SIZE: if a public page states a weekly attendance / average worship-service size (an "about"/"who we are"/news/annual-report page), capture it as estimated_attendance (an integer) and attendance_source_url (the page it came from). NEVER guess or infer attendance from building size, staff count, or denomination — if no public figure is stated, return estimated_attendance: null and attendance_source_url: null.
+9. Church SIZE: use the size-source rules below. Capture a stated weekly attendance / average worship-service size as estimated_attendance (an integer) and cite the exact page as attendance_source_url. NEVER guess or infer attendance from building size, staff count, denomination, ranking, or the fact that a church appears on a list. If no numeric public figure is stated, return estimated_attendance: null and attendance_source_url: null.
+
+${sizeSourcePrompt()}
 
 ${sourceInstructions}
 
@@ -193,7 +196,8 @@ function parseResponseLeads(data: OpenAIResponse, maxLeads?: number): Discovered
   return boundedProviderItems(parsed.leads, maxLeads)
     .filter((l) => l && l.org_name && l.contact_email)
     .map(applyDirectorySourcePolicy)
-    .filter((lead): lead is DiscoveredLead => Boolean(lead));
+    .filter((lead): lead is DiscoveredLead => Boolean(lead))
+    .map(applyAttendanceSourcePolicy);
 }
 
 /** One synchronous OpenAI web-search call for the legacy monthly cron. */
