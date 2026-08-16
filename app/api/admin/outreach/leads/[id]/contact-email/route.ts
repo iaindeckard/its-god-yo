@@ -16,10 +16,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const body = await req.json().catch(() => ({}));
     const email = typeof body.email === "string" ? body.email : "";
     const sourceUrl = typeof body.source_url === "string" ? body.source_url : "";
-    let validated: { email: string; sourceUrl: string };
+    const manuallyConfirmed = body.manually_confirmed === true;
+    let validated: { email: string; sourceUrl: string; automatedEvidenceConfirmed: boolean };
     try {
-      validated = await validateReplacementContactEmail(lead, email, sourceUrl);
-      await replaceLeadContactEmail(lead, { ...validated, actorUserId: staff.userId });
+      validated = await validateReplacementContactEmail(lead, email, sourceUrl, manuallyConfirmed);
+      await replaceLeadContactEmail(lead, { ...validated, manuallyConfirmed, actorUserId: staff.userId });
     } catch (error) {
       const message = error instanceof Error ? error.message : "invalid contact email";
       const friendly = message === "contact_email_already_exists"
@@ -29,7 +30,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
           : message;
       return NextResponse.json({ error: friendly }, { status: 400 });
     }
-    await verifyLeads({ ids: [lead.id] });
+    if (validated.automatedEvidenceConfirmed) await verifyLeads({ ids: [lead.id] });
     return NextResponse.json({ lead: await getLead(lead.id) });
   } catch (error) {
     return apiError(error);

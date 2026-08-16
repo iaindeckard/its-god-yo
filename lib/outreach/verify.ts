@@ -187,7 +187,8 @@ export async function validateReplacementContactEmail(
   lead: Pick<OutreachLead, "org_name" | "website">,
   email: string,
   sourceUrl: string,
-): Promise<{ email: string; sourceUrl: string }> {
+  manuallyConfirmed = false,
+): Promise<{ email: string; sourceUrl: string; automatedEvidenceConfirmed: boolean }> {
   const cleanEmail = email.trim().toLowerCase();
   if (!EMAIL_RE.test(cleanEmail)) throw new Error("Enter a valid email address.");
   if (!isGeneralAddress(cleanEmail)) {
@@ -208,12 +209,15 @@ export async function validateReplacementContactEmail(
     throw new Error("The source must be on the church website or the email domain.");
   }
   const page = await fetchPageText(normalizedSource);
-  if (!page.text) throw new Error(`The source page could not be verified (${page.reason ?? "unavailable"}).`);
-  if (!orgMatches(lead.org_name, page.text)) throw new Error("The source page does not clearly identify this church.");
-  if (!page.text.includes(cleanEmail)) throw new Error("The replacement email is not displayed on the source page.");
+  const automatedEvidenceConfirmed = Boolean(page.text && orgMatches(lead.org_name, page.text) && page.text.includes(cleanEmail));
+  if (!automatedEvidenceConfirmed && !manuallyConfirmed) {
+    throw new Error(page.text
+      ? "The automated check could not confirm the church and replacement email on that page."
+      : `The source page could not be verified (${page.reason ?? "unavailable"}).`);
+  }
   const mx = await checkEmailDomain(cleanEmail);
   if (!mx.format_ok || !mx.mx_ok) throw new Error("The replacement email domain does not currently accept mail.");
-  return { email: cleanEmail, sourceUrl: normalizedSource };
+  return { email: cleanEmail, sourceUrl: normalizedSource, automatedEvidenceConfirmed };
 }
 
 // ---- Per-lead verification ------------------------------------------------

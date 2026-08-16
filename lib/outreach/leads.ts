@@ -193,7 +193,7 @@ export async function getLead(id: string): Promise<OutreachLead | null> {
 
 export async function replaceLeadContactEmail(
   lead: OutreachLead,
-  input: { email: string; sourceUrl: string; actorUserId: string },
+  input: { email: string; sourceUrl: string; actorUserId: string; manuallyConfirmed: boolean; automatedEvidenceConfirmed: boolean },
 ): Promise<void> {
   if (!lead.campaign_id || !["staged", "active", "needs_review"].includes(lead.status)) {
     throw new Error("contact_email_edit_not_allowed");
@@ -205,7 +205,7 @@ export async function replaceLeadContactEmail(
   const { error } = await getSupabaseAdmin().from(TABLE).update({
     contact_email: input.email,
     source_urls: [...new Set(sourceUrls)],
-    verification_status: "unverified",
+    verification_status: input.automatedEvidenceConfirmed ? "unverified" : "needs_manual",
     verified_at: null,
     verification_notes: {
       ...priorNotes,
@@ -215,6 +215,8 @@ export async function replaceLeadContactEmail(
         source_url: input.sourceUrl,
         changed_by: input.actorUserId,
         changed_at: now,
+        manually_confirmed: input.manuallyConfirmed,
+        automated_evidence_confirmed: input.automatedEvidenceConfirmed,
       }],
     },
     updated_at: now,
