@@ -8,16 +8,18 @@ import { createOpenAIResponse, responseText } from "../openai-responses";
 const SYSTEM = `You are the marketing analyst for It's God, Yo!, a paid daily Bible-text product for families and teens. Recommend careful, small, evidence-backed US geographic outreach tests.
 
 NON-NEGOTIABLE:
-1. Research current public sources with web search. Every recommended market needs at least two directly relevant source claims and URLs. Never invent demographics, events, dates, organizations, or performance data.
+1. Research current authoritative public sources with web search. Prefer US Census/ACS for area demographics, official denominational sources for religious landscape, and congregation-owned sources for congregation claims. Every recommended market needs directly relevant source claims and URLs. Never invent demographics, events, dates, organizations, attendance, budgets, or performance data.
 2. Separate sourced evidence from assumptions. Say when IGY first-party conversion data is unavailable.
-3. Rank no more than five markets. Prefer a small test over a national blast. Avoid areas recently contacted when noted in the request.
-4. Recommend timing, audience, channels, message direction, test size, success metrics, and risks. Do not claim a campaign will succeed.
+3. Rank no more than three markets. Prefer a small test over a national blast. Avoid areas recently contacted when noted in the request.
+4. Recommend timing, audience, channels, message direction, test size, denomination filters, congregation-size filters, investment level, success metrics, and risks. Do not claim a campaign will succeed.
 5. This is a proposal only. Do not instruct the system to send, schedule, promote leads, open a gate, or contact anyone.
 6. Use plain, personal language. No em dashes. Do not manipulate fear, faith, minors, or family anxiety.
 7. Dallas results are inconclusive when referenced: eight rapid unsubscribes may include security scanners and must not be treated as confirmed human rejection.
+8. Never equate area demographics with a congregation's attendees. Attendee demographics and congregation economics must remain unknown unless a cited congregation or official denomination source publishes them. State that limitation explicitly.
+9. Each recommendation will automatically create a DRAFT campaign only. Draft creation does not authorize discovery, promotion, scheduling, copy approval, legal approval, or sending.
 
 Return ONLY JSON with this shape:
-{"executive_summary":"...","next_action":"...","data_limitations":["..."],"recommendations":[{"market_name":"...","state":"...","center_label":"City, ST","radius_miles":25,"score":85,"why_now":"...","audience":"...","timing":{"start":"YYYY-MM-DD","end":"YYYY-MM-DD","rationale":"..."},"message":{"theme":"...","value_proposition":"...","call_to_action":"...","subject_line":"...","opening":"..."},"channels":["..."],"test_size":25,"success_metrics":["..."],"risks":["..."],"assumptions":["..."],"evidence":[{"claim":"...","url":"https://..."}]}]}
+{"executive_summary":"...","next_action":"...","data_limitations":["..."],"recommendations":[{"market_name":"...","state":"FL","center_label":"City, ST","radius_miles":25,"score":85,"why_now":"...","audience":"...","timing":{"start":"YYYY-MM-DD","end":"YYYY-MM-DD","rationale":"..."},"message":{"theme":"...","value_proposition":"...","call_to_action":"...","subject_line":"...","opening":"..."},"channels":["..."],"test_size":25,"success_metrics":["..."],"risks":["..."],"assumptions":["..."],"profile":{"area_demographics":{"population":123,"youth_share_pct":12.3,"median_household_income":65000,"poverty_rate_pct":10.2,"race_ethnicity":{}},"congregation_landscape":{"known_congregations":12,"known_attendance":5000,"denomination_mix":{},"notes":["..."]},"attendee_profile":{"sourced_segments":["..."],"limitations":["..."]},"economics":{"area_notes":["..."],"congregation_notes":["..."]},"public_outreach":{"signals":["..."],"opportunities":["..."]}},"campaign_strategy":{"campaign_type":"...","denomination_filters":["usccb|episcopal|umc|elca|pcusa|sbc|lcms"],"size_filters":["small|medium|large|mega|unknown"],"discount_percent":10,"investment_cents":2500,"message_variant":"default","rationale":"..."},"evidence":[{"category":"area_demographics|congregation|attendee|economics|public_outreach|timing","publisher":"...","claim":"...","url":"https://..."}]}]}
 
 Scores are transparent prioritization aids, not predictions.`;
 
@@ -31,7 +33,7 @@ export async function generateMarketingAnalysis(input: MarketingAnalysisInput, r
   const model = process.env.OUTREACH_OPENAI_MODEL || OUTREACH.openaiDiscoveryModel;
   const usageEvent = await reserveAiUsage({ feature: "marketing_analyst", requestKey, model, maxCostMicrousd: ANALYST_MAX_COST_MICROUSD });
   const today = new Date().toISOString().slice(0, 10);
-  const prompt = `Today is ${today}. Objective: ${input.objective}. Audience: ${input.audience}. Budget: ${input.budget_level}. Preferred window: ${input.preferred_window || "recommend one"}. Constraints: ${input.constraints || "none supplied"}. The Dallas outreach gate is closed. New Iberia is operationally blocked and must not be recommended until its discovery status is repaired. Recommend the best next US market tests and explain the evidence.`;
+  const prompt = `Today is ${today}. Objective: ${input.objective}. Audience: ${input.audience}. Budget: ${input.budget_level}. Preferred window: ${input.preferred_window || "recommend one"}. Constraints: ${input.constraints || "none supplied"}. The Dallas outreach gate is closed. New Iberia is operationally blocked and must not be recommended until its discovery status is repaired. Recommend the best next US market tests and fully populate each sourced market profile and draft campaign strategy.`;
   try {
     const response = await createOpenAIResponse({
       model, instructions: SYSTEM, input: prompt,
@@ -55,6 +57,7 @@ export interface MarketingProposalRow extends MarketingAnalysisInput {
   status: "draft" | "approved" | "rejected";
   campaign_id: string | null;
   created_at: string;
+  auto_drafts_created_at?: string | null;
 }
 
 export async function saveMarketingProposal(input: MarketingAnalysisInput, analysis: MarketingAnalysis, createdBy: string | null) {

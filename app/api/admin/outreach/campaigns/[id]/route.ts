@@ -7,6 +7,7 @@ import { clampDiscountPercent, isApprovedVariant } from "@/lib/outreach/template
 import { listCampaignDeliveries } from "@/lib/outreach/deliveries";
 import { latestDiscoveryRun } from "@/lib/outreach/discovery";
 import { validDirectoryIds } from "@/lib/outreach/directory-sources";
+import { getCampaignMarketProfile } from "@/lib/outreach/market-intelligence";
 
 export const dynamic = "force-dynamic";
 
@@ -17,10 +18,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     const { id } = await params;
     const campaign = await getCampaign(id);
     if (!campaign) return NextResponse.json({ error: "not_found" }, { status: 404 });
-    const [leads, deliveries, discoveryRun] = await Promise.all([
-      fetchCampaignLeads(id), listCampaignDeliveries(id), latestDiscoveryRun(id),
+    const [leads, deliveries, discoveryRun, marketProfile] = await Promise.all([
+      fetchCampaignLeads(id), listCampaignDeliveries(id), latestDiscoveryRun(id), getCampaignMarketProfile(id),
     ]);
-    return NextResponse.json({ campaign, leads, deliveries, discoveryRun });
+    return NextResponse.json({ campaign, leads, deliveries, discoveryRun, marketProfile });
   } catch (e) {
     return apiError(e);
   }
