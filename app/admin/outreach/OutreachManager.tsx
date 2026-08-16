@@ -12,6 +12,15 @@ const BUCKET_LABEL: Record<SizeBucket, string> = {
   small: "Small (<100)", medium: "Medium (100–499)", large: "Large (500–1,999)",
   mega: "Mega (2,000+)", unknown: "Unknown",
 };
+const attendanceSourceName = (url: string) => {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "") === "outreach100.com"
+      ? "Outreach 100"
+      : "published source";
+  } catch {
+    return "published source";
+  }
+};
 const DENOMINATIONS = [
   { id: "usccb", label: "Roman Catholic" },
   { id: "episcopal", label: "Episcopal" },
@@ -778,6 +787,7 @@ export default function OutreachManager({
           <div className="card">
             <h3>2 · Discover</h3>
             <p className="muted">Search the selected denominations' official directories first, then confirm the public general email and active youth ministry on congregation-owned pages. General web search is used only when no denomination is selected. Discovered leads land staged (found, not yet in the send pipeline) and are auto-verified.</p>
+            <p className="hint">Size is checked against the live <a href="https://outreach100.com/largest-churches-in-america" target="_blank" rel="noreferrer">Outreach 100</a> profiles. <a href="https://hirr.hartfordinternational.edu/research/megachurch-database/" target="_blank" rel="noreferrer">Hartford's Megachurch Database</a> is linked for research only and is not copied into IGY under its published use restriction.</p>
             {discoveryRun && <p className="hint" role="status">
               {discoveryRun.status === "completed"
                 ? (discoveryRun.last_error ? "Discovery complete with saved partial results" : "Discovery complete")
@@ -859,7 +869,9 @@ export default function OutreachManager({
                         <td>{[l.city, l.state].filter(Boolean).join(", ") || "—"}</td>
                         <td><span className="pill">{l.size_bucket}</span></td>
                         <td>{l.estimated_attendance != null
-                          ? (l.attendance_source_url ? <a href={l.attendance_source_url} target="_blank" rel="noreferrer">{l.estimated_attendance}</a> : l.estimated_attendance)
+                          ? (l.attendance_source_url
+                            ? <span><a href={l.attendance_source_url} target="_blank" rel="noreferrer">{l.estimated_attendance.toLocaleString()}</a><span className="muted" style={{ display: "block", fontSize: 10 }}>{attendanceSourceName(l.attendance_source_url)}</span></span>
+                            : l.estimated_attendance.toLocaleString())
                           : <span className="muted">unknown</span>}</td>
                         <td>{l.discovery_confidence ?? "—"}</td>
                         <td><span className={statusPill(l.status)}>{l.status}</span></td>

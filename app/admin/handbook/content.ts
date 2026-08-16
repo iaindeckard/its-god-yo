@@ -494,6 +494,8 @@ export const PARTS: Part[] = [
           { type: "subheading", text: "Discovery" },
           { type: "prose", text: "Running discovery searches public sources for churches within the campaign's radius, using only publicly posted general contact emails and youth-ministry signals. Each lead is placed on the map and, where a public attendance figure exists, sized. A lead with no findable attendance is marked “unknown,” never guessed." },
           { type: "list", items: [
+            "Size is checked live during discovery. Outreach 100 is the preferred national size source and is cited on the lead; it is never used as contact or youth-ministry evidence.",
+            "Hartford's Megachurch Database is available as a linked research reference only. Its published terms prohibit copying or private/commercial reuse, so its records are not imported into IGY.",
             "Size buckets: small (under 100), medium (100 to 499), large (500 to 1,999), mega (2,000 and up), and unknown.",
             "Discovered leads land “staged”: found, but NOT yet in the send pipeline.",
           ] },
