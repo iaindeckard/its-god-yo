@@ -1,9 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import {
   boundedDiscoveryMaxRounds,
   boundedProviderItems,
   discoveryErrorStatus,
   discoveryIsComplete,
+  discoveryPrimaryProvider,
   extractDiscoveryJson,
   isCreditExhaustedError,
   providerResponsePhase,
@@ -156,5 +157,26 @@ describe("isCreditExhaustedError (failover trigger)", () => {
     expect(isCreditExhaustedError(new Error("openai_timeout_135s"))).toBe(false);
     expect(isCreditExhaustedError(null)).toBe(false);
     expect(isCreditExhaustedError(undefined)).toBe(false);
+  });
+});
+
+describe("discoveryPrimaryProvider (provider order switch)", () => {
+  const prev = process.env.OUTREACH_DISCOVERY_PRIMARY;
+  afterAll(() => { if (prev === undefined) delete process.env.OUTREACH_DISCOVERY_PRIMARY; else process.env.OUTREACH_DISCOVERY_PRIMARY = prev; });
+  it("defaults to openai when unset/blank/unknown", () => {
+    delete process.env.OUTREACH_DISCOVERY_PRIMARY;
+    expect(discoveryPrimaryProvider()).toBe("openai");
+    process.env.OUTREACH_DISCOVERY_PRIMARY = "";
+    expect(discoveryPrimaryProvider()).toBe("openai");
+    process.env.OUTREACH_DISCOVERY_PRIMARY = "openai";
+    expect(discoveryPrimaryProvider()).toBe("openai");
+    process.env.OUTREACH_DISCOVERY_PRIMARY = "somethingelse";
+    expect(discoveryPrimaryProvider()).toBe("openai");
+  });
+  it("selects anthropic (case/space-insensitive) only on an explicit value", () => {
+    process.env.OUTREACH_DISCOVERY_PRIMARY = "anthropic";
+    expect(discoveryPrimaryProvider()).toBe("anthropic");
+    process.env.OUTREACH_DISCOVERY_PRIMARY = "  ANTHROPIC ";
+    expect(discoveryPrimaryProvider()).toBe("anthropic");
   });
 });

@@ -22,7 +22,7 @@ import {
   isExcludedSchoolLead,
 } from "../lib/outreach/school-sources";
 import { applyAttendanceSourcePolicy } from "../lib/outreach/size-sources";
-import { isCreditExhaustedError } from "../lib/outreach/discovery-core";
+import { isCreditExhaustedError, discoveryPrimaryProvider } from "../lib/outreach/discovery-core";
 import { anthropicDiscoverLeads, anthropicDiscoveryAvailable, ANTHROPIC_DISCOVERY_MODEL } from "../lib/outreach/anthropic-discovery";
 import type { DiscoveredLead } from "../lib/outreach/leads";
 
@@ -86,18 +86,30 @@ async function callOpenAI(system: string, prompt: string, maxLeads: number, key:
   }
 }
 
-/** Mirror of the production failover: try OpenAI, and on a credit-exhaustion error
- *  fall over to Anthropic (same system + prompt). Returns the raw leads plus which
- *  provider served them. */
+/** Mirror of the production provider-order failover: run the PRIMARY provider
+ *  (OUTREACH_DISCOVERY_PRIMARY, default openai) for this lane, and on a
+ *  credit-exhaustion error fall over to the OTHER provider (same system + prompt).
+ *  Returns the raw leads plus which provider served them. */
 async function discoverWithFailover(system: string, prompt: string, key: string): Promise<{ leads: unknown[]; provider: "openai" | "anthropic" }> {
+  const runOpenai = async () => (await callOpenAI(system, prompt, 4, key)).leads;
+  const runAnthropic = async () => (await anthropicDiscoverLeads({ system, prompt })).leads;
+  if (discoveryPrimaryProvider() === "anthropic") {
+    try {
+      return { leads: await runAnthropic(), provider: "anthropic" };
+    } catch (e) {
+      if (isCreditExhaustedError(e) && key) {
+        console.error("  ↳ Anthropic credit exhausted; failing over to OpenAI");
+        return { leads: await runOpenai(), provider: "openai" };
+      }
+      throw e;
+    }
+  }
   try {
-    const { leads } = await callOpenAI(system, prompt, 4, key);
-    return { leads, provider: "openai" };
+    return { leads: await runOpenai(), provider: "openai" };
   } catch (e) {
     if (isCreditExhaustedError(e) && anthropicDiscoveryAvailable()) {
       console.error(`  ↳ OpenAI credit exhausted; failing over to Anthropic (${ANTHROPIC_DISCOVERY_MODEL})`);
-      const r = await anthropicDiscoverLeads({ system, prompt });
-      return { leads: r.leads, provider: "anthropic" };
+      return { leads: await runAnthropic(), provider: "anthropic" };
     }
     throw e;
   }
@@ -109,6 +121,11 @@ async function main() {
   if (!key) throw new Error("OPENAI_API_KEY not set (checked env + .env.local)");
   const state = (process.argv[2] || "LA").toUpperCase();
   const laneCount = schoolSourceLaneCount(state);
+  // Resume support: argv[3] is the 1-indexed lane to START from (default 1). e.g.
+  // `... LA 3` resumes at lane 3 (round index 2), skipping lanes already done.
+  const startLane = Math.max(1, Math.min(laneCount, Number(process.argv[3] || 1)));
+  const startRound = startLane - 1;
+  console.error(`[test] state=${state} primary=${discoveryPrimaryProvider()} anthropicKey=${anthropicDiscoveryAvailable()} lanes=${startLane}..${laneCount}`);
 
   // --- Exclusion unit test: a CHS-shaped candidate MUST be dropped ---
   const chsSynthetic: DiscoveredLead = {
@@ -128,7 +145,7 @@ async function main() {
   let failedOverLanes = 0;
   const rawByLane: Array<{ lane: string; returned: number; kept: number; excluded: number; provider?: string }> = [];
 
-  for (let round = 0; round < laneCount; round++) {
+  for (let round = startRound; round < laneCount; round++) {
     const lane = schoolSourceLane(round, state);
     const system = schoolDiscoverySystem(state);
     const prompt = schoolUserPrompt(state, 4, [...seen], lane.label);
@@ -163,7 +180,7 @@ async function main() {
   const probeSurfaced = (probe.leads as DiscoveredLead[]).map((l) => l?.org_name).filter(Boolean);
 
   console.log(JSON.stringify({
-    state, laneCount,
+    state, laneCount, startLane, primary: discoveryPrimaryProvider(),
     exclusionUnitTest: { chsByDomain, chsByName, chsPolicyDrops },
     rawByLane,
     failedOverLanes,

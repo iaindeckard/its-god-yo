@@ -69,6 +69,21 @@ export function providerResponsePhase(status: string | null | undefined): "pendi
  * This is the ONLY error class the discovery failover reacts to — a plain 429
  * rate limit (retry-after) is left to the provider's own backoff, not failed over.
  */
+export type DiscoveryProvider = "openai" | "anthropic";
+
+/**
+ * Which provider discovery TRIES FIRST. The other is held in reserve and only
+ * used when the primary returns a credit-exhaustion error (see the failover in
+ * discovery.ts). Global switch via OUTREACH_DISCOVERY_PRIMARY; defaults to the
+ * original 'openai'. Set to 'anthropic' to run on Anthropic credits and hold
+ * OpenAI in reserve. This is a GLOBAL env switch, not per-campaign.
+ */
+export function discoveryPrimaryProvider(): DiscoveryProvider {
+  return (process.env.OUTREACH_DISCOVERY_PRIMARY || "").trim().toLowerCase() === "anthropic"
+    ? "anthropic"
+    : "openai";
+}
+
 export function isCreditExhaustedError(error: unknown): boolean {
   const msg = (error instanceof Error ? error.message : String(error ?? "")).toLowerCase();
   if (!msg) return false;
