@@ -72,6 +72,16 @@ const YOUTH_KEYWORDS = [
   "junior high", "jr high", "confirmation class", "young life", "youth night",
 ];
 
+// A Catholic K-12 SCHOOL signal on the page (entity_type='school'). Schools don't
+// have "youth ministry"; the relevant proof is that it's an operating Catholic
+// school with grade levels / admissions. Lowercased substring match.
+const SCHOOL_KEYWORDS = [
+  "catholic school", "school", "academy", "admissions", "enrollment", "enroll",
+  "tuition", "students", "grades", "grade ", "pre-k", "prek", "pre-kindergarten",
+  "kindergarten", "elementary", "middle school", "high school", "faculty",
+  "principal", "parochial", "diocese", "archdiocese", "academics", "curriculum",
+];
+
 // Generic words in a church name that don't identify it — excluded from the
 // token-overlap match so "First Baptist Church" doesn't pass on "church" alone.
 const ORG_STOPWORDS = new Set([
@@ -144,6 +154,20 @@ function orgMatches(org: string, pageText: string): boolean {
 function youthMatches(pageText: string): { ok: boolean; keyword: string | null } {
   for (const k of YOUTH_KEYWORDS) if (pageText.includes(k)) return { ok: true, keyword: k.trim() };
   return { ok: false, keyword: null };
+}
+
+function schoolMatches(pageText: string): { ok: boolean; keyword: string | null } {
+  for (const k of SCHOOL_KEYWORDS) if (pageText.includes(k)) return { ok: true, keyword: k.trim() };
+  return { ok: false, keyword: null };
+}
+
+/** Relevance-signal match for the org's TYPE: a school proves it's a Catholic
+ *  K-12 school; a church/legacy lead proves an active youth ministry. */
+function relevanceMatches(
+  pageText: string,
+  entityType: "church" | "school" | null | undefined,
+): { ok: boolean; keyword: string | null } {
+  return entityType === "school" ? schoolMatches(pageText) : youthMatches(pageText);
 }
 
 // ---- Email / MX check -----------------------------------------------------
@@ -225,7 +249,7 @@ export async function validateReplacementContactEmail(
 /** Run both checks for one lead and return a verdict + evidence. Pure w.r.t. the
  *  DB (no write) — callers persist via setVerification/verifyLeads. */
 export async function verifyLead(
-  lead: Pick<OutreachLead, "org_name" | "contact_email" | "source_urls">,
+  lead: Pick<OutreachLead, "org_name" | "contact_email" | "source_urls" | "entity_type">,
 ): Promise<VerificationResult> {
   const checked_at = new Date().toISOString();
   const mx = await checkEmailDomain(lead.contact_email);
@@ -241,7 +265,7 @@ export async function verifyLead(
     anyFetched = true;
     if (!checkedUrl) checkedUrl = url;
     if (!orgOk && orgMatches(lead.org_name, text)) { orgOk = true; checkedUrl = url; }
-    if (!youthOk) { const y = youthMatches(text); if (y.ok) { youthOk = true; matchedKeyword = y.keyword; } }
+    if (!youthOk) { const y = relevanceMatches(text, lead.entity_type); if (y.ok) { youthOk = true; matchedKeyword = y.keyword; } }
     if (orgOk && youthOk) break;
   }
 
@@ -305,14 +329,14 @@ export async function verifyLeads(scope: {
   campaignId?: string; ids?: string[]; onlyUnverified?: boolean;
 }): Promise<VerifyBatchResult> {
   const admin = getSupabaseAdmin();
-  let q = admin.from(TABLE).select("id, org_name, contact_email, source_urls, verification_status");
+  let q = admin.from(TABLE).select("id, org_name, contact_email, source_urls, entity_type, verification_status");
   if (scope.campaignId) q = q.eq("campaign_id", scope.campaignId);
   if (scope.ids && scope.ids.length) q = q.in("id", scope.ids);
   if (scope.onlyUnverified) q = q.eq("verification_status", "unverified");
   const { data, error } = await q;
   if (error) throw new Error(`verify_fetch_failed: ${error.message}`);
   const leads = (data ?? []) as Array<
-    Pick<OutreachLead, "id" | "org_name" | "contact_email" | "source_urls" | "verification_status">
+    Pick<OutreachLead, "id" | "org_name" | "contact_email" | "source_urls" | "entity_type" | "verification_status">
   >;
 
   const result: VerifyBatchResult = { checked: 0, passed: 0, needs_manual: 0 };

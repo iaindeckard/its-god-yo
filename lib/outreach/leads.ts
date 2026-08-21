@@ -18,6 +18,10 @@ export interface OutreachLead {
   youth_ministry_signal: string | null;
   source_urls: string[];
   discovery_confidence: "high" | "medium" | "low" | null;
+  // Nature of the org: 'school' for the Catholic K-12 Schools campaign, 'church' or
+  // null for the church/youth-ministry pipeline. Drives school-aware verification
+  // and the send/email variant.
+  entity_type: "church" | "school" | null;
   status: LeadStatus;
   promo_code: string | null;
   promo_promotion_code_id: string | null;
@@ -257,6 +261,8 @@ export interface DiscoveredLead {
   website?: string | null;
   youth_ministry_signal?: string | null;
   source_urls?: string[];
+  // 'school' for Catholic-schools discovery; omitted/null for the church pipeline.
+  entity_type?: "church" | "school" | null;
   // Candidate provenance is separate from qualification evidence. An official
   // denominational directory establishes that the congregation exists; its own
   // public pages must still establish the office email and active youth ministry.
@@ -314,6 +320,7 @@ export async function insertDiscovered(
       youth_ministry_signal: l.youth_ministry_signal ?? null,
       source_urls: l.source_urls ?? [],
       discovery_confidence: l.discovery_confidence ?? null,
+      entity_type: l.entity_type ?? null,
       status,
       campaign_id: campaignId,
       latitude: l.latitude ?? null,

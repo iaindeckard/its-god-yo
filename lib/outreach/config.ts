@@ -70,6 +70,11 @@ export function sendAllowlist(): Set<string> | null {
 export const GENERAL_EMAIL_PREFIXES = [
   "info", "office", "church", "admin", "contact", "hello", "mail",
   "parish", "welcome", "connect", "reception", "frontdesk", "secretary",
+  // School role inboxes (Catholic K-12 Schools campaign). Still ROLE addresses,
+  // never a named individual — a principal's OFFICE inbox qualifies, an individual
+  // teacher's personal address does not.
+  "principal", "admissions", "school", "registrar", "enrollment",
+  "advancement", "frontoffice", "mainoffice", "schooloffice",
 ];
 
 export function isGeneralAddress(email: string): boolean {

@@ -5,6 +5,7 @@ import {
   discoveryErrorStatus,
   discoveryIsComplete,
   extractDiscoveryJson,
+  isCreditExhaustedError,
   providerResponsePhase,
   normalizeUsStateCode,
 } from "../outreach/discovery-core";
@@ -134,5 +135,26 @@ describe("outreach discovery core", () => {
       contact_source_url: "https://missing.example/contact",
       youth_source_url: null,
     })).toBeNull();
+  });
+});
+
+describe("isCreditExhaustedError (failover trigger)", () => {
+  it("matches OpenAI credit-exhaustion (insufficient_quota / credit_balance_exhausted)", () => {
+    expect(isCreditExhaustedError(new Error(
+      'openai_429: {"error":{"message":"You have no credits remaining.","type":"insufficient_quota","code":"credit_balance_exhausted"}}',
+    ))).toBe(true);
+  });
+  it("matches Anthropic 'credit balance is too low'", () => {
+    expect(isCreditExhaustedError(new Error(
+      'anthropic_400: {"type":"error","error":{"type":"invalid_request_error","message":"Your credit balance is too low to access the Anthropic API."}}',
+    ))).toBe(true);
+    expect(isCreditExhaustedError("billing_hard_limit_reached")).toBe(true);
+  });
+  it("does NOT match ordinary rate limits or other errors", () => {
+    expect(isCreditExhaustedError(new Error("openai_429: rate_limit_exceeded; retry after 20s"))).toBe(false);
+    expect(isCreditExhaustedError(new Error("openai_500: internal error"))).toBe(false);
+    expect(isCreditExhaustedError(new Error("openai_timeout_135s"))).toBe(false);
+    expect(isCreditExhaustedError(null)).toBe(false);
+    expect(isCreditExhaustedError(undefined)).toBe(false);
   });
 });

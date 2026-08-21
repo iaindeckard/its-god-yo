@@ -11,9 +11,13 @@ import {
   discoveryErrorStatus,
   discoveryIsComplete,
   extractDiscoveryJson,
+  isCreditExhaustedError,
   providerResponsePhase,
   normalizeUsStateCode,
 } from "./discovery-core";
+import { anthropicDiscoverLeads, anthropicDiscoveryAvailable, ANTHROPIC_DISCOVERY_MODEL } from "./anthropic-discovery";
+import { sendOpsAlert } from "../opsAlert";
+import { claimAlert } from "../alertState";
 import {
   applyDirectorySourcePolicy,
   directorySourcePrompt,
@@ -21,6 +25,14 @@ import {
   discoverySourceLaneCount,
   type OfficialChurchDirectory,
 } from "./directory-sources";
+import {
+  applySchoolLeadPolicy,
+  schoolDiscoverySystem,
+  schoolSourceLane,
+  schoolSourceLaneCount,
+  schoolUserPrompt,
+} from "./school-sources";
+import { isSchoolVariant } from "./templates";
 import { applyAttendanceSourcePolicy, sizeSourcePrompt } from "./size-sources";
 import { DISCOVERY_LEGACY_MAX_COST_MICROUSD, DISCOVERY_ROUND_MAX_COST_MICROUSD, attachAiProviderResponse, completeAiUsage, completeAiUsageByProviderResponse, failAiUsage, failAiUsageByProviderResponse, reserveAiUsage } from "../ai-usage";
 
@@ -125,6 +137,7 @@ function leadRequestBody(
   background = false,
   directory?: OfficialChurchDirectory | null,
   maxLeads?: number,
+  systemPrompt?: string,
 ): Record<string, unknown> {
   const leadProperties = {
     org_name: { type: "string" }, city: { type: "string" }, state: { type: "string" },
@@ -141,7 +154,9 @@ function leadRequestBody(
     model: OUTREACH.openaiDiscoveryModel,
     store: false,
     background,
-    instructions: discoverySystem(directory),
+    // A school campaign supplies its own school-discovery instructions; the church
+    // pipeline uses the directory-based system prompt.
+    instructions: systemPrompt ?? discoverySystem(directory),
     input: prompt,
     max_output_tokens: DISCOVERY_MAX_OUTPUT_TOKENS,
     max_tool_calls: background ? 5 : 15,
@@ -191,16 +206,68 @@ async function openAIRequest(
   return (await res.json()) as OpenAIResponse;
 }
 
-function parseResponseLeads(data: OpenAIResponse, maxLeads?: number): DiscoveredLead[] {
+/** Apply the shared lead policy pipeline to raw model output. Used for BOTH
+ *  providers (OpenAI text-extracted JSON and Anthropic-extracted JSON) so a
+ *  failed-over lane is filtered/validated identically to the primary. School
+ *  leads use the school policy (drops the CHS-New Iberia exclusion and stamps
+ *  entity_type='school'); churches use the directory policy. */
+function applyLeadPolicies(rawLeads: unknown[], maxLeads: number | undefined, school: boolean): DiscoveredLead[] {
+  const policy = school ? applySchoolLeadPolicy : applyDirectorySourcePolicy;
+  return boundedProviderItems(rawLeads as DiscoveredLead[], maxLeads)
+    .filter((l) => l && l.org_name && l.contact_email)
+    .map(policy)
+    .filter((lead): lead is DiscoveredLead => Boolean(lead))
+    .map(applyAttendanceSourcePolicy);
+}
+
+function parseResponseLeads(data: OpenAIResponse, maxLeads?: number, school = false): DiscoveredLead[] {
   const text = data.output_text ?? (data.output ?? []).flatMap((item) => item.content ?? [])
     .filter((item) => item.type === "output_text").map((item) => item.text ?? "").join("\n");
   const parsed = extractDiscoveryJson(text);
   if (!parsed) return [];
-  return boundedProviderItems(parsed.leads, maxLeads)
-    .filter((l) => l && l.org_name && l.contact_email)
-    .map(applyDirectorySourcePolicy)
-    .filter((lead): lead is DiscoveredLead => Boolean(lead))
-    .map(applyAttendanceSourcePolicy);
+  return applyLeadPolicies(parsed.leads, maxLeads, school);
+}
+
+/**
+ * The credit-exhaustion failover (spec: DiscoveryAgentProviderFailover). When the
+ * primary provider (OpenAI) runs dry mid-run, the CURRENT lane is retried on
+ * Anthropic instead of aborting the run. Every failover is logged; an ops-alert
+ * email is sent (deduped to at most once per 6h per drained provider via the
+ * existing alert-state channel, so a long dry spell doesn't email per-lane).
+ * Records the fallback attempt through the same AI-usage ledger. Throws only if
+ * Anthropic ALSO fails — then the round fails normally.
+ */
+const FAILOVER_ALERT_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+
+async function runAnthropicFailover(opts: {
+  system: string; prompt: string; maxLeads: number | undefined; school: boolean;
+  laneLabel: string; requestKey: string; context: string; maxCostMicrousd: number;
+}): Promise<DiscoveredLead[]> {
+  console.warn(`[outreach-discovery] FAILOVER openai->anthropic lane="${opts.laneLabel}" (${opts.context}); OpenAI credit exhausted, retrying on ${ANTHROPIC_DISCOVERY_MODEL}`);
+  try {
+    const shouldEmail = await claimAlert(getSupabaseAdmin(), {
+      alertType: "discovery_provider_failover", entityKey: "openai",
+      cooldownMs: FAILOVER_ALERT_COOLDOWN_MS,
+      message: `OpenAI discovery credit exhausted; failing over to Anthropic (${ANTHROPIC_DISCOVERY_MODEL}).`,
+    });
+    if (shouldEmail) {
+      await sendOpsAlert({
+        subject: "IGY discovery failover: OpenAI to Anthropic (credit exhausted)",
+        text: `Discovery failed over from OpenAI to Anthropic (${ANTHROPIC_DISCOVERY_MODEL}).\nFirst context: ${opts.context}\nLane: ${opts.laneLabel}\nReason: OpenAI returned a credit-exhaustion error. The run continued on Anthropic. Top up OpenAI credits (auto-reload should handle this). Further failovers in the next 6h are logged but not re-emailed.`,
+      });
+    }
+  } catch (e) {
+    console.error("[outreach-discovery] failover alert failed (continuing):", e instanceof Error ? e.message : e);
+  }
+  const usage = await reserveAiUsage({ feature: "outreach_discovery", requestKey: opts.requestKey, model: ANTHROPIC_DISCOVERY_MODEL, maxCostMicrousd: opts.maxCostMicrousd, metadata: { failover_from: "openai", failover_to: "anthropic", lane: opts.laneLabel } });
+  try {
+    const result = await anthropicDiscoverLeads({ system: opts.system, prompt: opts.prompt });
+    await completeAiUsage(usage.id, { usage: result.usage }).catch(() => {});
+    return applyLeadPolicies(result.leads, opts.maxLeads, opts.school);
+  } catch (error) {
+    await failAiUsage(usage.id, error);
+    throw error;
+  }
 }
 
 /** One synchronous OpenAI web-search call for the legacy monthly cron. */
@@ -215,6 +282,16 @@ async function requestLeads(key: string, prompt: string): Promise<DiscoveredLead
     return parseResponseLeads(data);
   } catch (error) {
     await failAiUsage(usageEvent.id, error);
+    // Credit-exhaustion → fail the whole (synchronous) legacy call over to Anthropic.
+    if (isCreditExhaustedError(error) && anthropicDiscoveryAvailable()) {
+      return runAnthropicFailover({
+        system: discoverySystem(undefined), prompt, maxLeads: undefined, school: false,
+        laneLabel: "legacy global cron",
+        requestKey: `outreach_discovery:legacy:failover:${crypto.randomUUID()}`,
+        context: "legacy monthly cron (global geography)",
+        maxCostMicrousd: DISCOVERY_LEGACY_MAX_COST_MICROUSD,
+      });
+    }
     throw error;
   }
 }
@@ -224,10 +301,11 @@ async function startBackgroundLeadRequest(
   prompt: string,
   directory: OfficialChurchDirectory | null,
   maxLeads: number,
+  systemPrompt?: string,
 ): Promise<OpenAIResponse> {
   return openAIRequest(key, "https://api.openai.com/v1/responses", {
     method: "POST",
-    body: JSON.stringify(leadRequestBody(prompt, true, directory, maxLeads)),
+    body: JSON.stringify(leadRequestBody(prompt, true, directory, maxLeads, systemPrompt)),
   }, BACKGROUND_REQUEST_TIMEOUT_MS);
 }
 
@@ -291,7 +369,9 @@ async function createDiscoveryRun(campaign: Campaign): Promise<DiscoveryRun> {
   const admin = getSupabaseAdmin();
   const prior = await latestDiscoveryRun(campaign.id);
   if (prior && ["running", "processing"].includes(prior.status)) return prior;
-  const sourceLaneCount = discoverySourceLaneCount(campaign.denomination_filter);
+  const sourceLaneCount = isSchoolVariant(campaign.message_variant)
+    ? schoolSourceLaneCount(campaign.state_code)
+    : discoverySourceLaneCount(campaign.denomination_filter);
   const targetCount = campaign.discovery_target_count ?? OUTREACH.discoveryTarget;
   const { data, error } = await admin.from(RUNS_TABLE).insert({
     campaign_id: campaign.id,
@@ -337,59 +417,99 @@ export async function continueCampaignDiscovery(campaign: Campaign): Promise<Dis
   run = claimed;
   const center = campaign.center_lat != null && campaign.center_lng != null
     ? { lat: campaign.center_lat, lng: campaign.center_lng } : null;
+  const school = isSchoolVariant(campaign.message_variant);
   try {
     const remaining = Math.max(1, run.target_count - run.found_count);
-    let providerResponse: OpenAIResponse;
+    const roundTarget = Math.min(LEADS_PER_ROUND, remaining);
+    let providerResponse: OpenAIResponse | null = null;
+    // Set when this lane failed over to Anthropic: its (already policy-applied)
+    // leads, produced synchronously in this same invocation (Anthropic has no
+    // background/poll mode, so the failed-over lane completes inline).
+    let failoverBatch: DiscoveredLead[] | null = null;
+
     if (run.provider_response_id) {
       providerResponse = await retrieveBackgroundLeadRequest(key, run.provider_response_id);
       run = await patchRun(run.id, { provider_status: providerResponse.status ?? null });
     } else {
-      const lane = discoverySourceLane(run.round_count, campaign.denomination_filter);
+      // This round's lane, prompt, and system prompt. Kept in variables so an
+      // Anthropic failover searches the exact same sources with the same rules.
+      const churchLane = school ? null : discoverySourceLane(run.round_count, campaign.denomination_filter);
+      const laneLabel = school
+        ? schoolSourceLane(run.round_count, campaign.state_code).label
+        : churchLane!.label;
+      const roundPrompt = school
+        ? schoolUserPrompt(campaign.state_code, roundTarget, run.discovered_names, laneLabel)
+        : campaignPrompt(campaign, roundTarget, run.discovered_names, laneLabel);
+      const roundSystem = school
+        ? schoolDiscoverySystem(campaign.state_code)
+        : discoverySystem(churchLane?.directory ?? null);
       const usageEvent = await reserveAiUsage({ feature: "outreach_discovery", requestKey: `outreach_discovery:${run.id}:round:${run.round_count}`, model: OUTREACH.openaiDiscoveryModel, maxCostMicrousd: DISCOVERY_ROUND_MAX_COST_MICROUSD, metadata: { campaign_id: campaign.id, run_id: run.id, round: run.round_count } });
       try {
         providerResponse = await startBackgroundLeadRequest(
           key,
-          campaignPrompt(campaign, Math.min(LEADS_PER_ROUND, remaining), run.discovered_names, lane.label),
-          lane.directory,
-          Math.min(LEADS_PER_ROUND, remaining),
+          roundPrompt,
+          churchLane?.directory ?? null,
+          roundTarget,
+          // church lanes use the directory-based default system prompt inside the
+          // request body; school lanes pass the school system prompt explicitly.
+          school ? roundSystem : undefined,
         );
       } catch (error) {
         await failAiUsage(usageEvent.id, error);
-        throw error;
+        // Credit-exhaustion → fail THIS lane over to Anthropic (spec). Any other
+        // error still aborts the round exactly as before.
+        if (isCreditExhaustedError(error) && anthropicDiscoveryAvailable()) {
+          failoverBatch = await runAnthropicFailover({
+            system: roundSystem, prompt: roundPrompt, maxLeads: roundTarget, school,
+            laneLabel,
+            requestKey: `outreach_discovery:${run.id}:round:${run.round_count}:failover`,
+            context: `campaign ${campaign.id} run ${run.id} round ${run.round_count}`,
+            maxCostMicrousd: DISCOVERY_ROUND_MAX_COST_MICROUSD,
+          });
+        } else {
+          throw error;
+        }
       }
-      if (!providerResponse.id) {
-        const missingId = new Error("openai_background_missing_id");
-        await failAiUsage(usageEvent.id, missingId);
-        throw missingId;
+      if (failoverBatch === null) {
+        if (!providerResponse?.id) {
+          const missingId = new Error("openai_background_missing_id");
+          await failAiUsage(usageEvent.id, missingId);
+          throw missingId;
+        }
+        await attachAiProviderResponse(usageEvent.id, providerResponse.id);
+        run = await patchRun(run.id, {
+          provider_response_id: providerResponse.id,
+          provider_status: providerResponse.status ?? null,
+        });
       }
-      await attachAiProviderResponse(usageEvent.id, providerResponse.id);
-      run = await patchRun(run.id, {
-        provider_response_id: providerResponse.id,
-        provider_status: providerResponse.status ?? null,
-      });
     }
 
-    const phase = providerResponsePhase(providerResponse.status);
-    if (phase === "pending") {
-      return patchRun(run.id, {
-        status: "running",
-        provider_status: providerResponse.status ?? null,
-      });
+    let batch: DiscoveredLead[];
+    if (failoverBatch !== null) {
+      batch = failoverBatch;
+    } else {
+      // OpenAI background path: poll the phase, then parse when complete.
+      const resp = providerResponse!;
+      const phase = providerResponsePhase(resp.status);
+      if (phase === "pending") {
+        return patchRun(run.id, {
+          status: "running",
+          provider_status: resp.status ?? null,
+        });
+      }
+      if (phase === "failed") {
+        const detail = resp.error?.message
+          ?? resp.error?.code
+          ?? resp.incomplete_details?.reason
+          ?? resp.status
+          ?? "unknown";
+        const providerError = new Error(`openai_background_${detail}`);
+        if (run.provider_response_id) await failAiUsageByProviderResponse(run.provider_response_id, providerError);
+        throw providerError;
+      }
+      if (resp.id) await completeAiUsageByProviderResponse(resp.id, resp);
+      batch = parseResponseLeads(resp, LEADS_PER_ROUND, school);
     }
-    if (phase === "failed") {
-      const detail = providerResponse.error?.message
-        ?? providerResponse.error?.code
-        ?? providerResponse.incomplete_details?.reason
-        ?? providerResponse.status
-        ?? "unknown";
-      const providerError = new Error(`openai_background_${detail}`);
-      if (run.provider_response_id) await failAiUsageByProviderResponse(run.provider_response_id, providerError);
-      throw providerError;
-    }
-
-    if (providerResponse.id) await completeAiUsageByProviderResponse(providerResponse.id, providerResponse);
-
-    const batch = parseResponseLeads(providerResponse, LEADS_PER_ROUND);
     let found = run.found_count, inserted = run.inserted_count, skipped = run.skipped_count;
     let outOfRadius = run.out_of_radius_count, added = 0;
     const names = [...run.discovered_names];
@@ -403,7 +523,8 @@ export async function continueCampaignDiscovery(campaign: Campaign): Promise<Dis
         : Boolean(coords && center && haversineMiles(center, coords) > Number(campaign.radius_miles));
       if (outsideTarget) { outOfRadius++; continue; }
       const enriched = { ...lead, latitude: coords?.lat ?? null, longitude: coords?.lng ?? null,
-        size_bucket: sizeBucket(lead.estimated_attendance) };
+        size_bucket: sizeBucket(lead.estimated_attendance),
+        entity_type: school ? ("school" as const) : lead.entity_type ?? null };
       const saved = await insertDiscovered([enriched], campaign.id);
       inserted += saved.inserted; skipped += saved.skipped; found++; added++;
       await patchRun(run.id, { found_count: found, inserted_count: inserted, skipped_count: skipped,
@@ -418,7 +539,9 @@ export async function continueCampaignDiscovery(campaign: Campaign): Promise<Dis
       round,
       maxRounds: run.max_rounds,
       emptyStreak,
-      emptyStreakLimit: discoverySourceLaneCount(campaign.denomination_filter),
+      emptyStreakLimit: school
+        ? schoolSourceLaneCount(campaign.state_code)
+        : discoverySourceLaneCount(campaign.denomination_filter),
     });
     run = await patchRun(run.id, {
       status: done ? "completed" : "running", round_count: round, found_count: found,

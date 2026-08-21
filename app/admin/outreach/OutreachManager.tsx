@@ -62,6 +62,7 @@ interface Campaign {
 // approved copy in email.ts — a campaign can only pick from this fixed set.
 const MESSAGE_VARIANTS: { key: string; label: string }[] = [
   { key: "default", label: "Default (approved)" },
+  { key: "catholic_school", label: "Catholic School (approved)" },
 ];
 interface Lead {
   id: string; org_name: string; city: string | null; state: string | null;

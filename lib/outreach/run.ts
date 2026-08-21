@@ -4,7 +4,7 @@ import { fetchActiveLeads, recordSend, type OutreachLead, type SendScope } from 
 import { buildEmail, buildFollowupEmail, sendViaResend } from "./email";
 import { createPromoCode } from "../promoCodes";
 import { updateCampaign, listCampaigns } from "./campaigns";
-import { resolveVariant, clampDiscountPercent, type MessageVariant } from "./templates";
+import { resolveVariant, clampDiscountPercent, VARIANT_PROFILE, type MessageVariant, type VariantProfile } from "./templates";
 import { isSendable } from "./verify";
 import { claimDelivery, markDeliveryFailed, markDeliverySent, type DeliveryClaim } from "./deliveries";
 
@@ -52,9 +52,12 @@ async function ensurePromoCode(lead: OutreachLead, discountPercent: number): Pro
   return { code: view.code, promotionCodeId: view.id };
 }
 
-/** Which touch (if any) is due for this active lead right now. */
-function dueTouch(lead: OutreachLead): 1 | 2 | null {
+/** Which touch (if any) is due for this active lead right now. A single-touch
+ *  variant (e.g. catholic_school) sends exactly one email (the code is in it), so
+ *  it is complete after send_count 1 and never gets a second touch. */
+function dueTouch(lead: OutreachLead, profile: VariantProfile): 1 | 2 | null {
   if (lead.send_count === 0) return 1;
+  if (profile.singleTouch) return null; // one email only; sequence complete after touch 1
   if (lead.send_count === 1) {
     const days = lead.last_sent_at
       ? (Date.now() - new Date(lead.last_sent_at).getTime()) / 86_400_000
@@ -62,6 +65,11 @@ function dueTouch(lead: OutreachLead): 1 | 2 | null {
     return days >= FOLLOWUP_DAYS ? 2 : null; // 2nd touch only after ~30 days
   }
   return null; // send_count >= 2: sequence complete (2-touch max)
+}
+
+/** send_count at which this variant's sequence is fully complete. */
+function sequenceComplete(lead: OutreachLead, profile: VariantProfile): boolean {
+  return lead.send_count >= (profile.singleTouch ? 1 : 2);
 }
 
 export interface SendItem {
@@ -140,13 +148,15 @@ export async function runSend(opts: RunSendOptions = {}): Promise<SendReport> {
   };
 
   for (const lead of leads) {
-    const touch = dueTouch(lead);
+    const offer = offerFor(lead);
+    const profile = VARIANT_PROFILE[offer.variant];
+    const touch = dueTouch(lead, profile);
 
-    // Nothing due: either both touches already sent (2-touch max), or email 1 went
-    // out but the 30-day window hasn't elapsed. Recorded so a dry run explains
-    // every lead.
+    // Nothing due: either the sequence is fully sent (single- or two-touch max), or
+    // email 1 went out but the 30-day window hasn't elapsed. Recorded so a dry run
+    // explains every lead.
     if (touch === null) {
-      const complete = lead.send_count >= 2;
+      const complete = sequenceComplete(lead, profile);
       if (complete) report.complete++; else report.not_due++;
       report.items.push({
         lead_id: lead.id, org_name: lead.org_name, to: lead.contact_email,
@@ -182,18 +192,21 @@ export async function runSend(opts: RunSendOptions = {}): Promise<SendReport> {
       continue;
     }
 
-    const offer = offerFor(lead);
-
     if (!live) {
-      // Dry run: render, mint nothing, send nothing. Email 2 shows the code that
-      // WOULD be minted/reused so the preview is faithful — with the campaign's
-      // discount + variant applied exactly as a live send would.
-      const previewCode = touch === 2
-        ? (lead.promo_code ?? `${OUTREACH.promoPrefix}-${codeSlug(lead.org_name)}-${lead.id.slice(0, 6).toUpperCase()}`)
-        : "";
-      const preview = touch === 2
-        ? buildFollowupEmail(lead, previewCode, offer.discountPercent, offer.variant)
-        : buildEmail(lead, offer.variant);
+      // Dry run: render, mint nothing, send nothing. The preview shows the code that
+      // WOULD appear so it is faithful — a shared-code single-touch variant shows its
+      // fixed code up front; the default two-touch shows the minted/reused code at
+      // email 2. Campaign discount + variant are applied exactly as a live send would.
+      const previewCode = profile.singleTouch
+        ? (profile.sharedPromoCode ?? "")
+        : touch === 2
+          ? (lead.promo_code ?? `${OUTREACH.promoPrefix}-${codeSlug(lead.org_name)}-${lead.id.slice(0, 6).toUpperCase()}`)
+          : "";
+      const preview = profile.singleTouch
+        ? buildEmail(lead, offer.variant, offer.discountPercent)
+        : touch === 2
+          ? buildFollowupEmail(lead, previewCode, offer.discountPercent, offer.variant)
+          : buildEmail(lead, offer.variant);
       report.would_send++;
       report.items.push({
         lead_id: lead.id, org_name: lead.org_name, to: lead.contact_email,
@@ -222,7 +235,12 @@ export async function runSend(opts: RunSendOptions = {}): Promise<SendReport> {
       let promo: { code: string; promotionCodeId: string } | null = null;
       let email;
       if (touch === 1) {
-        email = buildEmail(lead, offer.variant);
+        // Touch 1 is code-free for the default two-touch variant; a single-touch
+        // shared-code variant (catholic_school) carries its fixed code in the copy.
+        // The shared code is deliberately NOT minted or stored per-lead (see
+        // VARIANT_PROFILE) — promo stays null so recordSend won't set
+        // promo_promotion_code_id and the conversion webhook can't mass-convert.
+        email = buildEmail(lead, offer.variant, offer.discountPercent);
       } else {
         promo = await ensurePromoCode(lead, offer.discountPercent);
         email = buildFollowupEmail(lead, promo.code, offer.discountPercent, offer.variant);
@@ -233,7 +251,9 @@ export async function runSend(opts: RunSendOptions = {}): Promise<SendReport> {
       report.sent++;
       report.items.push({
         lead_id: lead.id, org_name: lead.org_name, to: lead.contact_email,
-        outcome: "sent", touch, promo_code: promo?.code ?? "", subject: email.subject,
+        outcome: "sent", touch,
+        promo_code: promo?.code ?? (profile.singleTouch ? profile.sharedPromoCode ?? "" : ""),
+        subject: email.subject,
         send_count_after: lead.send_count + 1,
       });
     } catch (e) {
