@@ -303,12 +303,19 @@ export async function insertDiscovered(
   for (const l of leads) {
     const email = l.contact_email?.trim().toLowerCase();
     if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { skipped++; continue; }
-    const weak = l.discovery_confidence === "low" || !isGeneralAddress(email);
-    // Campaign leads are born 'staged' (NOT send-eligible) regardless of
-    // confidence — they only enter the send pipeline when an admin promotes a
-    // size-filtered subset. Legacy/global-cron leads keep the original
-    // active-vs-needs_review routing.
-    const status = campaignId ? "staged" : weak ? "needs_review" : "active";
+    // Office-inbox enforcement applies to BOTH providers (this insert path is
+    // shared) and BOTH pipelines. A non-role / personal address is never
+    // send-clean: it routes to needs_review so a human fixes or clears it first.
+    const notOfficeInbox = !isGeneralAddress(email);
+    // Campaign leads are born 'staged' (NOT send-eligible) — they only enter the
+    // send pipeline when an admin promotes a size-filtered subset — EXCEPT when the
+    // address isn't a recognized office inbox, which routes to needs_review instead
+    // of staged-clean. Legacy/global-cron leads keep the original active-vs-
+    // needs_review routing (low confidence OR non-office-inbox -> needs_review).
+    const weakLegacy = l.discovery_confidence === "low" || notOfficeInbox;
+    const status = campaignId
+      ? (notOfficeInbox ? "needs_review" : "staged")
+      : (weakLegacy ? "needs_review" : "active");
     const row = {
       org_name: l.org_name?.trim(),
       city: l.city ?? null,

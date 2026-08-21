@@ -75,6 +75,7 @@ export const GENERAL_EMAIL_PREFIXES = [
   // teacher's personal address does not.
   "principal", "admissions", "school", "registrar", "enrollment",
   "advancement", "frontoffice", "mainoffice", "schooloffice",
+  "churchoffice", "parishoffice",
 ];
 
 export function isGeneralAddress(email: string): boolean {
