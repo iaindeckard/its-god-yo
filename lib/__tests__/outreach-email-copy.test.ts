@@ -41,4 +41,38 @@ describe("outreach email copy", () => {
       expect(copy).not.toContain("rewritten into the slang");
     }
   });
+
+  const school = {
+    id: "33333333-3333-4333-8333-333333333333",
+    org_name: "St. Thomas More Catholic School",
+    contact_email: "office@stmbr.org",
+    campaign_id: "44444444-4444-4444-8444-444444444444",
+    city: "Baton Rouge",
+    state: "LA",
+    source_urls: ["https://stmbr.org/contact"],
+  } as OutreachLead;
+
+  it("routes the catholic_school variant to the schools copy (verbatim + attestation + code)", () => {
+    const email = buildEmail(school, "catholic_school", 10);
+    expect(email.subject).toBe("A note for St. Thomas More Catholic School families");
+    for (const copy of [email.text, email.html]) {
+      // Role greeting (not "Dear [Principal Name]")
+      expect(copy).toContain("St. Thomas More Catholic School Administration");
+      // Verbatim spec framing
+      expect(copy).toContain("I attended Catholic High in New Iberia, Louisiana for several years");
+      expect(copy).toContain("10% off");
+      expect(copy).toContain("individual annual, family, or gift subscription");
+      expect(copy).toContain("APPRECIATION10");
+      expect(copy).toContain("valid through December 31, 2026");
+      // Authorized attestation-mention addition
+      expect(copy.toLowerCase()).toContain("attestation");
+      // DM from Him upsell, pitched separately (not a code condition)
+      expect(copy).toContain("DM from Him");
+      // Compliance envelope
+      expect(copy).toContain("Deckard Enterprise International, LLC");
+      expect(copy.toLowerCase()).toContain("unsubscribe");
+      // Never a church/youth-ministry framing for a school
+      expect(copy).not.toContain("youth ministry");
+    }
+  });
 });

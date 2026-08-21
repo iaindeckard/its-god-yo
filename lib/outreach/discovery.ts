@@ -10,10 +10,16 @@ import {
   boundedProviderItems,
   discoveryErrorStatus,
   discoveryIsComplete,
+  discoveryPrimaryProvider,
   extractDiscoveryJson,
+  isCreditExhaustedError,
   providerResponsePhase,
   normalizeUsStateCode,
+  type DiscoveryProvider,
 } from "./discovery-core";
+import { anthropicDiscoverLeads, anthropicDiscoveryAvailable, ANTHROPIC_DISCOVERY_MODEL } from "./anthropic-discovery";
+import { sendOpsAlert } from "../opsAlert";
+import { claimAlert } from "../alertState";
 import {
   applyDirectorySourcePolicy,
   directorySourcePrompt,
@@ -21,6 +27,14 @@ import {
   discoverySourceLaneCount,
   type OfficialChurchDirectory,
 } from "./directory-sources";
+import {
+  applySchoolLeadPolicy,
+  schoolDiscoverySystem,
+  schoolSourceLane,
+  schoolSourceLaneCount,
+  schoolUserPrompt,
+} from "./school-sources";
+import { isSchoolVariant } from "./templates";
 import { applyAttendanceSourcePolicy, sizeSourcePrompt } from "./size-sources";
 import { DISCOVERY_LEGACY_MAX_COST_MICROUSD, DISCOVERY_ROUND_MAX_COST_MICROUSD, attachAiProviderResponse, completeAiUsage, completeAiUsageByProviderResponse, failAiUsage, failAiUsageByProviderResponse, reserveAiUsage } from "../ai-usage";
 
@@ -125,6 +139,7 @@ function leadRequestBody(
   background = false,
   directory?: OfficialChurchDirectory | null,
   maxLeads?: number,
+  systemPrompt?: string,
 ): Record<string, unknown> {
   const leadProperties = {
     org_name: { type: "string" }, city: { type: "string" }, state: { type: "string" },
@@ -141,7 +156,9 @@ function leadRequestBody(
     model: OUTREACH.openaiDiscoveryModel,
     store: false,
     background,
-    instructions: discoverySystem(directory),
+    // A school campaign supplies its own school-discovery instructions; the church
+    // pipeline uses the directory-based system prompt.
+    instructions: systemPrompt ?? discoverySystem(directory),
     input: prompt,
     max_output_tokens: DISCOVERY_MAX_OUTPUT_TOKENS,
     max_tool_calls: background ? 5 : 15,
@@ -191,30 +208,134 @@ async function openAIRequest(
   return (await res.json()) as OpenAIResponse;
 }
 
-function parseResponseLeads(data: OpenAIResponse, maxLeads?: number): DiscoveredLead[] {
-  const text = data.output_text ?? (data.output ?? []).flatMap((item) => item.content ?? [])
-    .filter((item) => item.type === "output_text").map((item) => item.text ?? "").join("\n");
-  const parsed = extractDiscoveryJson(text);
-  if (!parsed) return [];
-  return boundedProviderItems(parsed.leads, maxLeads)
+/** Apply the shared lead policy pipeline to raw model output. Used for BOTH
+ *  providers (OpenAI text-extracted JSON and Anthropic-extracted JSON) so a
+ *  failed-over lane is filtered/validated identically to the primary. School
+ *  leads use the school policy (drops the CHS-New Iberia exclusion and stamps
+ *  entity_type='school'); churches use the directory policy. */
+function applyLeadPolicies(rawLeads: unknown[], maxLeads: number | undefined, school: boolean): DiscoveredLead[] {
+  const policy = school ? applySchoolLeadPolicy : applyDirectorySourcePolicy;
+  return boundedProviderItems(rawLeads as DiscoveredLead[], maxLeads)
     .filter((l) => l && l.org_name && l.contact_email)
-    .map(applyDirectorySourcePolicy)
+    .map(policy)
     .filter((lead): lead is DiscoveredLead => Boolean(lead))
     .map(applyAttendanceSourcePolicy);
 }
 
-/** One synchronous OpenAI web-search call for the legacy monthly cron. */
-async function requestLeads(key: string, prompt: string): Promise<DiscoveredLead[]> {
-  const usageEvent = await reserveAiUsage({ feature: "outreach_discovery", requestKey: `outreach_discovery:legacy:${crypto.randomUUID()}`, model: OUTREACH.openaiDiscoveryModel, maxCostMicrousd: DISCOVERY_LEGACY_MAX_COST_MICROUSD });
+function parseResponseLeads(data: OpenAIResponse, maxLeads?: number, school = false): DiscoveredLead[] {
+  const text = data.output_text ?? (data.output ?? []).flatMap((item) => item.content ?? [])
+    .filter((item) => item.type === "output_text").map((item) => item.text ?? "").join("\n");
+  const parsed = extractDiscoveryJson(text);
+  if (!parsed) return [];
+  return applyLeadPolicies(parsed.leads, maxLeads, school);
+}
+
+/**
+ * Discovery provider failover (spec: DiscoveryAgentProviderFailover). The PRIMARY
+ * provider (OUTREACH_DISCOVERY_PRIMARY; default OpenAI) runs each lane. If it
+ * returns a credit-exhaustion error, the CURRENT lane is retried on the OTHER
+ * provider instead of aborting the run — either direction (OpenAI<->Anthropic).
+ * Every failover is logged; one ops-alert email is sent per drained provider per
+ * 6h (deduped via the alert-state channel, so a long dry spell doesn't email
+ * per-lane). Each attempt is recorded in the AI-usage ledger.
+ */
+const FAILOVER_ALERT_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+
+async function alertFailover(from: DiscoveryProvider, to: DiscoveryProvider, laneLabel: string, context: string): Promise<void> {
+  console.warn(`[outreach-discovery] FAILOVER ${from}->${to} lane="${laneLabel}" (${context}); ${from} credit exhausted, retrying on ${to}`);
   try {
-    const data = await openAIRequest(key, "https://api.openai.com/v1/responses", {
-      method: "POST",
-      body: JSON.stringify(leadRequestBody(prompt)),
-    }, DISCOVERY_REQUEST_TIMEOUT_MS);
-    await completeAiUsage(usageEvent.id, data);
-    return parseResponseLeads(data);
+    const shouldEmail = await claimAlert(getSupabaseAdmin(), {
+      alertType: "discovery_provider_failover", entityKey: from,
+      cooldownMs: FAILOVER_ALERT_COOLDOWN_MS,
+      message: `${from} discovery credit exhausted; failing over to ${to}.`,
+    });
+    if (shouldEmail) {
+      await sendOpsAlert({
+        subject: `IGY discovery failover: ${from} to ${to} (credit exhausted)`,
+        text: `Discovery failed over from ${from} to ${to}.\nFirst context: ${context}\nLane: ${laneLabel}\nReason: ${from} returned a credit-exhaustion error. The run continued on ${to}. Top up ${from} credits. Further failovers in the next 6h are logged but not re-emailed.`,
+      });
+    }
+  } catch (e) {
+    console.error("[outreach-discovery] failover alert failed (continuing):", e instanceof Error ? e.message : e);
+  }
+}
+
+/** Run ONE lane synchronously on Anthropic (web search + extract). Reserves and
+ *  completes a usage event; returns policy-applied leads. No alert — the caller
+ *  alerts only when this runs as a failover. */
+async function anthropicLane(opts: {
+  system: string; prompt: string; maxLeads: number | undefined; school: boolean;
+  requestKey: string; maxCostMicrousd: number;
+}): Promise<DiscoveredLead[]> {
+  const usage = await reserveAiUsage({ feature: "outreach_discovery", requestKey: opts.requestKey, model: ANTHROPIC_DISCOVERY_MODEL, maxCostMicrousd: opts.maxCostMicrousd, metadata: { provider: "anthropic", request_key: opts.requestKey } });
+  try {
+    const result = await anthropicDiscoverLeads({ system: opts.system, prompt: opts.prompt });
+    await completeAiUsage(usage.id, { usage: result.usage }).catch(() => {});
+    return applyLeadPolicies(result.leads, opts.maxLeads, opts.school);
   } catch (error) {
-    await failAiUsage(usageEvent.id, error);
+    await failAiUsage(usage.id, error);
+    throw error;
+  }
+}
+
+/** Run ONE lane synchronously (FOREGROUND) on OpenAI. Used when OpenAI is the
+ *  RESERVE provider (Anthropic-primary mode) and for the legacy cron — the durable
+ *  background/poll path is used only when OpenAI is PRIMARY. Reserves and completes
+ *  usage; returns policy-applied leads. No alert. */
+async function openaiForegroundLane(opts: {
+  key: string; system?: string; prompt: string; directory?: OfficialChurchDirectory | null;
+  maxLeads: number | undefined; school: boolean; requestKey: string; maxCostMicrousd: number;
+}): Promise<DiscoveredLead[]> {
+  const usage = await reserveAiUsage({ feature: "outreach_discovery", requestKey: opts.requestKey, model: OUTREACH.openaiDiscoveryModel, maxCostMicrousd: opts.maxCostMicrousd, metadata: { provider: "openai", request_key: opts.requestKey } });
+  try {
+    const data = await openAIRequest(opts.key, "https://api.openai.com/v1/responses", {
+      method: "POST",
+      body: JSON.stringify(leadRequestBody(opts.prompt, false, opts.directory, opts.maxLeads, opts.system)),
+    }, DISCOVERY_REQUEST_TIMEOUT_MS);
+    await completeAiUsage(usage.id, data);
+    return parseResponseLeads(data, opts.maxLeads, opts.school);
+  } catch (error) {
+    await failAiUsage(usage.id, error);
+    throw error;
+  }
+}
+
+/** One synchronous web-search call for the legacy monthly cron, honoring the
+ *  primary/reserve provider order (both providers run FOREGROUND here). */
+async function requestLeads(openaiKey: string | null, prompt: string): Promise<DiscoveredLead[]> {
+  const primary = discoveryPrimaryProvider();
+  const system = discoverySystem(undefined);
+  const context = "legacy monthly cron (global geography)";
+  const laneLabel = "legacy global cron";
+  const runAnthropic = (suffix: string) => anthropicLane({
+    system, prompt, maxLeads: undefined, school: false,
+    requestKey: `outreach_discovery:legacy:${suffix}:${crypto.randomUUID()}`,
+    maxCostMicrousd: DISCOVERY_LEGACY_MAX_COST_MICROUSD,
+  });
+  const runOpenai = (suffix: string) => openaiForegroundLane({
+    key: openaiKey!, prompt, directory: undefined, maxLeads: undefined, school: false,
+    requestKey: `outreach_discovery:legacy:${suffix}:${crypto.randomUUID()}`,
+    maxCostMicrousd: DISCOVERY_LEGACY_MAX_COST_MICROUSD,
+  });
+
+  if (primary === "anthropic") {
+    try {
+      return await runAnthropic("anthropic");
+    } catch (error) {
+      if (isCreditExhaustedError(error) && openaiKey) {
+        await alertFailover("anthropic", "openai", laneLabel, context);
+        return await runOpenai("failover:openai");
+      }
+      throw error;
+    }
+  }
+  try {
+    return await runOpenai("openai");
+  } catch (error) {
+    if (isCreditExhaustedError(error) && anthropicDiscoveryAvailable()) {
+      await alertFailover("openai", "anthropic", laneLabel, context);
+      return await runAnthropic("failover:anthropic");
+    }
     throw error;
   }
 }
@@ -224,10 +345,11 @@ async function startBackgroundLeadRequest(
   prompt: string,
   directory: OfficialChurchDirectory | null,
   maxLeads: number,
+  systemPrompt?: string,
 ): Promise<OpenAIResponse> {
   return openAIRequest(key, "https://api.openai.com/v1/responses", {
     method: "POST",
-    body: JSON.stringify(leadRequestBody(prompt, true, directory, maxLeads)),
+    body: JSON.stringify(leadRequestBody(prompt, true, directory, maxLeads, systemPrompt)),
   }, BACKGROUND_REQUEST_TIMEOUT_MS);
 }
 
@@ -243,12 +365,15 @@ async function retrieveBackgroundLeadRequest(key: string, responseId: string): P
 /** Legacy global-geography discovery (the monthly cron). Non-campaign: leads land
  *  active/needs_review per confidence, no geo/size enrichment. */
 export async function runDiscovery(): Promise<DiscoveryResult> {
-  const key = apiKey();
-  if (!key) {
-    console.log("[outreach-discovery] OPENAI_API_KEY not set — discovery skipped (no-op).");
+  const openaiKey = apiKey();
+  const primary = discoveryPrimaryProvider();
+  // Only the PRIMARY provider's key is required; the reserve is optional (no
+  // failover if it's absent).
+  if (primary === "anthropic" ? !anthropicDiscoveryAvailable() : !openaiKey) {
+    console.log(`[outreach-discovery] primary provider '${primary}' key not set — discovery skipped (no-op).`);
     return { ran: false, reason: "no_api_key", found: 0, inserted: 0, skipped: 0, leads: [] };
   }
-  const leads = await requestLeads(key, userPrompt());
+  const leads = await requestLeads(openaiKey, userPrompt());
   const { inserted, skipped } = await insertDiscovered(leads, null);
   // Auto-verify freshly discovered leads (best-effort). A failure leaves them
   // 'unverified' -> the send gate blocks them until verification runs.
@@ -291,7 +416,9 @@ async function createDiscoveryRun(campaign: Campaign): Promise<DiscoveryRun> {
   const admin = getSupabaseAdmin();
   const prior = await latestDiscoveryRun(campaign.id);
   if (prior && ["running", "processing"].includes(prior.status)) return prior;
-  const sourceLaneCount = discoverySourceLaneCount(campaign.denomination_filter);
+  const sourceLaneCount = isSchoolVariant(campaign.message_variant)
+    ? schoolSourceLaneCount(campaign.state_code)
+    : discoverySourceLaneCount(campaign.denomination_filter);
   const targetCount = campaign.discovery_target_count ?? OUTREACH.discoveryTarget;
   const { data, error } = await admin.from(RUNS_TABLE).insert({
     campaign_id: campaign.id,
@@ -328,8 +455,14 @@ async function claimRun(run: DiscoveryRun): Promise<DiscoveryRun | null> {
 /** Process exactly one durable discovery round. The browser can call this again
  * until complete; every accepted lead is persisted before the round returns. */
 export async function continueCampaignDiscovery(campaign: Campaign): Promise<DiscoveryRun> {
-  const key = apiKey();
-  if (!key) throw new Error("OPENAI_API_KEY is not configured");
+  const openaiKey = apiKey();
+  const primary = discoveryPrimaryProvider();
+  // Require only the PRIMARY provider's key; the reserve is optional.
+  if (primary === "anthropic") {
+    if (!anthropicDiscoveryAvailable()) throw new Error("ANTHROPIC_API_KEY is not configured (discovery primary=anthropic)");
+  } else if (!openaiKey) {
+    throw new Error("OPENAI_API_KEY is not configured");
+  }
   let run = await createDiscoveryRun(campaign);
   if (["completed", "failed"].includes(run.status)) return run;
   const claimed = await claimRun(run);
@@ -337,59 +470,110 @@ export async function continueCampaignDiscovery(campaign: Campaign): Promise<Dis
   run = claimed;
   const center = campaign.center_lat != null && campaign.center_lng != null
     ? { lat: campaign.center_lat, lng: campaign.center_lng } : null;
+  const school = isSchoolVariant(campaign.message_variant);
   try {
     const remaining = Math.max(1, run.target_count - run.found_count);
-    let providerResponse: OpenAIResponse;
+    const roundTarget = Math.min(LEADS_PER_ROUND, remaining);
+    let providerResponse: OpenAIResponse | null = null;
+    // Set when this lane ran on a SYNCHRONOUS provider — its already-policy-applied
+    // leads, produced inline in this same invocation. Anthropic has no background/
+    // poll mode, so an Anthropic lane (primary or reserve) and an OpenAI reserve
+    // lane both complete here rather than being polled across invocations.
+    let failoverBatch: DiscoveredLead[] | null = null;
+
     if (run.provider_response_id) {
-      providerResponse = await retrieveBackgroundLeadRequest(key, run.provider_response_id);
+      // Polling an in-flight OpenAI background job (only OpenAI-primary sets this).
+      if (!openaiKey) throw new Error("OPENAI_API_KEY missing while polling an OpenAI background job");
+      providerResponse = await retrieveBackgroundLeadRequest(openaiKey, run.provider_response_id);
       run = await patchRun(run.id, { provider_status: providerResponse.status ?? null });
     } else {
-      const lane = discoverySourceLane(run.round_count, campaign.denomination_filter);
-      const usageEvent = await reserveAiUsage({ feature: "outreach_discovery", requestKey: `outreach_discovery:${run.id}:round:${run.round_count}`, model: OUTREACH.openaiDiscoveryModel, maxCostMicrousd: DISCOVERY_ROUND_MAX_COST_MICROUSD, metadata: { campaign_id: campaign.id, run_id: run.id, round: run.round_count } });
-      try {
-        providerResponse = await startBackgroundLeadRequest(
-          key,
-          campaignPrompt(campaign, Math.min(LEADS_PER_ROUND, remaining), run.discovered_names, lane.label),
-          lane.directory,
-          Math.min(LEADS_PER_ROUND, remaining),
-        );
-      } catch (error) {
-        await failAiUsage(usageEvent.id, error);
-        throw error;
+      // This round's lane, prompt, and system prompt — shared by both providers so
+      // whichever runs searches the exact same sources with the same rules.
+      const churchLane = school ? null : discoverySourceLane(run.round_count, campaign.denomination_filter);
+      const laneLabel = school
+        ? schoolSourceLane(run.round_count, campaign.state_code).label
+        : churchLane!.label;
+      const roundPrompt = school
+        ? schoolUserPrompt(campaign.state_code, roundTarget, run.discovered_names, laneLabel)
+        : campaignPrompt(campaign, roundTarget, run.discovered_names, laneLabel);
+      const roundSystem = school
+        ? schoolDiscoverySystem(campaign.state_code)
+        : discoverySystem(churchLane?.directory ?? null);
+      const directory = churchLane?.directory ?? null;
+      // church lanes use the directory-based default system inside the request body;
+      // school lanes pass the school system prompt explicitly.
+      const openaiSystem = school ? roundSystem : undefined;
+      const context = `campaign ${campaign.id} run ${run.id} round ${run.round_count}`;
+      const baseKey = `outreach_discovery:${run.id}:round:${run.round_count}`;
+
+      if (primary === "openai") {
+        // OpenAI primary: durable background start/poll. Reserve = Anthropic (sync).
+        const usageEvent = await reserveAiUsage({ feature: "outreach_discovery", requestKey: baseKey, model: OUTREACH.openaiDiscoveryModel, maxCostMicrousd: DISCOVERY_ROUND_MAX_COST_MICROUSD, metadata: { campaign_id: campaign.id, run_id: run.id, round: run.round_count, provider: "openai" } });
+        try {
+          providerResponse = await startBackgroundLeadRequest(openaiKey!, roundPrompt, directory, roundTarget, openaiSystem);
+        } catch (error) {
+          await failAiUsage(usageEvent.id, error);
+          if (isCreditExhaustedError(error) && anthropicDiscoveryAvailable()) {
+            await alertFailover("openai", "anthropic", laneLabel, context);
+            failoverBatch = await anthropicLane({ system: roundSystem, prompt: roundPrompt, maxLeads: roundTarget, school, requestKey: `${baseKey}:failover:anthropic`, maxCostMicrousd: DISCOVERY_ROUND_MAX_COST_MICROUSD });
+          } else {
+            throw error;
+          }
+        }
+        if (failoverBatch === null) {
+          if (!providerResponse?.id) {
+            const missingId = new Error("openai_background_missing_id");
+            await failAiUsage(usageEvent.id, missingId);
+            throw missingId;
+          }
+          await attachAiProviderResponse(usageEvent.id, providerResponse.id);
+          run = await patchRun(run.id, {
+            provider_response_id: providerResponse.id,
+            provider_status: providerResponse.status ?? null,
+          });
+        }
+      } else {
+        // Anthropic primary: run this lane SYNCHRONOUSLY inline. Reserve = OpenAI
+        // (foreground, since the background/poll path is OpenAI-primary only).
+        try {
+          failoverBatch = await anthropicLane({ system: roundSystem, prompt: roundPrompt, maxLeads: roundTarget, school, requestKey: baseKey, maxCostMicrousd: DISCOVERY_ROUND_MAX_COST_MICROUSD });
+        } catch (error) {
+          if (isCreditExhaustedError(error) && openaiKey) {
+            await alertFailover("anthropic", "openai", laneLabel, context);
+            failoverBatch = await openaiForegroundLane({ key: openaiKey, system: openaiSystem, prompt: roundPrompt, directory, maxLeads: roundTarget, school, requestKey: `${baseKey}:failover:openai`, maxCostMicrousd: DISCOVERY_ROUND_MAX_COST_MICROUSD });
+          } else {
+            throw error;
+          }
+        }
       }
-      if (!providerResponse.id) {
-        const missingId = new Error("openai_background_missing_id");
-        await failAiUsage(usageEvent.id, missingId);
-        throw missingId;
+    }
+
+    let batch: DiscoveredLead[];
+    if (failoverBatch !== null) {
+      batch = failoverBatch;
+    } else {
+      // OpenAI background path: poll the phase, then parse when complete.
+      const resp = providerResponse!;
+      const phase = providerResponsePhase(resp.status);
+      if (phase === "pending") {
+        return patchRun(run.id, {
+          status: "running",
+          provider_status: resp.status ?? null,
+        });
       }
-      await attachAiProviderResponse(usageEvent.id, providerResponse.id);
-      run = await patchRun(run.id, {
-        provider_response_id: providerResponse.id,
-        provider_status: providerResponse.status ?? null,
-      });
+      if (phase === "failed") {
+        const detail = resp.error?.message
+          ?? resp.error?.code
+          ?? resp.incomplete_details?.reason
+          ?? resp.status
+          ?? "unknown";
+        const providerError = new Error(`openai_background_${detail}`);
+        if (run.provider_response_id) await failAiUsageByProviderResponse(run.provider_response_id, providerError);
+        throw providerError;
+      }
+      if (resp.id) await completeAiUsageByProviderResponse(resp.id, resp);
+      batch = parseResponseLeads(resp, LEADS_PER_ROUND, school);
     }
-
-    const phase = providerResponsePhase(providerResponse.status);
-    if (phase === "pending") {
-      return patchRun(run.id, {
-        status: "running",
-        provider_status: providerResponse.status ?? null,
-      });
-    }
-    if (phase === "failed") {
-      const detail = providerResponse.error?.message
-        ?? providerResponse.error?.code
-        ?? providerResponse.incomplete_details?.reason
-        ?? providerResponse.status
-        ?? "unknown";
-      const providerError = new Error(`openai_background_${detail}`);
-      if (run.provider_response_id) await failAiUsageByProviderResponse(run.provider_response_id, providerError);
-      throw providerError;
-    }
-
-    if (providerResponse.id) await completeAiUsageByProviderResponse(providerResponse.id, providerResponse);
-
-    const batch = parseResponseLeads(providerResponse, LEADS_PER_ROUND);
     let found = run.found_count, inserted = run.inserted_count, skipped = run.skipped_count;
     let outOfRadius = run.out_of_radius_count, added = 0;
     const names = [...run.discovered_names];
@@ -403,7 +587,8 @@ export async function continueCampaignDiscovery(campaign: Campaign): Promise<Dis
         : Boolean(coords && center && haversineMiles(center, coords) > Number(campaign.radius_miles));
       if (outsideTarget) { outOfRadius++; continue; }
       const enriched = { ...lead, latitude: coords?.lat ?? null, longitude: coords?.lng ?? null,
-        size_bucket: sizeBucket(lead.estimated_attendance) };
+        size_bucket: sizeBucket(lead.estimated_attendance),
+        entity_type: school ? ("school" as const) : lead.entity_type ?? null };
       const saved = await insertDiscovered([enriched], campaign.id);
       inserted += saved.inserted; skipped += saved.skipped; found++; added++;
       await patchRun(run.id, { found_count: found, inserted_count: inserted, skipped_count: skipped,
@@ -418,7 +603,9 @@ export async function continueCampaignDiscovery(campaign: Campaign): Promise<Dis
       round,
       maxRounds: run.max_rounds,
       emptyStreak,
-      emptyStreakLimit: discoverySourceLaneCount(campaign.denomination_filter),
+      emptyStreakLimit: school
+        ? schoolSourceLaneCount(campaign.state_code)
+        : discoverySourceLaneCount(campaign.denomination_filter),
     });
     run = await patchRun(run.id, {
       status: done ? "completed" : "running", round_count: round, found_count: found,

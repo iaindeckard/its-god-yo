@@ -3,7 +3,7 @@ import crypto from "crypto";
 import { OUTREACH } from "./config";
 import { SPANISH_ENABLED } from "../flags";
 import type { OutreachLead } from "./leads";
-import { resolveVariant, clampDiscountPercent, type MessageVariant } from "./templates";
+import { resolveVariant, clampDiscountPercent, VARIANT_PROFILE, type MessageVariant } from "./templates";
 import { outreachEntryUrl } from "./attribution";
 
 /**
@@ -77,11 +77,18 @@ const CAMPAIGN_INTRO: Record<string, string> = {
  * one-click List-Unsubscribe (RFC 8058) + a visible link, the required physical
  * mailing address, and Reply-To to a monitored human inbox.
  */
-export function buildEmail(lead: OutreachLead, variant: MessageVariant = "default"): BuiltEmail {
+export function buildEmail(
+  lead: OutreachLead,
+  variant: MessageVariant = "default",
+  discountPercent = 10,
+): BuiltEmail {
   // Guardrail: only an approved variant KEY is honored; copy is code-resident.
-  // The intro (email 1) is code-free and identical across the sole 'default'
-  // variant today — when a second approved variant ships, branch on `v` here.
-  const v = resolveVariant(variant); void v;
+  const v = resolveVariant(variant);
+  // The Catholic K-12 Schools variant is a single email that carries the shared
+  // APPRECIATION10 code + DMFH upsell up front (no code-free intro, no follow-up).
+  if (v === "catholic_school") {
+    return buildCatholicSchoolEmail(lead, VARIANT_PROFILE.catholic_school.sharedPromoCode ?? "APPRECIATION10", discountPercent);
+  }
   const org = lead.org_name;
   const link = unsubUrl(lead.id);
   const site = OUTREACH.appUrl;
@@ -151,6 +158,90 @@ Unsubscribe (one click): ${link}`;
 
   // RFC 8058: List-Unsubscribe with an https one-click endpoint + a mailto
   // fallback; List-Unsubscribe-Post signals one-click POST support.
+  const headers: Record<string, string> = {
+    "List-Unsubscribe": `<${link}>, <mailto:unsubscribe@outreach.itsgodyo.com?subject=unsub-${lead.id}>`,
+    "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+  };
+
+  return { to: lead.contact_email, from: OUTREACH.from, replyTo: OUTREACH.replyTo, subject, text, html, headers };
+}
+
+/**
+ * Catholic K-12 Schools variant (message_variant: 'catholic_school').
+ *
+ * COPY GOVERNANCE: the body below is the spec's draft copy, used VERBATIM pending
+ * Iain's review, with exactly two deliberate, flagged departures from that draft:
+ *   1. A short ATTESTATION-mention line (Iain authorized this addition 2026-08-20) —
+ *      APPRECIATION10 requires a checkout attestation, so the email says so.
+ *   2. A functional signup line ("sign up at itsgodyo.com") whose visible label is
+ *      the plain site URL but whose href is the signed outreach ENTRY URL. This is
+ *      structurally required: the shared code isn't stored per-lead, so per-lead
+ *      conversion attribution rides this entry URL (see templates.VARIANT_PROFILE).
+ * The greeting is role-based ("Dear <School> Administration") rather than the draft's
+ * "Dear [Principal Name]" — chosen 2026-08-20; we do not capture principal names.
+ * The only campaign-configurable value reaching the copy is the discount NUMBER,
+ * substituted for the numeral in "{pct}% off".
+ *
+ * Single-touch: this email carries the code up front; there is no 30-day follow-up
+ * (see run.ts dueTouch + VARIANT_PROFILE.singleTouch).
+ */
+export function buildCatholicSchoolEmail(
+  lead: OutreachLead,
+  promoCode: string,
+  discountPercent = 10,
+): BuiltEmail {
+  const pct = clampDiscountPercent(discountPercent);
+  const org = lead.org_name;
+  const link = unsubUrl(lead.id);
+  const site = OUTREACH.appUrl;
+  const siteLabel = site.replace(/^https?:\/\//, "");
+  // Campaign leads use the signed entry URL for attribution; visible label stays the
+  // plain site URL and the visitor still lands on the ordinary homepage.
+  const entry = lead.campaign_id ? outreachEntryUrl(lead.id, 1, "en") : site;
+  const contactNote = sourceNote(lead);
+
+  const subject = `A note for ${org} families`;
+
+  const text =
+`Dear ${org} Administration,
+
+My name is Iain Deckard. I'm the founder of It's God, Yo!™ (IGY), a daily Bible verse text service for teens. A short verse matched to a mood or theme, sent by text each day.
+
+I attended Catholic High in New Iberia, Louisiana for several years, and what's stayed with me longest isn't the academics. It's that the school led with faith every day. That's a big part of why I wanted Catholic school families nationwide, including at ${org}, to have a discount on IGY: ${pct}% off an individual annual, family, or gift subscription, using code ${promoCode} (valid through December 31, 2026). At checkout, ${promoCode} asks for a quick attestation that you're a student, caregiver, or faculty/staff at a U.S. Catholic school, nothing more. You can see how it works and sign up at ${siteLabel}.
+
+And if you sign up today, you can also take advantage of DM from Him, an add-on where your teen can text back and forth about what that day's verse actually means for what they're going through. A verse alone is something to read; DM from Him turns it into a conversation your teen can have in the moment, when it's actually on their mind, not just something they scroll past. It's a small add, and it's the difference between a daily text and something that meets a teen where they are on a hard day.
+
+I'd welcome five minutes to talk about it, or I'm happy to send a one-page rundown you can look at whenever it's convenient. Either works for me.
+
+With gratitude,
+Iain Deckard
+Founder, It's God, Yo!™
+hello@itsgodyo.com
+
+---
+It's God, Yo!™ is operated by ${OUTREACH.physicalAddress}.
+You received this because ${org} is a Catholic school in ${lead.state || "the United States"} with a publicly listed contact address; we found it at ${contactNote}.
+Unsubscribe (one click): ${link}`;
+
+  const html =
+`<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:#1a1a1a;max-width:600px;margin:0 auto;">
+  <p>Dear ${esc(org)} Administration,</p>
+  <p>My name is Iain Deckard. I'm the founder of <strong>It's God, Yo!&trade;</strong> (IGY), a daily Bible verse text service for teens. A short verse matched to a mood or theme, sent by text each day.</p>
+  <p>I attended Catholic High in New Iberia, Louisiana for several years, and what's stayed with me longest isn't the academics. It's that the school led with faith every day. That's a big part of why I wanted Catholic school families nationwide, including at ${esc(org)}, to have a discount on IGY: <strong>${pct}% off</strong> an individual annual, family, or gift subscription, using code <strong>${esc(promoCode)}</strong> (valid through December 31, 2026). At checkout, ${esc(promoCode)} asks for a quick attestation that you're a student, caregiver, or faculty/staff at a U.S. Catholic school, nothing more. You can see how it works and sign up at <a href="${esc(entry)}" style="color:#00ABBC;">${esc(siteLabel)}</a>.</p>
+  <p>And if you sign up today, you can also take advantage of <strong>DM from Him</strong>, an add-on where your teen can text back and forth about what that day's verse actually means for what they're going through. A verse alone is something to read; DM from Him turns it into a conversation your teen can have in the moment, when it's actually on their mind, not just something they scroll past. It's a small add, and it's the difference between a daily text and something that meets a teen where they are on a hard day.</p>
+  <p>I'd welcome five minutes to talk about it, or I'm happy to send a one-page rundown you can look at whenever it's convenient. Either works for me.</p>
+  <p style="margin-bottom:2px;">With gratitude,</p>
+  <p style="margin-bottom:0;"><strong>Iain Deckard</strong></p>
+  <p style="margin:0;color:#555;">Founder, It's God, Yo!&trade;</p>
+  <p style="margin-top:2px;"><a href="mailto:hello@itsgodyo.com" style="color:#00ABBC;">hello@itsgodyo.com</a></p>
+  <hr style="border:none;border-top:1px solid #e2e2e2;margin:22px 0;"/>
+  <p style="font-size:12px;color:#777;">
+    It's God, Yo!&trade; is operated by ${esc(OUTREACH.physicalAddress)}.<br/>
+    You received this because ${esc(org)} is a Catholic school in ${esc(lead.state || "the United States")} with a publicly listed contact address; we found it at ${esc(contactNote)}.<br/>
+    <a href="${link}" style="color:#777;">Unsubscribe (one click)</a>
+  </p>
+</div>`;
+
   const headers: Record<string, string> = {
     "List-Unsubscribe": `<${link}>, <mailto:unsubscribe@outreach.itsgodyo.com?subject=unsub-${lead.id}>`,
     "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
