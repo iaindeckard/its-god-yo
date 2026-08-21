@@ -91,7 +91,7 @@ async function callOpenAI(system: string, prompt: string, maxLeads: number, key:
  *  credit-exhaustion error fall over to the OTHER provider (same system + prompt).
  *  Returns the raw leads plus which provider served them. */
 async function discoverWithFailover(system: string, prompt: string, key: string): Promise<{ leads: unknown[]; provider: "openai" | "anthropic" }> {
-  const runOpenai = async () => (await callOpenAI(system, prompt, 4, key)).leads;
+  const runOpenai = async () => (await callOpenAI(system, prompt, 2, key)).leads;
   const runAnthropic = async () => (await anthropicDiscoverLeads({ system, prompt })).leads;
   if (discoveryPrimaryProvider() === "anthropic") {
     try {
@@ -148,10 +148,10 @@ async function main() {
   for (let round = startRound; round < laneCount; round++) {
     const lane = schoolSourceLane(round, state);
     const system = schoolDiscoverySystem(state);
-    const prompt = schoolUserPrompt(state, 4, [...seen], lane.label);
+    const prompt = schoolUserPrompt(state, 2, [...seen], lane.label);
     let leads: unknown[] = [];
     let provider: "openai" | "anthropic" = "openai";
-    try { ({ leads, provider } = await discoverWithFailover(system, prompt, key)); if (provider === "anthropic") failedOverLanes++; }
+    try { ({ leads, provider } = await discoverWithFailover(system, prompt, key)); if (provider !== discoveryPrimaryProvider()) failedOverLanes++; }
     catch (e) { rawByLane.push({ lane: lane.label, returned: -1, kept: 0, excluded: 0 }); console.error(`lane "${lane.label}" error:`, e instanceof Error ? e.message : e); continue; }
     let kept = 0, excluded = 0;
     for (const l of leads as DiscoveredLead[]) {

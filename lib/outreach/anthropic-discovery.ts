@@ -29,7 +29,17 @@ export const ANTHROPIC_DISCOVERY_MODEL = process.env.OUTREACH_ANTHROPIC_MODEL ||
 // small. Mirrors the OpenAI side's low search-context / capped output.
 const MAX_WEB_SEARCHES = 5;
 const MAX_OUTPUT_TOKENS = 8000;
-const REQUEST_TIMEOUT_MS = 120_000;
+// This call is SYNCHRONOUS (Anthropic has no background mode). Use the BASIC web
+// search tool (see WEB_SEARCH_TOOL below): the newer web_search_20260209 runs a
+// per-search code-execution "dynamic filtering" step that balloons a full-evidence
+// multi-school lane past 240s, while the basic variant completes the same lane in
+// ~30s with the same verification standard. 180s is generous headroom (and stays
+// under a 300s prod route cap).
+const REQUEST_TIMEOUT_MS = 180_000;
+// Basic web search (no code-exec dynamic filtering). Available on all current
+// models; on Vertex AI it's the only web-search variant. Chosen for latency — see
+// REQUEST_TIMEOUT_MS above. The system prompt supplies all source/eval rules.
+const WEB_SEARCH_TOOL = "web_search_20250305";
 
 export function anthropicApiKey(): string | null {
   return process.env.ANTHROPIC_API_KEY || null;
@@ -73,10 +83,13 @@ export async function anthropicDiscoverLeads(args: {
     model: ANTHROPIC_DISCOVERY_MODEL,
     max_tokens: MAX_OUTPUT_TOKENS,
     system: args.system,
-    // Keep the fallback cheap and deterministic: no extended thinking, minimal effort.
-    thinking: { type: "disabled" as const },
+    // Adaptive thinking (low effort) mirrors the OpenAI side's reasoning=low. NOTE:
+    // do NOT disable thinking — a judgment-heavy extraction (evaluate candidates,
+    // cite evidence) with no reasoning scratchpad fails to converge and the request
+    // runs until it times out. Measured: disabled -> >280s timeout; adaptive -> 131s.
+    thinking: { type: "adaptive" as const },
     output_config: { effort: "low" as const },
-    tools: [{ type: "web_search_20260209", name: "web_search", max_uses: MAX_WEB_SEARCHES }],
+    tools: [{ type: WEB_SEARCH_TOOL, name: "web_search", max_uses: MAX_WEB_SEARCHES }],
     messages: [{ role: "user" as const, content: args.prompt }],
   };
 
