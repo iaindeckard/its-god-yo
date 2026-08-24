@@ -1,10 +1,9 @@
 import "server-only";
-import { OUTREACH, sendGate, sendAllowlist } from "./config";
+import { sendGate, sendAllowlist } from "./config";
 import { fetchActiveLeads, recordSend, type OutreachLead, type SendScope } from "./leads";
-import { buildEmail, buildFollowupEmail, sendViaResend } from "./email";
-import { createPromoCode } from "../promoCodes";
+import { buildEmail, buildFollowupEmail, sendViaResend, type BuiltEmail } from "./email";
 import { updateCampaign, listCampaigns } from "./campaigns";
-import { resolveVariant, clampDiscountPercent, VARIANT_PROFILE, type MessageVariant, type VariantProfile } from "./templates";
+import { resolveVariant, clampDiscountPercent, VARIANT_PROFILE, TOUCH2_FLAT_PERCENT, type MessageVariant, type VariantProfile } from "./templates";
 import { isSendable } from "./verify";
 import { claimDelivery, markDeliveryFailed, markDeliverySent, type DeliveryClaim } from "./deliveries";
 
@@ -21,35 +20,35 @@ import { claimDelivery, markDeliveryFailed, markDeliverySent, type DeliveryClaim
  */
 const FOLLOWUP_DAYS = 30;
 
-function codeSlug(org: string): string {
-  return org.toUpperCase().replace(/[^A-Z0-9]+/g, "").slice(0, 16) || "CHURCH";
-}
-
 /** Per-lead resolved offer: the campaign's discount + message variant, or the
  *  default (10% / 'default') for legacy/global-cron leads with no campaign. */
 interface Offer { discountPercent: number; variant: MessageVariant }
 const DEFAULT_OFFER: Offer = { discountPercent: 10, variant: "default" };
 
-/** Mint (or reuse) this lead's one-time Stripe promo code at email 2, at the
- *  campaign's discount percent (default 10). Reuses lib/promoCodes so the coupon/
- *  PromotionCode plumbing matches the app. Note: a code minted earlier keeps its
- *  original percent (Stripe coupons are immutable) — only later leads pick up a
- *  changed campaign discount. */
-async function ensurePromoCode(lead: OutreachLead, discountPercent: number): Promise<{ code: string; promotionCodeId: string }> {
-  if (lead.promo_code && lead.promo_promotion_code_id) {
-    return { code: lead.promo_code, promotionCodeId: lead.promo_promotion_code_id };
+/** Resolve the email to send (or preview) for a touch, plus the promo code shown
+ *  in the report. No per-lead minting: every code is a shared, pre-created promo.
+ *    touch 1 — default: code-free intro; schools: pitch carrying APPRECIATION10.
+ *    touch 2 — default: shared TOUCH2-25 at a flat 25%; schools: code-free
+ *              distribution ask (references APPRECIATION10 in its copy).
+ *  The shared code is deliberately never stored per-lead (see VARIANT_PROFILE): the
+ *  conversion webhook matches promo_promotion_code_id and would mass-convert on one
+ *  redemption, so per-lead attribution rides the signed entry URL instead. */
+export function renderTouch(lead: OutreachLead, offer: Offer, touch: 1 | 2): { email: BuiltEmail; code: string } {
+  const profile = VARIANT_PROFILE[offer.variant];
+  if (touch === 1) {
+    const email = buildEmail(lead, offer.variant, offer.discountPercent);
+    // A shared-code pitch (schools) carries its code up front; default is code-free.
+    const code = offer.variant === "catholic_school" ? (profile.sharedPromoCode ?? "") : "";
+    return { email, code };
   }
-  const code = `${OUTREACH.promoPrefix}-${codeSlug(lead.org_name)}-${lead.id.slice(0, 6).toUpperCase()}`;
-  const view = await createPromoCode({
-    code,
-    discountType: "percent",
-    value: clampDiscountPercent(discountPercent),
-    duration: "once",
-    maxRedemptions: 1,
-    internalLabel: `outreach:${lead.id}`,
-    note: `Church outreach - ${lead.org_name}`,
-  });
-  return { code: view.code, promotionCodeId: view.id };
+  if (offer.variant === "catholic_school") {
+    // Distribution nudge: no new offer; the copy references the existing code.
+    return { email: buildFollowupEmail(lead, "", offer.discountPercent, offer.variant), code: "" };
+  }
+  // Default church follow-up: the shared flat code (TOUCH2-25) at a fixed 25%,
+  // regardless of the campaign's own Touch-1 discount tier.
+  const code = profile.sharedPromoCode ?? "";
+  return { email: buildFollowupEmail(lead, code, TOUCH2_FLAT_PERCENT, offer.variant), code };
 }
 
 /** Which touch (if any) is due for this active lead right now. A single-touch
@@ -193,20 +192,9 @@ export async function runSend(opts: RunSendOptions = {}): Promise<SendReport> {
     }
 
     if (!live) {
-      // Dry run: render, mint nothing, send nothing. The preview shows the code that
-      // WOULD appear so it is faithful — a shared-code single-touch variant shows its
-      // fixed code up front; the default two-touch shows the minted/reused code at
-      // email 2. Campaign discount + variant are applied exactly as a live send would.
-      const previewCode = profile.singleTouch
-        ? (profile.sharedPromoCode ?? "")
-        : touch === 2
-          ? (lead.promo_code ?? `${OUTREACH.promoPrefix}-${codeSlug(lead.org_name)}-${lead.id.slice(0, 6).toUpperCase()}`)
-          : "";
-      const preview = profile.singleTouch
-        ? buildEmail(lead, offer.variant, offer.discountPercent)
-        : touch === 2
-          ? buildFollowupEmail(lead, previewCode, offer.discountPercent, offer.variant)
-          : buildEmail(lead, offer.variant);
+      // Dry run: render, mint nothing, send nothing. renderTouch produces exactly
+      // the email + code a live send would, so the preview is faithful.
+      const { email: preview, code: previewCode } = renderTouch(lead, offer, touch);
       report.would_send++;
       report.items.push({
         lead_id: lead.id, org_name: lead.org_name, to: lead.contact_email,
@@ -216,8 +204,10 @@ export async function runSend(opts: RunSendOptions = {}): Promise<SendReport> {
       continue;
     }
 
-    // Live send. Touch 1 is code-free; touch 2 mints/attaches the code at the
-    // campaign's discount, with the campaign's message variant.
+    // Live send. No per-lead minting: renderTouch attaches the shared code (or none
+    // for the schools distribution nudge). The shared code is NOT stored per-lead —
+    // recordSend gets null so promo_promotion_code_id stays empty and the conversion
+    // webhook can't mass-convert on a single redemption (attribution rides the URL).
     let claim: DeliveryClaim | null = null;
     try {
       if (campaignId) {
@@ -232,27 +222,14 @@ export async function runSend(opts: RunSendOptions = {}): Promise<SendReport> {
           continue;
         }
       }
-      let promo: { code: string; promotionCodeId: string } | null = null;
-      let email;
-      if (touch === 1) {
-        // Touch 1 is code-free for the default two-touch variant; a single-touch
-        // shared-code variant (catholic_school) carries its fixed code in the copy.
-        // The shared code is deliberately NOT minted or stored per-lead (see
-        // VARIANT_PROFILE) — promo stays null so recordSend won't set
-        // promo_promotion_code_id and the conversion webhook can't mass-convert.
-        email = buildEmail(lead, offer.variant, offer.discountPercent);
-      } else {
-        promo = await ensurePromoCode(lead, offer.discountPercent);
-        email = buildFollowupEmail(lead, promo.code, offer.discountPercent, offer.variant);
-      }
+      const { email, code } = renderTouch(lead, offer, touch);
       const provider = await sendViaResend(email, claim?.idempotencyKey);
-      await recordSend(lead.id, lead.send_count, promo);
+      await recordSend(lead.id, lead.send_count, null);
       if (claim) await markDeliverySent(claim, provider.id);
       report.sent++;
       report.items.push({
         lead_id: lead.id, org_name: lead.org_name, to: lead.contact_email,
-        outcome: "sent", touch,
-        promo_code: promo?.code ?? (profile.singleTouch ? profile.sharedPromoCode ?? "" : ""),
+        outcome: "sent", touch, promo_code: code,
         subject: email.subject,
         send_count_after: lead.send_count + 1,
       });

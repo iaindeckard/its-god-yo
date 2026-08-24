@@ -100,7 +100,7 @@ async function applyDeliveryEvent(
 /** Persist one signed Resend event and update its matching scheduler delivery.
  * Svix event ids are unique, making provider retries and manual replays harmless. */
 export async function recordDeliveryEvent(providerEventId: string, event: ResendDeliveryEvent): Promise<{
-  duplicate: boolean; matched: boolean; status: string | null;
+  duplicate: boolean; matched: boolean; status: string | null; campaignId: string | null;
 }> {
   const admin = getSupabaseAdmin();
   const eventType = typeof event.type === "string" ? event.type : "unknown";
@@ -126,17 +126,38 @@ export async function recordDeliveryEvent(providerEventId: string, event: Resend
     throw new Error(`record_delivery_event_failed: ${inserted.error?.message ?? "unknown"}`);
   }
   if (!eventId) throw new Error("record_delivery_event_failed: event id missing");
-  if (!messageId) return { duplicate, matched: false, status: lifecycleStatus(eventType) };
+  if (!messageId) return { duplicate, matched: false, status: lifecycleStatus(eventType), campaignId: null };
 
   const { data: delivery, error: lookupError } = await admin.from(TABLE)
-    .select("id,last_event_at")
+    .select("id,last_event_at,campaign_id")
     .eq("provider_message_id", messageId)
     .maybeSingle();
   if (lookupError) throw new Error(`find_delivery_for_event_failed: ${lookupError.message}`);
-  if (!delivery) return { duplicate, matched: false, status: lifecycleStatus(eventType) };
+  if (!delivery) return { duplicate, matched: false, status: lifecycleStatus(eventType), campaignId: null };
 
   const status = await applyDeliveryEvent(admin, delivery.id, eventId, eventType, occurredAt);
-  return { duplicate, matched: true, status };
+  return { duplicate, matched: true, status, campaignId: (delivery.campaign_id as string | null) ?? null };
+}
+
+/** Per-campaign bounce stats for the ops alert. Denominator is deliveries actually
+ *  dispatched to the provider (past the 'claimed' state, i.e. sent_at set) — not
+ *  claimed-but-unsent rows. Numerator is deliveries whose current lifecycle status
+ *  is 'bounced': a transient bounce that later delivers flips back to 'delivered'
+ *  (applyDeliveryEvent keeps the latest event), so this counts messages that ended
+ *  up bounced (unrecovered) — the bad-lead-list signal, close to a hard-bounce rate. */
+export async function campaignBounceStats(campaignId: string): Promise<{ sent: number; bounced: number; rate: number }> {
+  return bounceStatsFromDeliveries(await listCampaignDeliveries(campaignId));
+}
+
+/** Pure stats computation (separated for unit testing). Denominator = dispatched
+ *  deliveries (sent_at set); numerator = those currently 'bounced'. */
+export function bounceStatsFromDeliveries(
+  deliveries: Array<{ sent_at: string | null; status: string }>,
+): { sent: number; bounced: number; rate: number } {
+  const dispatched = deliveries.filter((d) => d.sent_at != null);
+  const bounced = dispatched.filter((d) => d.status === "bounced").length;
+  const sent = dispatched.length;
+  return { sent, bounced, rate: sent > 0 ? bounced / sent : 0 };
 }
 
 export interface CampaignDelivery {

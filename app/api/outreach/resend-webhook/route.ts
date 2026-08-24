@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { suppressByEmail, findLeadByContactEmail } from "@/lib/outreach/leads";
 import { recordActionItem } from "@/lib/actionItems";
 import { recordDeliveryEvent, type ResendDeliveryEvent } from "@/lib/outreach/deliveries";
+import { evaluateBounceRateAlert } from "@/lib/outreach/alerts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -169,10 +170,15 @@ export async function POST(req: Request) {
   const emails = recipients(event.data);
   let suppressed = 0;
   let replyFlagged = false;
-  let deliveryEvent: { duplicate: boolean; matched: boolean; status: string | null } | null = null;
+  let deliveryEvent: { duplicate: boolean; matched: boolean; status: string | null; campaignId: string | null } | null = null;
   try {
     if (event.type?.startsWith("email.") && event.type !== "email.received") {
       deliveryEvent = await recordDeliveryEvent(id, event as ResendDeliveryEvent);
+      // A bounce may mean a bad lead list — evaluate this campaign's rate and
+      // alert early (best-effort; evaluateBounceRateAlert never throws).
+      if (deliveryEvent.status === "bounced" && deliveryEvent.campaignId) {
+        await evaluateBounceRateAlert(deliveryEvent.campaignId);
+      }
     }
     if (event.type === "email.bounced") {
       const bounceType = event.data?.bounce?.type ?? "";

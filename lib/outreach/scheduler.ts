@@ -4,7 +4,8 @@ import { getCampaign, updateCampaign, type Campaign } from "./campaigns";
 import { fetchActiveLeads } from "./leads";
 import { isSendable } from "./verify";
 import { runSend, type SendReport } from "./run";
-import { hasAudienceBlocker, nextReleaseAt, validTimeZone } from "./schedule-policy";
+import { hasAudienceBlocker, touchTwoReleaseAt, validTimeZone } from "./schedule-policy";
+import { notifyTouch2Sent } from "./alerts";
 const TABLE = "outreach_campaigns";
 
 export interface ScheduleSnapshot extends Record<string, unknown> {
@@ -99,10 +100,16 @@ export async function runScheduledCampaigns(now = new Date()): Promise<Array<{ c
       await updateCampaign(campaign.id, { status: "paused" });
       continue;
     }
-    const startedAt = new Date().toISOString();
     try {
       const report = await runSend({ campaignId: campaign.id, leadIds: snapshot.lead_ids, updateCampaignStatus: false });
       results.push({ campaign_id: campaign.id, report });
+      // Reactive timing (spec 2026-08-24): capture the moment Touch-1 ACTUALLY
+      // finished sending, here after runSend returns. Touch-2 anchors on this,
+      // never on the pre-computed scheduled release_at — that drifts whenever a
+      // send is delayed (closed gate yields dry-runs, retry, stale-claim recovery).
+      // This is the same instant written to release_completed_at, so the Touch-2
+      // anchor and the completion timestamp can never diverge.
+      const completedAt = new Date().toISOString();
       if (report.mode !== "live") {
         await updateCampaign(campaign.id, { status: "scheduled", last_release_report: report as unknown as Record<string, unknown> });
         continue;
@@ -121,14 +128,21 @@ export async function runScheduledCampaigns(now = new Date()): Promise<Array<{ c
       } else if (hasFirstTouch && !hasSecondTouch) {
         await updateCampaign(campaign.id, {
           status: "scheduled",
-          release_at: nextReleaseAt(campaign.release_at ?? startedAt),
-          release_completed_at: startedAt,
+          // Reactive anchor — Touch-2 is 30 days from actual send completion, NOT
+          // from the scheduled release_at. touchTwoReleaseAt takes only completedAt,
+          // so the stale scheduled time cannot be reintroduced here.
+          release_at: touchTwoReleaseAt(completedAt),
+          release_completed_at: completedAt,
           last_release_report: report as unknown as Record<string, unknown>,
         });
       } else {
         await updateCampaign(campaign.id, {
-          status: "completed", release_completed_at: startedAt, last_release_report: report as unknown as Record<string, unknown>,
+          status: "completed", release_completed_at: completedAt, last_release_report: report as unknown as Record<string, unknown>,
         });
+      }
+      // Confirm the Touch-2 wave fired (once per campaign; best-effort, never throws).
+      if (hasSecondTouch) {
+        await notifyTouch2Sent({ id: campaign.id, name: campaign.name }, report);
       }
     } catch (error) {
       await updateCampaign(campaign.id, { status: "scheduled" }).catch(() => {});
