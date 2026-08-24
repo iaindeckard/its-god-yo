@@ -3,7 +3,7 @@ import crypto from "crypto";
 import { OUTREACH } from "./config";
 import { SPANISH_ENABLED } from "../flags";
 import type { OutreachLead } from "./leads";
-import { resolveVariant, clampDiscountPercent, VARIANT_PROFILE, type MessageVariant } from "./templates";
+import { resolveVariant, clampDiscountPercent, VARIANT_PROFILE, TOUCH2_EXPIRES_DISPLAY, type MessageVariant } from "./templates";
 import { outreachEntryUrl } from "./attribution";
 
 /**
@@ -251,11 +251,17 @@ Unsubscribe (one click): ${link}`;
 }
 
 /**
- * The second-touch (email 2) follow-up: a light variant of buildEmail with a
- * "circling back" framing plus the 10%-off code. Sent ~30 days after email 1 to
- * leads that haven't signed up (i.e. still active). Same compliance envelope as
- * email 1 (From/Reply-To, physical address, one-click unsubscribe). This is the
- * final touch: the copy says so, and the send logic stops after it.
+ * The second-touch (email 2) follow-up. For the default church variant this is a
+ * light "circling back" of buildEmail carrying the shared flat TOUCH2-25 code (25%
+ * off, valid through 2026-10-23) — one flat rate for every church campaign, minted
+ * once by Iain, not per lead. For the catholic_school variant it's a code-free
+ * DISTRIBUTION nudge (see buildSchoolsFollowupEmail). Sent ~30 days after email 1
+ * to leads that haven't signed up (still active). Same compliance envelope as
+ * email 1. This is the final touch: the copy says so, and the send logic stops.
+ *
+ * The shared code is passed in (VARIANT_PROFILE.<variant>.sharedPromoCode) rather
+ * than minted; promoCode/discountPercent are the ONLY values reaching the copy and
+ * they carry a fixed, reviewed code + flat percent (never a campaign's own tier).
  */
 export function buildFollowupEmail(
   lead: OutreachLead,
@@ -263,12 +269,12 @@ export function buildFollowupEmail(
   discountPercent = 10,
   variant: MessageVariant = "default",
 ): BuiltEmail {
-  // Guardrail: only an approved variant KEY is honored (copy is code-resident);
-  // and the ONLY campaign-configurable value that reaches the copy is the discount
-  // NUMBER, substituted for the numeral in "{pct}% off" below — every surrounding
-  // word is fixed. Changing the number never opens the rest of the approved copy
-  // to editing; a new variant/copy is a reviewed code change.
-  const v = resolveVariant(variant); void v;
+  // Guardrail: only an approved variant KEY is honored (copy is code-resident).
+  const v = resolveVariant(variant);
+  // The Catholic K-12 Schools follow-up is a code-free distribution ask, not an
+  // offer — it references the existing APPRECIATION10 code and asks the school to
+  // share a ready-to-paste blurb with families.
+  if (v === "catholic_school") return buildSchoolsFollowupEmail(lead);
   const pct = clampDiscountPercent(discountPercent);
   const org = lead.org_name;
   const link = unsubUrl(lead.id);
@@ -286,18 +292,20 @@ export function buildFollowupEmail(
   const areaLabelText = isFallback ? "a Wichita-area church" : (lead.city ? `a ${lead.city}-area church` : "a church");
   const areaLabelHtml = isFallback ? "a Wichita-area church" : (lead.city ? `a ${esc(lead.city)}-area church` : "a church");
 
-  const subject = `Following up for ${org}'s youth ministry`;
+  const subject = `Following up for ${org}: ${pct}% off through Oct 23`;
 
   const text =
 `Hi ${org} team,
 
 I reached out a few weeks back about It's God, Yo!, our daily Scripture text for teens, which pairs each ${SPANISH_ENABLED ? "KJV and Reina-Valera 1909 verse" : "KJV verse"} with a plain-language slang rendering designed to help teens understand it. No worries if it slipped by.
 
-If it might be a fit for the students at ${org}, here's a code for ${pct}% off any plan, on us:
+If it might be a fit for the families and students at ${org}, here's ${pct}% off, on us:
 
-${promoCode} gets you ${pct}% off at ${entry}
+${promoCode} gets you ${pct}% off an individual, family, or gift subscription at ${entry}
 
-Same as before: share it if it helps, ignore it if it's not for you. This is the last you'll hear from us unless you reach out. The link below removes ${org} for good.
+One thing worth knowing: this code is good through ${TOUCH2_EXPIRES_DISPLAY}, so if you've been meaning to pass it along, now's the window. Share it if it helps, ignore it if it's not for you.
+
+This is the last you'll hear from us unless you reach out. The link below removes ${org} for good.
 
 Thanks for everything you pour into young people.
 
@@ -313,11 +321,12 @@ Unsubscribe (one click): ${link}`;
 `<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:#1a1a1a;max-width:600px;margin:0 auto;">
   <p>Hi ${esc(org)} team,</p>
   <p>I reached out a few weeks back about <strong>It's God, Yo!</strong>, our daily Scripture text for teens, which pairs each ${SPANISH_ENABLED ? "KJV and Reina-Valera 1909 verse" : "KJV verse"} with a plain-language slang rendering designed to help teens understand it. No worries if it slipped by.</p>
-  <p>If it might be a fit for the students at ${esc(org)}, here's a code for <strong>${pct}% off</strong> any plan, on us:</p>
+  <p>If it might be a fit for the families and students at ${esc(org)}, here's <strong>${pct}% off</strong>, on us:</p>
   <p style="background:#f4f7f7;border:1px solid #d7e2e2;border-radius:8px;padding:12px 16px;font-size:16px;">
-    <strong>${esc(promoCode)}</strong> gets you ${pct}% off at <a href="${esc(entry)}" style="color:#00ABBC;">${esc(site.replace(/^https?:\/\//, ""))}</a>
+    <strong>${esc(promoCode)}</strong> gets you ${pct}% off an individual, family, or gift subscription at <a href="${esc(entry)}" style="color:#00ABBC;">${esc(site.replace(/^https?:\/\//, ""))}</a>
   </p>
-  <p>Same as before: share it if it helps, ignore it if it's not for you. This is the last you'll hear from us unless you reach out. The link below removes ${esc(org)} for good.</p>
+  <p>One thing worth knowing: this code is good through <strong>${TOUCH2_EXPIRES_DISPLAY}</strong>, so if you've been meaning to pass it along, now's the window. Share it if it helps, ignore it if it's not for you.</p>
+  <p>This is the last you'll hear from us unless you reach out. The link below removes ${esc(org)} for good.</p>
   <p style="margin-bottom:2px;">Thanks for everything you pour into young people.</p>
   <p style="margin-bottom:2px;"><strong>Iain Deckard</strong> · It's God, Yo!</p>
   <p style="color:#555;">Reply to this email directly, it comes to me.</p>
@@ -325,6 +334,97 @@ Unsubscribe (one click): ${link}`;
   <p style="font-size:12px;color:#777;">
     It's God, Yo!™ is operated by ${esc(OUTREACH.physicalAddress)}.<br/>
     You received this because ${esc(org)} is ${areaLabelHtml} with a publicly listed youth ministry.${localSentence} We found your general contact address at ${esc(sourceNote(lead))}.${localBusiness}<br/>
+    <a href="${link}" style="color:#777;">Unsubscribe (one click)</a>
+  </p>
+</div>`;
+
+  const headers: Record<string, string> = {
+    "List-Unsubscribe": `<${link}>, <mailto:unsubscribe@outreach.itsgodyo.com?subject=unsub-${lead.id}>`,
+    "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+  };
+
+  return { to: lead.contact_email, from: OUTREACH.from, replyTo: OUTREACH.replyTo, subject, text, html, headers };
+}
+
+/**
+ * Catholic K-12 Schools SECOND touch (message_variant 'catholic_school', ~30 days
+ * after the pitch). This is a DISTRIBUTION nudge, not a re-pitch or a bigger
+ * discount (spec 2026-08-24): the original note reached the office, not the parents
+ * who'd actually buy, so the likely reason for zero visible sign-ups is that it
+ * never reached anyone who could act. So it (1) acknowledges no visible
+ * participation yet, (2) makes the ask a copy-paste action with a ready-to-paste
+ * newsletter/bulletin blurb, and (3) asks who the right contact is if the front
+ * office isn't who handles the newsletter — so a wrong-contact problem surfaces
+ * instead of silently going nowhere a second time. NO new code: APPRECIATION10
+ * (10% off, through 2026-12-31) stays as-is, referenced in the blurb.
+ *
+ * The pasteable blurb deliberately links to the PLAIN itsgodyo.com, not the signed
+ * per-lead entry URL — a newsletter blurb gets forwarded/republished, where a
+ * lead-specific link would mis-attribute or leak. The email's own signup link keeps
+ * the signed entry URL for per-lead attribution.
+ */
+export function buildSchoolsFollowupEmail(lead: OutreachLead): BuiltEmail {
+  const code = VARIANT_PROFILE.catholic_school.sharedPromoCode ?? "APPRECIATION10";
+  const org = lead.org_name;
+  const link = unsubUrl(lead.id);
+  const site = OUTREACH.appUrl;
+  const siteLabel = site.replace(/^https?:\/\//, "");
+  const entry = lead.campaign_id ? outreachEntryUrl(lead.id, 2, "en") : site;
+  const contactNote = sourceNote(lead);
+
+  const subject = `A quick way to get IGY in front of ${org} families`;
+
+  const text =
+`Dear ${org} Administration,
+
+A few weeks ago I wrote about It's God, Yo!™ (IGY), our daily Bible-verse text for teens, and the 10% Catholic-school discount (code ${code}, good through December 31, 2026). I haven't seen any sign-ups from ${org} families yet, and I suspect the reason is simple: the note reached the office, but not the parents who'd actually use it.
+
+So I wanted to make sharing it effortless. If you have a family newsletter, a PTO email, or a weekly bulletin, here's a short blurb you can paste straight in:
+
+------------------------------------------------------------
+A gift for our families from It's God, Yo!
+It's God, Yo! sends your teen one Bible verse by text each day, a short verse matched to a mood or theme, in language they'll actually read. Catholic-school families get 10% off with code ${code} (good through Dec. 31, 2026). See how it works at ${siteLabel}.
+------------------------------------------------------------
+
+Two small asks:
+  1. Would you be willing to drop that into your next family newsletter or bulletin?
+  2. If the newsletter or bulletin is handled by someone other than the front office, a communications coordinator, PTO lead, or the advancement office, could you point me to the right person, or forward this to them? I'd rather reach whoever can actually place it than keep guessing.
+
+That's the whole ask. No cost, no commitment, just getting it in front of families who might be glad to have it. You can see how it works at ${entry}.
+
+With gratitude,
+Iain Deckard
+Founder, It's God, Yo!™
+hello@itsgodyo.com
+
+---
+It's God, Yo!™ is operated by ${OUTREACH.physicalAddress}.
+You received this because ${org} is a Catholic school in ${lead.state || "the United States"} with a publicly listed contact address; we found it at ${contactNote}.
+Unsubscribe (one click): ${link}`;
+
+  const html =
+`<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:#1a1a1a;max-width:600px;margin:0 auto;">
+  <p>Dear ${esc(org)} Administration,</p>
+  <p>A few weeks ago I wrote about <strong>It's God, Yo!&trade;</strong> (IGY), our daily Bible-verse text for teens, and the 10% Catholic-school discount (code <strong>${esc(code)}</strong>, good through December 31, 2026). I haven't seen any sign-ups from ${esc(org)} families yet, and I suspect the reason is simple: the note reached the office, but not the parents who'd actually use it.</p>
+  <p>So I wanted to make sharing it effortless. If you have a family newsletter, a PTO email, or a weekly bulletin, here's a short blurb you can paste straight in:</p>
+  <div style="background:#f4f7f7;border:1px solid #d7e2e2;border-radius:8px;padding:14px 18px;margin:14px 0;">
+    <p style="margin:0 0 6px;"><strong>A gift for our families from It's God, Yo!</strong></p>
+    <p style="margin:0;">It's God, Yo! sends your teen one Bible verse by text each day, a short verse matched to a mood or theme, in language they'll actually read. Catholic-school families get 10% off with code <strong>${esc(code)}</strong> (good through Dec. 31, 2026). See how it works at ${esc(siteLabel)}.</p>
+  </div>
+  <p>Two small asks:</p>
+  <ol style="padding-left:20px;">
+    <li style="margin-bottom:8px;">Would you be willing to drop that into your next family newsletter or bulletin?</li>
+    <li>If the newsletter or bulletin is handled by someone other than the front office, a communications coordinator, PTO lead, or the advancement office, could you point me to the right person, or forward this to them? I'd rather reach whoever can actually place it than keep guessing.</li>
+  </ol>
+  <p>That's the whole ask. No cost, no commitment, just getting it in front of families who might be glad to have it. You can see how it works at <a href="${esc(entry)}" style="color:#00ABBC;">${esc(siteLabel)}</a>.</p>
+  <p style="margin-bottom:2px;">With gratitude,</p>
+  <p style="margin-bottom:0;"><strong>Iain Deckard</strong></p>
+  <p style="margin:0;color:#555;">Founder, It's God, Yo!&trade;</p>
+  <p style="margin-top:2px;"><a href="mailto:hello@itsgodyo.com" style="color:#00ABBC;">hello@itsgodyo.com</a></p>
+  <hr style="border:none;border-top:1px solid #e2e2e2;margin:22px 0;"/>
+  <p style="font-size:12px;color:#777;">
+    It's God, Yo!&trade; is operated by ${esc(OUTREACH.physicalAddress)}.<br/>
+    You received this because ${esc(org)} is a Catholic school in ${esc(lead.state || "the United States")} with a publicly listed contact address; we found it at ${esc(contactNote)}.<br/>
     <a href="${link}" style="color:#777;">Unsubscribe (one click)</a>
   </p>
 </div>`;
