@@ -982,6 +982,9 @@ export default function OutreachManager({
                   <div className="field" style={{ margin: 0 }}>
                     <label>Release date and time</label>
                     <input type="datetime-local" value={releaseDraft} onChange={(e) => setReleaseDraft(e.target.value)} />
+                    <small className="hint" style={{ display: "block", marginTop: 4, maxWidth: 340 }}>
+                      Schedule time, not exact send time. The campaign becomes eligible at this moment and goes out on the next 15-minute release sweep, so up to about 15 minutes later.
+                    </small>
                   </div>
                   <button className="btn btn-primary" disabled={!releaseDraft || audienceSel.size === 0 || !!busy} onClick={scheduleRelease}>
                     {busy === "schedule" ? "Scheduling…" : selected.status === "scheduled" ? "Reschedule campaign" : "Approve and schedule"}
