@@ -18,10 +18,14 @@
 .wordmarkMsg { display: inline-block; background: #111b30; border: 1px solid rgba(255,255,255,0.08); border-radius: 24px 24px 24px 6px; padding: 20px 30px; }
 
 /* ---------- Gate ---------- */
-.gate { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; }
-.gateReceived { align-self: center; margin-bottom: 48px; }
+.gate { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 92px 40px 40px; position: relative; }
+.gateNav { position: absolute; top: 28px; right: 40px; display: flex; gap: 20px; font-size: 13.5px; }
+.gateNav a { color: #a9bad6; text-decoration: none; }
+.gateNav a:hover, .gateNav a:focus-visible { color: #fff; text-decoration: underline; }
+.gateReceived { align-self: center; margin-bottom: 34px; }
 .gateReceived :global(.wordmark) { font-size: 60px; }
-.gateQuestion { font-size: 32px; font-weight: 700; margin-bottom: 12px; text-align: center; }
+.gateHeadline { max-width: 720px; margin: 0 0 18px; text-align: center; font-size: clamp(28px, 4vw, 44px); line-height: 1.12; letter-spacing: -0.025em; }
+.gateQuestion { font-size: 24px; font-weight: 700; margin: 0 0 10px; text-align: center; }
 .gateSub { font-size: 15px; color: #a9bad6; margin-bottom: 40px; max-width: 400px; text-align: center; }
 .gateChoices { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
 .gateCard { width: 256px; background: #111b30; border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 38px 30px; cursor: pointer; color: #fff; text-align: center; font: inherit; transition: border-color .15s, background .15s; }
@@ -256,6 +260,9 @@
   .pricingGrid { grid-template-columns: 1fr 1fr; }
   .iotnboBanner { flex-direction: column; align-items: flex-start; }
   .gateQuestion { font-size: 24px; }
+  .gate { padding: 92px 20px 36px; }
+  .gateNav { top: 24px; right: 20px; gap: 14px; }
+  .gateHeadline { font-size: 30px; }
   .gateReceived { align-self: center; }
   .gateReceived :global(.wordmark) { font-size: 40px; }
 }
