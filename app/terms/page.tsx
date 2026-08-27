@@ -5,13 +5,13 @@ export const metadata: Metadata = {
   title: "Terms of Service | It's God, Yo!™",
   description: "The terms that govern your use of It's God, Yo!™",
   // DRAFT legal content pending attorney review (§9a/§9b added 2026-08-04): not
-  // indexed until counsel signs off, matching the /faq + /program-terms convention.
+  // indexed until counsel signs off, matching the /program-terms convention.
   robots: { index: false, follow: false },
 };
 
 export default function TermsPage() {
   return (
-    <LegalPage title="Terms of Service" updated="July 22, 2026">
+    <LegalPage title="Terms of Service" updated="August 27, 2026">
       <h2>1. What IGY is</h2>
       <p>
         It&rsquo;s God, Yo!&trade; (&ldquo;IGY&rdquo;) is a subscription SMS/text service that sends a daily scripture message to a recipient&rsquo;s phone. A purchaser (typically a parent, guardian, or gift-giver) sets up and pays for the subscription; the recipient (often a teen) must personally confirm by replying YES before any subscription is created or any charge occurs.
@@ -63,7 +63,7 @@ export default function TermsPage() {
 
       <h2>8. Opt-out</h2>
       <p>
-        Any recipient may stop receiving texts at any time by replying STOP (or any other clear request to stop) to any message. Stopping messages does not automatically cancel or refund an active subscription; the purchaser must separately manage billing.
+        Any recipient may stop receiving texts at any time by replying STOP (or any other clear request to stop) to any message. A STOP reply immediately stops further texts and cancels the entire associated subscription and its future billing. It does not refund a charge already collected, except where required by law.
       </p>
 
       <h2>9. Disclaimers</h2>
@@ -72,7 +72,7 @@ export default function TermsPage() {
       </p>
 
       {/* ⚠️ DRAFT — §9a and §9b are pending attorney review (added 2026-08-04); wording
-          not finalized. Page is noindex per the /faq + /program-terms draft convention. */}
+          not finalized. Page is noindex per the /program-terms draft convention. */}
       <h2>9a. Content availability and focus tracks</h2>
       <p>
         Your selected focus is a preference for the kind of daily message you receive when such content is available. It is not a guarantee that every message will match it. On any day your selected focus does not have a message available, IGY sends that day&rsquo;s General message instead, so you still receive your one daily message. You will never receive more than one message per day as a result.

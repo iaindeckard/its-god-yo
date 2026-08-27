@@ -4,7 +4,7 @@ import { createSubscriptionForPendingSignup } from "./createSubscription";
 import { createFamilyBaseSubscription, reconcileFamilyExtraTeens } from "./familyBilling";
 import { classifyReply } from "./twilio";
 import { toE164, phoneKey } from "./phone";
-import { cancelSubscriptionForSignup, cancelFamilyBaseIfNoActiveTeens } from "./cancelSubscription";
+import { cancelSubscriptionForSignup } from "./cancelSubscription";
 import { setDmAddon } from "./dmAddon";
 import { resolveActiveSignupForConsent } from "./stopCancelResolve";
 
@@ -18,7 +18,7 @@ import { resolveActiveSignupForConsent } from "./stopCancelResolve";
  * trial. The base $99 subscription is created on the FIRST teen's YES; each
  * teen's YES sets their trial_ends_at (= now + 7d); the extra-teen $28 quantity
  * is reconciled (added at each teen's trial-end by the scheduled job — see
- * lib/familyBilling.ts). One teen opting out never cancels the whole family.
+ * lib/familyBilling.ts). STOP cancels the owning subscription immediately.
  */
 
 const TRIAL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -27,7 +27,7 @@ const REPLY = {
   en: {
     allSet: "You're all set! You'll start getting daily Good News from It's God, Yo! 🙏",
     waiting: "Thanks! You're confirmed! We're just waiting on one more person before this starts.",
-    optedOut: "You've been unsubscribed and won't receive messages. Reply START to opt back in.",
+    optedOut: "You've been unsubscribed. You won't receive more messages, and billing has been canceled.",
     help: "It's God, Yo! sends daily encouragement texts. Reply YES to confirm, STOP to cancel. Add or remove DM from Him with DM ON / DM OFF. Msg & data rates may apply.",
     notFound: "We couldn't find a pending confirmation for this number. If you signed up recently, please try again.",
     unknown: "Reply YES to confirm your daily texts from It's God, Yo!, or STOP to opt out.",
@@ -38,7 +38,7 @@ const REPLY = {
   es: {
     allSet: "¡Todo listo! Empezarás a recibir Buenas Nuevas diarias de It's God, Yo! 🙏",
     waiting: "¡Gracias, quedaste confirmado! Solo esperamos a una persona más para comenzar.",
-    optedOut: "Cancelaste tu suscripción y no recibirás mensajes. Responde START para volver a suscribirte.",
+    optedOut: "Cancelaste tu suscripción. No recibirás más mensajes y se canceló la facturación.",
     help: "It's God, Yo! envía textos diarios de ánimo. Responde SÍ para confirmar, STOP para cancelar.",
     notFound: "No encontramos una confirmación pendiente para este número. Si te registraste hace poco, inténtalo de nuevo.",
     unknown: "Responde SÍ para confirmar tus textos diarios de It's God, Yo!, o STOP para cancelar.",
@@ -238,15 +238,8 @@ export async function processInboundReply(from: string, body: string): Promise<I
           .update({ consent_status: "opted_out", opted_out_at: nowIso, opt_out_method: "sms_stop", confirmation_reply_raw: body })
           .eq("id", confirmed.consentId);
 
-        if (confirmed.consentType === "family_teen") {
-          // One teen opting out never cancels the whole family: drop THEIR $28
-          // extra-teen line, then cancel the base ONLY if no confirmed teen remains.
-          await reconcileFamilyExtraTeens(confirmed.signupId);
-          await cancelFamilyBaseIfNoActiveTeens(confirmed.signupId);
-        } else {
-          // Individual / gift: cancel the subscription outright.
-          await cancelSubscriptionForSignup(confirmed.signupId, "sms_stop");
-        }
+        // STOP always cancels the owning subscription, including a Family plan.
+        await cancelSubscriptionForSignup(confirmed.signupId, "sms_stop");
         return { action: "opted_out", reply: REPLY[clang].optedOut, pending_signup_id: confirmed.signupId };
       }
 
@@ -255,12 +248,11 @@ export async function processInboundReply(from: string, body: string): Promise<I
       // legacy / prefix-divergent rows are still opted out.
       const { data: knownRows } = await admin
         .from("consent_log")
-        .select("id, recipient_phone, pending_signup_id, consent_type")
-        .neq("consent_status", "opted_out")
+        .select("id, recipient_phone, pending_signup_id, consent_type, consent_status")
         .limit(1000);
-      const matchedRows = ((knownRows ?? []) as Array<{ id: string; recipient_phone: string; pending_signup_id: string | null; consent_type: string | null }>)
+      const matchedRows = ((knownRows ?? []) as Array<{ id: string; recipient_phone: string; pending_signup_id: string | null; consent_type: string | null; consent_status: string }>)
         .filter((r) => phoneKey(r.recipient_phone) === fromKey);
-      const optOutIds = matchedRows.map((r) => r.id);
+      const optOutIds = matchedRows.filter((r) => r.consent_status !== "opted_out").map((r) => r.id);
       if (optOutIds.length) {
         await admin
           .from("consent_log")
@@ -271,12 +263,11 @@ export async function processInboundReply(from: string, body: string): Promise<I
       // subscriber match above failed (e.g. consent was never flipped to
       // 'confirmed' but a subscription exists). Resolve each matched consent row to
       // its owning ACTIVE signup via either link direction and cancel any live
-      // subscription. Idempotent. Skip family_teen here — cancelling the whole
-      // family base for one teen is wrong; that teardown is handled by the
-      // confirmed-subscriber path's family branch.
+      // subscription. This also examines rows already marked opted_out so a Twilio
+      // retry can finish a cancellation that previously failed after consent was
+      // saved. Idempotent for every plan, including Family.
       const canceledSignups = new Set<string>();
       for (const r of matchedRows) {
-        if (r.consent_type === "family_teen") continue;
         const ps = await resolveActiveSignupForConsent(admin, r.id, r.pending_signup_id);
         if (ps && !canceledSignups.has(ps.id)) {
           canceledSignups.add(ps.id);
@@ -295,7 +286,7 @@ export async function processInboundReply(from: string, body: string): Promise<I
         .from("consent_log")
         .update({ consent_status: "opted_out", opted_out_at: new Date().toISOString(), opt_out_method: "sms_stop", confirmation_reply_received: true, confirmation_reply_at: new Date().toISOString(), confirmation_reply_raw: body })
         .eq("id", matched.id);
-      if (familyHasSub) await reconcileFamilyExtraTeens(familySignupId); // drop their $28 if it was billed
+      if (familyHasSub) await cancelSubscriptionForSignup(familySignupId, "sms_stop");
       return { action: "opted_out", reply: REPLY[lang].optedOut, pending_signup_id: familySignupId };
     }
     if (intent !== "confirm") return { action: "unknown", reply: REPLY[lang].unknown };
