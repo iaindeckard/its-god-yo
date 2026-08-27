@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 
 export default function PrivacyPage() {
   return (
-    <LegalPage title="Privacy Policy" updated="July 22, 2026">
+    <LegalPage title="Privacy Policy" updated="August 27, 2026">
       <h2>1. Who we are</h2>
       <p>
         It&rsquo;s God, Yo!&trade; (&ldquo;IGY,&rdquo; &ldquo;we,&rdquo; &ldquo;us&rdquo;) is a daily SMS/text scripture subscription service operated by Deckard Enterprise International, LLC, a Kansas limited liability company.
@@ -38,7 +38,7 @@ export default function PrivacyPage() {
 
       <h2>5. Consent and opt-out</h2>
       <p>
-        Every recipient must personally reply YES to a confirmation text before any subscription is created or any charge is made. Any recipient can stop texts at any time by replying STOP, or by any other reasonably clear request to stop.
+        Every recipient must personally reply YES to a confirmation text before any subscription is created or any charge is made. Any recipient can reply STOP, or make any other reasonably clear request to stop, to immediately stop further texts and cancel the entire associated subscription and its future billing.
       </p>
 
       <h2>6. Data retention</h2>

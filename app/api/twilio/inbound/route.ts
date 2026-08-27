@@ -47,8 +47,10 @@ export async function POST(req: Request) {
     const result = await processInboundReply(from, body);
     return twiml(result.reply);
   } catch (e) {
-    // Ack to Twilio rather than 500-looping on a logic bug; log for diagnosis.
+    // A STOP is not complete until both consent and billing cancellation finish.
+    // Return a retryable error so a transient Stripe or database failure cannot
+    // be acknowledged as successful while billing remains active.
     console.error("[twilio/inbound] error:", e instanceof Error ? e.message : e);
-    return twiml();
+    return new Response("temporary inbound processing failure", { status: 500 });
   }
 }
