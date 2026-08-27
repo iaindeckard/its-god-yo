@@ -144,10 +144,16 @@ export default function Landing() {
     return (
       <div className={s.page}>
         <div className={s.gate}>
+          <nav className={s.gateNav} aria-label="Homepage">
+            <a href="/sample">Sample</a>
+            <a href="/pricing">Pricing</a>
+            <a href="/privacy">Privacy</a>
+          </nav>
           <div className={`${s.wordmarkMsg} ${s.gateReceived}`}>
             <Wordmark tone="brass" />
           </div>
-          <div className={s.gateQuestion}>Who&rsquo;s here today?</div>
+          <h1 className={s.gateHeadline}>Daily scripture texted to your teen. The way they&rsquo;d actually read it.</h1>
+          <h2 className={s.gateQuestion}>Who&rsquo;s here today?</h2>
           <div className={s.gateSub}>We&rsquo;ll tailor everything on this site to you, so it actually makes sense.</div>
           <div className={s.gateChoices}>
             <button className={s.gateCard} onClick={() => setAudience("parent")}>
