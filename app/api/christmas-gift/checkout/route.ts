@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { loadChristmasConfig, resolveWindow, validateReleaseDate } from "@/lib/christmasGift";
+import { findUsableReferralCode, recordChristmasGiftReferral } from "@/lib/referral";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -151,6 +152,25 @@ export async function POST(req: Request) {
     if (updErr) {
       console.error("[christmas-checkout] purchase update failed:", updErr, "pi=", pi.id);
       return bad("purchase_update_failed", 500);
+    }
+
+    // 5) Referral attribution (best-effort; a referral failure must never break checkout).
+    //    The referrer's reward only fires later, when the recipient confirms (Phase 3F).
+    const refCode = body.referral_code?.trim();
+    if (refCode) {
+      try {
+        const lookup = await findUsableReferralCode(refCode);
+        // Self-referral guard: the buyer used their own code -> do not attribute.
+        if (lookup && lookup.referrer_customer_id !== customer.id) {
+          await recordChristmasGiftReferral({
+            codeId: lookup.code_id,
+            referrerCustomerId: lookup.referrer_customer_id,
+            refereeChristmasGiftPurchaseId: purchaseId,
+          });
+        }
+      } catch (e) {
+        console.error("[christmas-checkout] referral attribution failed (non-blocking):", e);
+      }
     }
 
     return NextResponse.json({

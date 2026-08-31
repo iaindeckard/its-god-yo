@@ -1,5 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { onChristmasGiftReferralConversion } from "./referral";
 
 /**
  * Christmas Scheduled Gift — recipient confirmation (the YES path).
@@ -31,6 +32,7 @@ interface ClaimedPurchase {
   language: string | null;
   dmfh_bonus_included: boolean | null;
   stripe_customer_id: string;
+  stripe_payment_intent_id: string;
   purchaser_email: string;
   purchaser_user_id: string | null;
 }
@@ -50,7 +52,7 @@ export async function confirmScheduledGift(
     .update({ status: "confirmed", confirmed_at: nowIso, updated_at: nowIso })
     .eq("id", args.purchaseId)
     .eq("status", "confirmation_sent")
-    .select("id, language, dmfh_bonus_included, stripe_customer_id, purchaser_email, purchaser_user_id");
+    .select("id, language, dmfh_bonus_included, stripe_customer_id, stripe_payment_intent_id, purchaser_email, purchaser_user_id");
   if (claimErr) throw new Error(`christmas_confirm_claim_failed: ${claimErr.message}`);
 
   if (!claimedRows || claimedRows.length === 0) {
@@ -114,6 +116,19 @@ export async function confirmScheduledGift(
     .update({ pending_signup_id: pendingSignupId, updated_at: nowIso })
     .eq("id", args.purchaseId);
   if (linkErr) throw new Error(`christmas_confirm_link_failed: ${linkErr.message}`);
+
+  // Fire the referral conversion (best-effort; never blocks confirmation). The buyer is
+  // the "referee"; no-ops when the purchase had no referral. Standard reward for now
+  // (the flash-sale 2x doubling lands in Phase 4).
+  try {
+    await onChristmasGiftReferralConversion({
+      christmasGiftPurchaseId: args.purchaseId,
+      refereeCustomerId: purchase.stripe_customer_id,
+      paymentIntentId: purchase.stripe_payment_intent_id,
+    });
+  } catch (e) {
+    console.error("[christmas-confirm] referral conversion failed (non-blocking):", e);
+  }
 
   return { status: "confirmed", pendingSignupId };
 }
