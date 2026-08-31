@@ -3,6 +3,7 @@ import { randomInt } from "crypto";
 import type Stripe from "stripe";
 import { getStripe } from "./stripe";
 import { getSupabaseAdmin } from "./supabaseAdmin";
+import { issueBalanceCredit } from "./balanceCredit";
 
 /**
  * Referral system (Option B) — service layer.
@@ -231,18 +232,18 @@ export async function applyBalanceMonth(args: {
   reason: string;
 }): Promise<void> {
   if (args.cents <= 0) return;
-  const stripe = getStripe();
-  const amount = args.direction === "credit" ? -Math.abs(args.cents) : Math.abs(args.cents);
-  await stripe.customers.createBalanceTransaction(
-    args.customerId,
-    {
-      amount, // negative = credit, positive = debit (clawback)
-      currency: "usd",
-      description: args.reason,
-      metadata: { referral_event_id: args.eventId, direction: args.direction },
-    },
-    { idempotencyKey: `ref_${args.direction}_${args.eventId}_${args.customerId}` },
-  );
+  // Delegates to the canonical balance-credit helper. Produces the identical Stripe call
+  // this function issued inline before (same signed amount, currency, description,
+  // metadata, and per-(event, direction, customer) idempotency key).
+  await issueBalanceCredit({
+    customerId: args.customerId,
+    cents: args.cents,
+    direction: args.direction,
+    currency: "usd",
+    description: args.reason,
+    idempotencyKey: `ref_${args.direction}_${args.eventId}_${args.customerId}`,
+    metadata: { referral_event_id: args.eventId, direction: args.direction },
+  });
 }
 
 /** Net referrer rewards granted in the trailing rolling window (grants minus
