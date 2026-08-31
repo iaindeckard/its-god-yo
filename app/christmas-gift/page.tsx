@@ -100,6 +100,10 @@ function Disclosures({ st }: { st: Status }) {
           credit instead of a refund.
         </li>
         <li>Your recipient&apos;s one year of daily messages begins only after they reply YES to confirm.</li>
+        <li>
+          If your recipient does not meet the age or consent requirements for their country, we will not text
+          them and your payment converts to account credit instead.
+        </li>
       </ul>
       {offerLine(st) && <p style={{ margin: "10px 0 0" }}>{offerLine(st)}</p>}
     </div>
