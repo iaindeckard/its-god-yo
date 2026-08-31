@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveActiveSignupForConsent } from "../stopCancelResolve";
+import { resolveActiveSignupForConsent, ACTIVE_SIGNUP_STATUSES } from "../stopCancelResolve";
 
 /**
  * Minimal mock of the Supabase query builder. Records the filter state as the chain
@@ -9,13 +9,13 @@ import { resolveActiveSignupForConsent } from "../stopCancelResolve";
  *   .from().select().or().in().limit().maybeSingle()    (forward-link lookup)
  */
 interface QueryState { table?: string; eqId?: string; or?: string }
-function mockAdmin(resolve: (s: QueryState) => unknown) {
+function mockAdmin(resolve: (s: QueryState) => unknown, captureStatuses?: (arr: string[]) => void) {
   const build = (s: QueryState): Record<string, unknown> => ({
     from: (table: string) => build({ ...s, table }),
     select: () => build(s),
     eq: (col: string, val: string) => build(col === "id" ? { ...s, eqId: val } : s),
     or: (expr: string) => build({ ...s, or: expr }),
-    in: () => build(s),
+    in: (col: string, arr: string[]) => { if (col === "status") captureStatuses?.(arr); return build(s); },
     limit: () => build(s),
     maybeSingle: async () => ({ data: resolve(s) }),
   });
@@ -45,5 +45,18 @@ describe("resolveActiveSignupForConsent", () => {
   it("returns null when neither link resolves an active signup", async () => {
     const admin = mockAdmin(() => null);
     expect(await resolveActiveSignupForConsent(admin, "consent-1", "sig-A")).toBeNull();
+  });
+
+  // Christmas Scheduled Gift: a confirmed prepaid recipient has NO Stripe subscription
+  // and status 'prepaid_active'. STOP must still resolve their signup so it gets canceled.
+  it("includes prepaid_active in the active-status filter", () => {
+    expect(ACTIVE_SIGNUP_STATUSES).toContain("prepaid_active");
+  });
+
+  it("resolves a prepaid_active gift recipient's signup on STOP", async () => {
+    let captured: string[] = [];
+    const admin = mockAdmin((s) => (s.eqId === "sig-P" ? { id: "sig-P" } : null), (arr) => { captured = arr; });
+    expect(await resolveActiveSignupForConsent(admin, "consent-1", "sig-P")).toEqual({ id: "sig-P" });
+    expect(captured).toContain("prepaid_active");
   });
 });

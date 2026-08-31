@@ -3,6 +3,7 @@ import { randomInt } from "crypto";
 import type Stripe from "stripe";
 import { getStripe } from "./stripe";
 import { getSupabaseAdmin } from "./supabaseAdmin";
+import { issueBalanceCredit } from "./balanceCredit";
 
 /**
  * Referral system (Option B) — service layer.
@@ -35,6 +36,12 @@ export type OwnerKind = "family" | "church";
  *  a plan identically. */
 export function ownerKindForPlan(planKey: string | null | undefined): OwnerKind {
   return typeof planKey === "string" && planKey.startsWith("group") ? "church" : "family";
+}
+
+/** Referrer-reward multiplier for a Christmas Scheduled Gift referral. A purchase made in
+ *  the flash-sale window doubles the reward (2 months); everything else is standard (1). */
+export function flashSaleRewardMultiplier(purchaseWindow: string | null | undefined): 1 | 2 {
+  return purchaseWindow === "flash_sale" ? 2 : 1;
 }
 
 // Same env fallback chain as lib/cornerstone / lib/churchEnrollment.
@@ -184,6 +191,29 @@ export async function recordReferralAtSignup(args: {
   return { status: "recorded" };
 }
 
+/** Record attribution for a Christmas Scheduled Gift purchase (pending). Mirrors
+ *  recordReferralAtSignup but links the campaign table via referee_christmas_gift_purchase_id
+ *  (the XOR CHECK requires exactly one referee link, so the pending-signup link stays null).
+ *  One per purchase (unique). Caller applies the self-referral guard before recording. */
+export async function recordChristmasGiftReferral(args: {
+  codeId: string;
+  referrerCustomerId: string;
+  refereeChristmasGiftPurchaseId: string;
+}): Promise<{ status: "recorded" | "duplicate" }> {
+  const admin = getSupabaseAdmin();
+  const { error } = await admin.from("referral_events").insert({
+    referral_code_id: args.codeId,
+    referrer_customer_id: args.referrerCustomerId,
+    referee_christmas_gift_purchase_id: args.refereeChristmasGiftPurchaseId,
+    status: "pending",
+  });
+  if (error) {
+    if (isUniqueViolation(error)) return { status: "duplicate" };
+    throw new Error(`recordChristmasGiftReferral failed: ${error.message}`);
+  }
+  return { status: "recorded" };
+}
+
 // ─────────────────────────── credit math / Stripe ───────────────────────────
 
 /** Monthly-equivalent value (cents) of a subscription's recurring items, summed
@@ -231,18 +261,18 @@ export async function applyBalanceMonth(args: {
   reason: string;
 }): Promise<void> {
   if (args.cents <= 0) return;
-  const stripe = getStripe();
-  const amount = args.direction === "credit" ? -Math.abs(args.cents) : Math.abs(args.cents);
-  await stripe.customers.createBalanceTransaction(
-    args.customerId,
-    {
-      amount, // negative = credit, positive = debit (clawback)
-      currency: "usd",
-      description: args.reason,
-      metadata: { referral_event_id: args.eventId, direction: args.direction },
-    },
-    { idempotencyKey: `ref_${args.direction}_${args.eventId}_${args.customerId}` },
-  );
+  // Delegates to the canonical balance-credit helper. Produces the identical Stripe call
+  // this function issued inline before (same signed amount, currency, description,
+  // metadata, and per-(event, direction, customer) idempotency key).
+  await issueBalanceCredit({
+    customerId: args.customerId,
+    cents: args.cents,
+    direction: args.direction,
+    currency: "usd",
+    description: args.reason,
+    idempotencyKey: `ref_${args.direction}_${args.eventId}_${args.customerId}`,
+    metadata: { referral_event_id: args.eventId, direction: args.direction },
+  });
 }
 
 /** Net referrer rewards granted in the trailing rolling window (grants minus
@@ -379,6 +409,105 @@ export async function onRefereePaidConversion(args: {
   await mintReferralCode(args.refereeCustomerId, args.refereeKind);
 
   return { status: "processed", refereeCredited, referrerReward };
+}
+
+/**
+ * Fire the referral conversion for a Christmas Scheduled Gift, at the RECIPIENT's
+ * confirmation (a one-time-PI gift never produces an invoice.paid, so the normal
+ * onRefereePaidConversion trigger never runs for it). The "referee" is the gift BUYER
+ * who used the code. Standard reward only; the flash-sale 2x doubling is added in Phase 4.
+ * Mirrors onRefereePaidConversion's anti-fraud exactly (self-referral void, Cornerstone
+ * exclusion, rolling cap) and reuses the SAME idempotency (referrer_credit_applied_at +
+ * the unique (referral_event_id, direction) ledger). Idempotent under re-drive.
+ */
+export async function onChristmasGiftReferralConversion(args: {
+  christmasGiftPurchaseId: string;
+  refereeCustomerId: string; // the gift buyer's Stripe customer
+  paymentIntentId?: string;
+}): Promise<{ status: "no_referral" | "self_referral_void" | "processed"; referrerReward?: "granted" | "capped" | "excluded" }> {
+  const admin = getSupabaseAdmin();
+  const stripe = getStripe();
+
+  const { data: evData } = await admin
+    .from("referral_events")
+    .select("id, referrer_customer_id, referee_customer_id, status, referee_credit_applied_at, referrer_credit_applied_at")
+    .eq("referee_christmas_gift_purchase_id", args.christmasGiftPurchaseId)
+    .maybeSingle();
+  const ev = evData as {
+    id: string; referrer_customer_id: string; referee_customer_id: string | null; status: string;
+    referee_credit_applied_at: string | null; referrer_credit_applied_at: string | null;
+  } | null;
+  if (!ev) return { status: "no_referral" };
+  if (ev.status === "void") return { status: "self_referral_void" };
+
+  // Self-referral guard: the buyer used their own code.
+  if (ev.referrer_customer_id === args.refereeCustomerId) {
+    await admin.from("referral_events").update({ status: "void", updated_at: new Date().toISOString() }).eq("id", ev.id);
+    return { status: "self_referral_void" };
+  }
+
+  await admin
+    .from("referral_events")
+    .update({
+      status: ev.status === "pending" ? "converted" : ev.status,
+      referee_customer_id: args.refereeCustomerId,
+      referee_payment_intent_id: args.paymentIntentId ?? null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", ev.id);
+
+  // Referee give-a-month (only if the buyer happens to have an active/trialing sub of
+  // their own; a gift buyer with no sub simply gets nothing here).
+  if (!ev.referee_credit_applied_at) {
+    const refereeSub = await activeSubscriptionFor(stripe, args.refereeCustomerId);
+    const cents = refereeSub ? subscriptionMonthlyValueCents(refereeSub) : 0;
+    if (cents > 0) {
+      await applyBalanceMonth({ customerId: args.refereeCustomerId, cents, direction: "credit", eventId: ev.id, reason: "IGY referral: welcome month" });
+      await admin.from("referral_events").update({ referee_credit_applied_at: new Date().toISOString() }).eq("id", ev.id);
+    }
+  }
+
+  // Flash-sale doubling: a Scheduled Gift referral whose PURCHASE was made in the
+  // flash-sale window (stamped at checkout, regardless of when the recipient confirms)
+  // doubles the referrer reward to 2 months. Every other referral (any plan, any window)
+  // is unaffected -- this function only ever runs for Scheduled Gift referrals.
+  const { data: purchaseRow } = await admin
+    .from("christmas_gift_2026_purchases").select("purchase_window").eq("id", args.christmasGiftPurchaseId).maybeSingle();
+  const rewardMultiplier = flashSaleRewardMultiplier((purchaseRow as { purchase_window?: string } | null)?.purchase_window);
+
+  // Referrer get-a-month (once; Cornerstone-excluded + rolling cap). A doubled reward
+  // still counts as ONE event against the cap of 6 (the cap counts grant rows, not months).
+  let referrerReward: "granted" | "capped" | "excluded" | undefined;
+  if (!ev.referrer_credit_applied_at && (await isCornerstonePartnerCustomer(ev.referrer_customer_id))) {
+    referrerReward = "excluded";
+    await admin.from("referral_events").update({ status: "referrer_excluded", updated_at: new Date().toISOString() }).eq("id", ev.id);
+  } else if (!ev.referrer_credit_applied_at) {
+    const net = await referrerNetRewardsInWindow(ev.referrer_customer_id);
+    if (net >= MAX_REFERRER_REWARDS_PER_YEAR) {
+      referrerReward = "capped";
+      await admin.from("referral_events").update({ status: "capped", updated_at: new Date().toISOString() }).eq("id", ev.id);
+    } else {
+      const referrerSub = await activeSubscriptionFor(stripe, ev.referrer_customer_id);
+      const cents = (referrerSub ? subscriptionMonthlyValueCents(referrerSub) : 0) * rewardMultiplier;
+      if (cents > 0) {
+        await applyBalanceMonth({ customerId: ev.referrer_customer_id, cents, direction: "credit", eventId: ev.id, reason: rewardMultiplier === 2 ? "IGY referral: Black Friday reward (2 months)" : "IGY referral: reward month" });
+        await admin.from("referral_reward_ledger").upsert(
+          { owner_customer_id: ev.referrer_customer_id, referral_event_id: ev.id, credit_cents: cents, direction: "grant" },
+          { onConflict: "referral_event_id,direction", ignoreDuplicates: true },
+        );
+        await admin.from("referral_events").update({ status: "rewarded", referrer_credit_applied_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", ev.id);
+        referrerReward = "granted";
+      } else {
+        await admin.from("referral_events").update({ status: "referrer_no_active_sub", updated_at: new Date().toISOString() }).eq("id", ev.id);
+      }
+    }
+  }
+
+  // Propagation: the buyer gets their own shareable code (a Scheduled Gift buyer becomes
+  // a recruiter). christmas_gift_2026 is not a group plan, so owner_kind = family.
+  await mintReferralCode(args.refereeCustomerId, "family");
+
+  return { status: "processed", referrerReward };
 }
 
 /**

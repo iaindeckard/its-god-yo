@@ -9,6 +9,7 @@ export const dynamic = "force-dynamic"; // identity/permissions resolve per-requ
 const NAV = [
   { href: "/admin/promo-codes", label: "Promo Code Studio", need: "billing.promo_codes.view" },
   { href: "/admin/referrals", label: "Referrals", need: "billing.promo_codes.view" },
+  { href: "/admin/christmas-gifts", label: "Christmas Gifts", need: "billing.promo_codes.view" },
   { href: "/admin/review", label: "Review queue", need: "content.queue.view" },
   { href: "/admin/season-review", label: "Season Review", need: "content.queue.view" },
   { href: "/admin/theme-tags", label: "Theme tags", need: "content.theme_tags.view" },

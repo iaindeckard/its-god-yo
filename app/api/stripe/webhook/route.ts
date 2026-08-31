@@ -8,6 +8,7 @@ import { upsertSubscriptionPayment, tsIso, type PaymentCapture } from "@/lib/sub
 import { cancelSubscriptionForSignup, cancelStripeSubscriptionById } from "@/lib/cancelSubscription";
 import { sendOpsAlert } from "@/lib/opsAlert";
 import { recordActionItem, resolveOpenByDedupe } from "@/lib/actionItems";
+import { sendChristmasGiftEmail, christmasGiftReceiptEmail } from "@/lib/christmasGiftEmails";
 
 export const dynamic = "force-dynamic";
 
@@ -295,6 +296,70 @@ export async function POST(req: Request) {
     }
   };
 
+  // christmas_gift_2026 → a one-time PaymentIntent with NO invoice and NO subscription.
+  // The existing invoice.paid capture (and the reconcile cron) only cover invoice-backed
+  // charges, so these campaign charges would otherwise never reach subscription_payments
+  // (invisible to the donation-fund tithe + DEI rollup). Capture the PI's settled charge
+  // here, gated by metadata.purpose so no OTHER one-time PI (e.g. season_addon) is touched.
+  const captureChristmasGiftPI = async (pi: Stripe.PaymentIntent) => {
+    const chargeId = idOf((pi as unknown as { latest_charge?: unknown }).latest_charge);
+    if (!chargeId) return;
+    const ch = await stripe.charges.retrieve(chargeId, { expand: ["balance_transaction"] });
+    const bt = (ch.balance_transaction ?? null) as Stripe.BalanceTransaction | null;
+    await recordPayment({
+      kind: "charge",
+      bt,
+      livemode: ch.livemode,
+      originalAmountCents: ch.amount ?? null,
+      originalCurrency: ch.currency ?? null,
+      chargeId: ch.id,
+      invoiceId: null,
+      paymentIntentId: pi.id,
+      subscriptionId: null,
+      customerId: idOf((pi as unknown as { customer?: unknown }).customer),
+      billingReason: "christmas_gift_2026",
+      status: "paid",
+      periodStart: null,
+      periodEnd: null,
+    });
+  };
+
+  // Advance the purchase row pending_payment -> awaiting_release once the charge has
+  // settled. Guarded by .eq('status','pending_payment') so a webhook redelivery is a
+  // no-op and a later state is never stomped. Throws on a DB error (NOT swallowed) so
+  // the handler returns 500 and Stripe retries — the row must not be stranded in
+  // pending_payment after a real charge, or the recipient would never be scheduled.
+  const finalizeChristmasGiftPurchase = async (pi: Stripe.PaymentIntent) => {
+    const purchaseId = (pi.metadata as Record<string, string> | null)?.christmas_purchase_id;
+    if (!purchaseId) return;
+    const { data, error } = await admin
+      .from("christmas_gift_2026_purchases")
+      .update({ status: "awaiting_release", livemode: pi.livemode, updated_at: new Date().toISOString() })
+      .eq("id", purchaseId)
+      .eq("status", "pending_payment")
+      .select("purchaser_email, purchaser_first_name, recipient_first_name, charged_amount_cents, list_price_cents, purchase_window, dmfh_bonus_included, release_at");
+    if (error) throw new Error(`christmas_finalize_failed purchase=${purchaseId}: ${error.message}`);
+    // Send the purchaser receipt exactly ONCE -- only when THIS delivery performed the
+    // flip (a redelivery selects 0 rows). Best-effort; sendChristmasGiftEmail never throws,
+    // so a receipt failure cannot undo the settled charge or the state transition.
+    const row = (data?.[0] ?? null) as {
+      purchaser_email: string; purchaser_first_name: string | null; recipient_first_name: string | null;
+      charged_amount_cents: number; list_price_cents: number;
+      purchase_window: "early_bird" | "flash_sale" | "standard"; dmfh_bonus_included: boolean; release_at: string;
+    } | null;
+    if (row) {
+      await sendChristmasGiftEmail(row.purchaser_email, christmasGiftReceiptEmail({
+        purchaserFirstName: row.purchaser_first_name,
+        recipientFirstName: row.recipient_first_name,
+        chargedCents: row.charged_amount_cents,
+        listCents: row.list_price_cents,
+        purchaseWindow: row.purchase_window,
+        dmfhBonus: row.dmfh_bonus_included,
+        releaseAt: row.release_at,
+      }));
+    }
+  };
+
   try {
     switch (event.type) {
       case "customer.subscription.trial_will_end": {
@@ -446,6 +511,18 @@ export async function POST(req: Request) {
         } else {
           // lost / warning_closed / other: the chargeback stands; sub already canceled.
           console.log(`[stripe-webhook] dispute closed status=${outcome} dispute=${dispute.id} sub=${subId ?? "?"} — no reinstatement (sub already canceled).`);
+        }
+        break;
+      }
+      case "payment_intent.succeeded": {
+        const pi = event.data.object as Stripe.PaymentIntent;
+        // ONLY campaign charges. Every other one-time PI is ignored exactly as before
+        // (falls through to the no-op below via this guard).
+        if ((pi.metadata as Record<string, string> | null)?.purpose === "christmas_gift_2026") {
+          // Ledger capture is additive + best-effort (backfilled by reconcile).
+          await safeCapture("payment_intent.succeeded:christmas", () => captureChristmasGiftPI(pi));
+          // State transition is NOT swallowed: a failure must 500 -> Stripe retry.
+          await finalizeChristmasGiftPurchase(pi);
         }
         break;
       }

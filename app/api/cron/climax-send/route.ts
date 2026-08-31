@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { isAuthorizedCron } from "@/lib/cronAuth";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-import { sendSms } from "@/lib/dailySend";
+import { sendSms } from "@/lib/sms";
 import { runClimaxSend } from "@/lib/seasons/climax";
 import { SEASONS_ENABLED } from "@/lib/flags";
 

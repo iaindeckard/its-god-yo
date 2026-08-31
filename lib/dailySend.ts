@@ -7,6 +7,7 @@ import { composeDailyMessage } from "./dmAddon";
 import { DM_OPENERS, renderOpener } from "./dmOpeners";
 import { peekOpenerIndex, advanceOpener } from "./dmOpenerRotation";
 import { smsSegments } from "./smsSegments";
+import { sendSms } from "./sms";
 
 /**
  * Stage 2 daily-send tick (spec: docs/STAGE-2-SEND-MECHANISM-SPEC.md). Invoked
@@ -44,31 +45,6 @@ interface AudienceRow {
   confirmed_at: string | null;
 }
 
-export async function sendSms(to: string, body: string): Promise<{ sid: string; segments: number | null }> {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const token = process.env.TWILIO_AUTH_TOKEN;
-  const from = process.env.TWILIO_FROM_NUMBER;
-  if (!accountSid || !token || !from) throw new Error("twilio_not_configured");
-  const form: Record<string, string> = { From: from, To: to, Body: body };
-  // Point Twilio at the delivery-status webhook so /api/twilio/status can advance
-  // daily_send_log (sent -> delivered/undelivered/failed) and alert on failure.
-  const statusUrl = process.env.TWILIO_STATUS_URL
-    || (process.env.NEXT_PUBLIC_SITE_URL ? `${process.env.NEXT_PUBLIC_SITE_URL}/api/twilio/status` : "");
-  if (statusUrl) form.StatusCallback = statusUrl;
-  const resp = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
-    method: "POST",
-    headers: {
-      Authorization: "Basic " + Buffer.from(`${accountSid}:${token}`).toString("base64"),
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: new URLSearchParams(form).toString(),
-  });
-  const data = await resp.json().catch(() => ({} as Record<string, unknown>));
-  if (!resp.ok) throw new Error(`twilio_${resp.status}: ${String((data as { message?: string })?.message ?? "").slice(0, 140)}`);
-  const numSeg = (data as { num_segments?: string | number }).num_segments;
-  return { sid: String((data as { sid?: string }).sid ?? ""), segments: numSeg != null ? Number(numSeg) : null };
-}
-
 export interface DailySendSummary {
   ran_at: string;
   dry_run: boolean;
@@ -98,6 +74,11 @@ export async function runDailySend(opts: { dryRun?: boolean } = {}): Promise<Dai
 
   const { data: audience, error } = await admin.from("daily_send_audience").select("*");
   if (error) throw new Error(`audience_query_failed: ${error.message}`);
+  // NOTE: prepaid Christmas Scheduled Gift recipients are in this audience with a NULL
+  // stripe_subscription_id (they have no Stripe subscription). The send path below must
+  // NOT depend on r.stripe_subscription_id — it keys off consent_id / pending_signup_id /
+  // dm_addon only. This tolerance ships together with the stopCancelResolve prepaid_active
+  // change so a STOP always cancels a prepaid recipient that could receive a send.
   const rows = (audience ?? []) as AudienceRow[];
   summary.checked = rows.length;
 

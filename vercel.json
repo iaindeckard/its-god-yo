@@ -1,6 +1,7 @@
 {
   "crons": [
     { "path": "/api/cron/family-trials", "schedule": "0 9 * * *" },
+    { "path": "/api/cron/christmas-gift-release", "schedule": "0 10 * * *" },
     { "path": "/api/cron/donation-fund-close", "schedule": "30 6 * * *" },
     { "path": "/api/cron/outreach-discovery", "schedule": "0 14 1 * *" },
     { "path": "/api/cron/outreach-send", "schedule": "*/15 * * * *" },

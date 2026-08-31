@@ -22,7 +22,10 @@ export const maxDuration = 300;
  *
  * SCOPE = the webhook's scope, exactly, so a run never reports a false gap:
  *   - charge  : balance-tx whose source is a charge WITH an invoice (webhook only
- *               captures invoice.paid — a non-invoice one-off charge is skipped).
+ *               captures invoice.paid — a non-invoice one-off charge is skipped),
+ *               PLUS a non-invoice charge whose PaymentIntent is a christmas_gift_2026
+ *               campaign purchase (webhook captures those via payment_intent.succeeded;
+ *               matched here against christmas_gift_2026_purchases by PI id).
  *   - refund  : source is a refund (webhook captures all refunds).
  *   - dispute : source is a dispute. The initial withdrawal (negative) is a webhook
  *               responsibility; a dispute_reversal (positive, won-back) is captured
@@ -84,6 +87,10 @@ export async function GET(req: Request) {
   try {
     // 1) List in-scope balance transactions in the window (source expanded inline).
     const inScope: InScope[] = [];
+    // Non-invoice charges that MIGHT be Christmas gift campaign PIs (captured by the
+    // webhook's payment_intent.succeeded). Resolved against our purchases table after
+    // the scan so we add only real campaign charges and still skip every other one-off.
+    const christmasCandidates: { bt: Stripe.BalanceTransaction; ch: Stripe.Charge; piId: string }[] = [];
     let scanned = 0;
     for await (const bt of stripe.balanceTransactions.list({
       created: { gte: windowStartSec },
@@ -98,7 +105,13 @@ export async function GET(req: Request) {
       if (obj === "charge") {
         const ch = src as Stripe.Charge;
         const invoiceId = idOf((ch as unknown as { invoice?: unknown }).invoice);
-        if (!invoiceId) continue; // scope match: webhook only captures invoice-backed charges
+        if (!invoiceId) {
+          // Non-invoice charge. In scope ONLY if it is a Christmas gift campaign PI
+          // (resolved below); every other one-off charge stays out of scope as before.
+          const piId = idOf((ch as unknown as { payment_intent?: unknown }).payment_intent);
+          if (piId) christmasCandidates.push({ bt, ch, piId });
+          continue;
+        }
         inScope.push({
           bt,
           webhookResponsible: true,
@@ -166,6 +179,47 @@ export async function GET(req: Request) {
         });
       }
       // else: payout / stripe_fee / transfer / non-dispute adjustment → ignore
+    }
+
+    // 1b) Resolve Christmas gift candidates: a non-invoice charge is in scope only if
+    //     its PaymentIntent is one of our campaign purchases. Matched by PI id against
+    //     christmas_gift_2026_purchases (authoritative, no extra Stripe calls). These
+    //     are webhook-responsible (payment_intent.succeeded), so a miss over the grace
+    //     window is a real gap, same as an invoice-backed charge.
+    if (christmasCandidates.length > 0) {
+      const piIds = [...new Set(christmasCandidates.map((c) => c.piId))];
+      const known = new Set<string>();
+      for (let i = 0; i < piIds.length; i += 300) {
+        const { data, error } = await admin
+          .from("christmas_gift_2026_purchases")
+          .select("stripe_payment_intent_id")
+          .in("stripe_payment_intent_id", piIds.slice(i, i + 300));
+        if (error) throw error;
+        for (const r of data ?? []) known.add((r as { stripe_payment_intent_id: string }).stripe_payment_intent_id);
+      }
+      for (const c of christmasCandidates) {
+        if (!known.has(c.piId)) continue;
+        inScope.push({
+          bt: c.bt,
+          webhookResponsible: true,
+          cap: {
+            kind: "charge",
+            bt: c.bt,
+            livemode: c.ch.livemode,
+            originalAmountCents: c.ch.amount ?? null,
+            originalCurrency: c.ch.currency ?? null,
+            chargeId: c.ch.id,
+            invoiceId: null,
+            paymentIntentId: c.piId,
+            subscriptionId: null,
+            customerId: idOf((c.ch as unknown as { customer?: unknown }).customer),
+            billingReason: "christmas_gift_2026",
+            status: "paid",
+            periodStart: null,
+            periodEnd: null,
+          },
+        });
+      }
     }
 
     // 2) Which are already in the ledger? (chunked IN() over the in-scope bt ids)
