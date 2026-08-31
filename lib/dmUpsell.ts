@@ -1,6 +1,6 @@
 import "server-only";
 import { getSupabaseAdmin } from "./supabaseAdmin";
-import { sendSms } from "./dailySend";
+import { sendSms } from "./sms";
 import { smsCostCents, TWILIO_US_SEGMENT_PRICE_CENTS, TWILIO_US_TOLLFREE_CARRIER_FEE_CENTS } from "./costs";
 import { baseIntervalForPlanKey } from "./plans";
 

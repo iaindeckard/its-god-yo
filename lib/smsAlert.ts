@@ -1,6 +1,6 @@
 import "server-only";
 import { getSupabaseAdmin } from "./supabaseAdmin";
-import { sendSms } from "./dailySend";
+import { sendSms } from "./sms";
 import { sendOpsAlert } from "./opsAlert";
 import { claimAlert, resolveAlert, SMS_COOLDOWN_MS } from "./alertState";
 
