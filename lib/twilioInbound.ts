@@ -8,6 +8,7 @@ import { cancelSubscriptionForSignup } from "./cancelSubscription";
 import { setDmAddon } from "./dmAddon";
 import { resolveActiveSignupForConsent } from "./stopCancelResolve";
 import { confirmScheduledGift } from "./christmasGiftConfirm";
+import { creditUnconfirmedChristmasGift } from "./christmasGiftRelease";
 
 /**
  * Core inbound-reply logic for the Twilio "YES" handler.
@@ -253,6 +254,9 @@ export async function processInboundReply(from: string, body: string): Promise<I
         .from("consent_log")
         .update({ consent_status: "opted_out", opted_out_at: new Date().toISOString(), opt_out_method: "sms_stop", confirmation_reply_received: true, confirmation_reply_at: new Date().toISOString(), confirmation_reply_raw: body })
         .eq("id", matched.id);
+      // STOP before confirming is an explicit decline: convert to account credit NOW
+      // rather than waiting for the day-30 pass (reuses the generic non-confirmation email).
+      await creditUnconfirmedChristmasGift(admin, giftPurchaseId, Date.now());
       return { action: "opted_out", reply: REPLY[lang].optedOut };
     }
     if (intent !== "confirm") return { action: "unknown", reply: REPLY[lang].unknown };
