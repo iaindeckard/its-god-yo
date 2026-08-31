@@ -38,6 +38,12 @@ export function ownerKindForPlan(planKey: string | null | undefined): OwnerKind 
   return typeof planKey === "string" && planKey.startsWith("group") ? "church" : "family";
 }
 
+/** Referrer-reward multiplier for a Christmas Scheduled Gift referral. A purchase made in
+ *  the flash-sale window doubles the reward (2 months); everything else is standard (1). */
+export function flashSaleRewardMultiplier(purchaseWindow: string | null | undefined): 1 | 2 {
+  return purchaseWindow === "flash_sale" ? 2 : 1;
+}
+
 // Same env fallback chain as lib/cornerstone / lib/churchEnrollment.
 const REFERRAL_APP_URL = (
   process.env.CORNERSTONE_APP_URL || process.env.OUTREACH_APP_URL || "https://itsgodyo.com"
@@ -461,8 +467,16 @@ export async function onChristmasGiftReferralConversion(args: {
     }
   }
 
-  // Referrer get-a-month (once; Cornerstone-excluded + rolling cap). STANDARD amount;
-  // Phase 4 introduces the flash-sale 2x multiplier at this exact site.
+  // Flash-sale doubling: a Scheduled Gift referral whose PURCHASE was made in the
+  // flash-sale window (stamped at checkout, regardless of when the recipient confirms)
+  // doubles the referrer reward to 2 months. Every other referral (any plan, any window)
+  // is unaffected -- this function only ever runs for Scheduled Gift referrals.
+  const { data: purchaseRow } = await admin
+    .from("christmas_gift_2026_purchases").select("purchase_window").eq("id", args.christmasGiftPurchaseId).maybeSingle();
+  const rewardMultiplier = flashSaleRewardMultiplier((purchaseRow as { purchase_window?: string } | null)?.purchase_window);
+
+  // Referrer get-a-month (once; Cornerstone-excluded + rolling cap). A doubled reward
+  // still counts as ONE event against the cap of 6 (the cap counts grant rows, not months).
   let referrerReward: "granted" | "capped" | "excluded" | undefined;
   if (!ev.referrer_credit_applied_at && (await isCornerstonePartnerCustomer(ev.referrer_customer_id))) {
     referrerReward = "excluded";
@@ -474,9 +488,9 @@ export async function onChristmasGiftReferralConversion(args: {
       await admin.from("referral_events").update({ status: "capped", updated_at: new Date().toISOString() }).eq("id", ev.id);
     } else {
       const referrerSub = await activeSubscriptionFor(stripe, ev.referrer_customer_id);
-      const cents = referrerSub ? subscriptionMonthlyValueCents(referrerSub) : 0;
+      const cents = (referrerSub ? subscriptionMonthlyValueCents(referrerSub) : 0) * rewardMultiplier;
       if (cents > 0) {
-        await applyBalanceMonth({ customerId: ev.referrer_customer_id, cents, direction: "credit", eventId: ev.id, reason: "IGY referral: reward month" });
+        await applyBalanceMonth({ customerId: ev.referrer_customer_id, cents, direction: "credit", eventId: ev.id, reason: rewardMultiplier === 2 ? "IGY referral: Black Friday reward (2 months)" : "IGY referral: reward month" });
         await admin.from("referral_reward_ledger").upsert(
           { owner_customer_id: ev.referrer_customer_id, referral_event_id: ev.id, credit_cents: cents, direction: "grant" },
           { onConflict: "referral_event_id,direction", ignoreDuplicates: true },
