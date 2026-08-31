@@ -98,6 +98,11 @@ export async function runDailySend(opts: { dryRun?: boolean } = {}): Promise<Dai
 
   const { data: audience, error } = await admin.from("daily_send_audience").select("*");
   if (error) throw new Error(`audience_query_failed: ${error.message}`);
+  // NOTE: prepaid Christmas Scheduled Gift recipients are in this audience with a NULL
+  // stripe_subscription_id (they have no Stripe subscription). The send path below must
+  // NOT depend on r.stripe_subscription_id — it keys off consent_id / pending_signup_id /
+  // dm_addon only. This tolerance ships together with the stopCancelResolve prepaid_active
+  // change so a STOP always cancels a prepaid recipient that could receive a send.
   const rows = (audience ?? []) as AudienceRow[];
   summary.checked = rows.length;
 
