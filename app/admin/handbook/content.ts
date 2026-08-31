@@ -135,6 +135,29 @@ export const PARTS: Part[] = [
         ],
       },
       {
+        id: "christmas-scheduled-gift",
+        title: "Christmas Scheduled Gift (seasonal)",
+        blocks: [
+          { type: "prose", text: "A limited-time seasonal campaign for Christmas 2026: a buyer purchases a prepaid one-year gift now, pays immediately (a real one-time charge, not a trial), and picks a future date for the recipient's confirmation text. It is a separate flow from the standard Gift plan, with its own table (christmas_gift_2026_purchases) and its own single-row admin config (christmas_gift_2026_config). It stays OFF until campaign_active is set true in that config row." },
+          { type: "table", head: ["Window", "Gift price", "DM from Him", "Referral reward"], rows: [
+            ["Early bird (Sept 1 to Thanksgiving)", "$59", "Free bonus", "Standard (1 month)"],
+            ["Black Friday flash sale (Nov 27 to Dec 3)", "20% off ($47.20)", "Free bonus", "Doubled (2 months), gift referrals only"],
+            ["Standard (Dec 4 to close)", "$59", "Not included", "Standard (1 month)"],
+          ] },
+          { type: "subheading", text: "How it works" },
+          { type: "list", items: [
+            "Charged today via a one-time Stripe PaymentIntent. No free trial, no Stripe subscription, no auto-renewal.",
+            "The recipient's confirmation text goes out on the buyer-chosen release date (a daily release cron). The recipient must reply YES; nothing sends and no clock starts until they do.",
+            "If the recipient never confirms: one reminder at about day 7, then at about day 30 the purchase converts to account credit (not a cash refund) and the purchaser is emailed.",
+            "If the recipient does not meet the age or consent requirements for their country at release: no text is sent and it converts to account credit immediately, with a distinct email.",
+            "The one-year service period runs from the recipient's confirmation, not from the purchase or the release date.",
+            "Free DM from Him in eligible windows is a content flag on the recipient, not a separate charge.",
+            "The flash-sale week doubles the referrer reward for Scheduled Gift referrals only; every other referral is unchanged. A doubled reward still counts as one against the referrer's annual cap of 6.",
+          ] },
+          { type: "callout", kind: "warning", title: "Dates and discount are admin-editable", text: "All window dates, the flash-sale discount percent, the campaign close, and the latest release date live in christmas_gift_2026_config (one row). Nothing is hardcoded. Close the campaign cleanly by setting campaign_active back to false. The admin pipeline view is at /admin/christmas-gifts." },
+        ],
+      },
+      {
         id: "dm-from-him",
         title: "DM from Him (add-on)",
         blocks: [

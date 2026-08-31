@@ -8,6 +8,7 @@ import { upsertSubscriptionPayment, tsIso, type PaymentCapture } from "@/lib/sub
 import { cancelSubscriptionForSignup, cancelStripeSubscriptionById } from "@/lib/cancelSubscription";
 import { sendOpsAlert } from "@/lib/opsAlert";
 import { recordActionItem, resolveOpenByDedupe } from "@/lib/actionItems";
+import { sendChristmasGiftEmail, christmasGiftReceiptEmail } from "@/lib/christmasGiftEmails";
 
 export const dynamic = "force-dynamic";
 
@@ -331,12 +332,32 @@ export async function POST(req: Request) {
   const finalizeChristmasGiftPurchase = async (pi: Stripe.PaymentIntent) => {
     const purchaseId = (pi.metadata as Record<string, string> | null)?.christmas_purchase_id;
     if (!purchaseId) return;
-    const { error } = await admin
+    const { data, error } = await admin
       .from("christmas_gift_2026_purchases")
       .update({ status: "awaiting_release", livemode: pi.livemode, updated_at: new Date().toISOString() })
       .eq("id", purchaseId)
-      .eq("status", "pending_payment");
+      .eq("status", "pending_payment")
+      .select("purchaser_email, purchaser_first_name, recipient_first_name, charged_amount_cents, list_price_cents, purchase_window, dmfh_bonus_included, release_at");
     if (error) throw new Error(`christmas_finalize_failed purchase=${purchaseId}: ${error.message}`);
+    // Send the purchaser receipt exactly ONCE -- only when THIS delivery performed the
+    // flip (a redelivery selects 0 rows). Best-effort; sendChristmasGiftEmail never throws,
+    // so a receipt failure cannot undo the settled charge or the state transition.
+    const row = (data?.[0] ?? null) as {
+      purchaser_email: string; purchaser_first_name: string | null; recipient_first_name: string | null;
+      charged_amount_cents: number; list_price_cents: number;
+      purchase_window: "early_bird" | "flash_sale" | "standard"; dmfh_bonus_included: boolean; release_at: string;
+    } | null;
+    if (row) {
+      await sendChristmasGiftEmail(row.purchaser_email, christmasGiftReceiptEmail({
+        purchaserFirstName: row.purchaser_first_name,
+        recipientFirstName: row.recipient_first_name,
+        chargedCents: row.charged_amount_cents,
+        listCents: row.list_price_cents,
+        purchaseWindow: row.purchase_window,
+        dmfhBonus: row.dmfh_bonus_included,
+        releaseAt: row.release_at,
+      }));
+    }
   };
 
   try {

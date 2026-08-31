@@ -89,6 +89,52 @@ export function ageGateFailureCreditEmail(args: CreditEmailArgs): ChristmasGiftE
   return { subject: `About your It's God, Yo! gift for ${r}`, text, html };
 }
 
+interface ReceiptArgs {
+  purchaserFirstName?: string | null;
+  recipientFirstName?: string | null;
+  chargedCents: number;
+  listCents: number;
+  purchaseWindow: "early_bird" | "flash_sale" | "standard";
+  dmfhBonus: boolean;
+  releaseAt: string; // YYYY-MM-DD
+}
+
+/** Purchaser receipt, sent once the charge settles. States the window, list price, amount
+ *  charged, DMFH bonus, and restates the prepaid/no-trial/credit-on-non-confirmation terms. */
+export function christmasGiftReceiptEmail(args: ReceiptArgs): ChristmasGiftEmail {
+  const r = who(args.recipientFirstName);
+  const charged = usd(args.chargedCents);
+  const discounted = args.purchaseWindow === "flash_sale" && args.listCents > args.chargedCents;
+  const savedLine = discounted ? `List price ${usd(args.listCents)}, you saved ${usd(args.listCents - args.chargedCents)} (Black Friday special).` : "";
+  const bonusLine = args.dmfhBonus ? "Includes DM from Him free for the gifted year." : "";
+
+  const lines = [
+    "Prepaid one-year gift subscription",
+    `Charged today: ${charged}`,
+    savedLine,
+    bonusLine,
+    `Scheduled: we will text ${r} to confirm on ${args.releaseAt}.`,
+  ].filter(Boolean);
+
+  const text =
+    `${hi(args.purchaserFirstName)}\n\n` +
+    `Thank you for your It's God, Yo! Christmas gift for ${r}. Here is your receipt.\n\n` +
+    lines.map((l) => `- ${l}`).join("\n") +
+    `\n\nA few reminders. Your card was charged today. There is no free trial on this purchase. It is not eligible for a cash refund. If your recipient never confirms, or does not meet the age or consent requirements for their country, your payment converts to It's God, Yo! account credit. Their year of daily messages begins only after they reply YES to confirm.\n\n` +
+    `Questions? Just reply to this email.\n\n` +
+    `Thank you,\nThe It's God, Yo! team`;
+
+  const html = wrapHtml(
+    `<p>${esc(hi(args.purchaserFirstName))}</p>
+  <p>Thank you for your It's God, Yo! Christmas gift for ${esc(r)}. Here is your receipt.</p>
+  <ul>${lines.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>
+  <p>A few reminders. Your card was charged today. There is no free trial on this purchase. It is not eligible for a cash refund. If your recipient never confirms, or does not meet the age or consent requirements for their country, your payment converts to It's God, Yo! account credit. Their year of daily messages begins only after they reply YES to confirm.</p>
+  <p>Questions? Just reply to this email.</p>
+  <p>Thank you,<br/>The It's God, Yo! team</p>`,
+  );
+  return { subject: "Your It's God, Yo! Christmas gift is confirmed", text, html };
+}
+
 /** Send one transactional email via Resend. Best-effort: never throws. */
 export async function sendChristmasGiftEmail(to: string, email: ChristmasGiftEmail): Promise<string | null> {
   const key = process.env.RESEND_API_KEY;
