@@ -53,6 +53,15 @@ export async function POST(req: Request) {
   if (!phone) return bad("recipient_phone_required");
   if (!language) return bad("language_required");
 
+  // Recipient birth year is REQUIRED and validated server-side (a client "required"
+  // attribute is not a guarantee). The release-day age gate needs it; fail closed here
+  // so a purchase can never be created without a usable birth year, consistent with the
+  // rest of this feature. Sanity range only; the actual age/consent decision is the gate.
+  const birthYear = body.recipient_birth_year;
+  if (typeof birthYear !== "number" || !Number.isInteger(birthYear)) return bad("recipient_birth_year_required");
+  const nowYear = new Date().getUTCFullYear();
+  if (birthYear < 1900 || birthYear > nowYear) return bad("recipient_birth_year_invalid");
+
   const admin = getSupabaseAdmin();
   const nowMs = Date.now();
 
@@ -79,7 +88,7 @@ export async function POST(req: Request) {
     recipient_first_name: body.recipient_first_name ?? null,
     recipient_phone: phone,
     language,
-    recipient_birth_year: typeof body.recipient_birth_year === "number" ? body.recipient_birth_year : null,
+    recipient_birth_year: birthYear,
     recipient_country_code: body.recipient_country_code ?? null,
     list_price_cents: win.listCents,
     charged_amount_cents: win.chargedCents,

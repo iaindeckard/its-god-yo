@@ -134,6 +134,10 @@ export default function ChristmasGiftPage() {
     if (!d.purchaser_email.trim()) return setErr("Please enter your email.");
     if (!d.recipient_first_name.trim()) return setErr("Please enter your recipient's first name.");
     if (!d.recipient_phone.trim()) return setErr("Please enter your recipient's mobile number.");
+    const by = Number(d.recipient_birth_year);
+    if (!d.recipient_birth_year || !Number.isInteger(by) || by < 1900 || by > new Date().getFullYear()) {
+      return setErr("Please enter your recipient's birth year.");
+    }
     if (!d.release_at) return setErr("Please choose a date to send the gift.");
     setBusy(true);
     try {
@@ -211,7 +215,8 @@ export default function ChristmasGiftPage() {
                 <option value="es">Messages in Spanish</option>
               </select>
             </div>
-            <input placeholder="Recipient birth year (optional)" inputMode="numeric" value={d.recipient_birth_year} onChange={(e) => set("recipient_birth_year", e.target.value.replace(/\D/g, "").slice(0, 4))} />
+            <input placeholder="Recipient birth year (required)" inputMode="numeric" required value={d.recipient_birth_year} onChange={(e) => set("recipient_birth_year", e.target.value.replace(/\D/g, "").slice(0, 4))} />
+            <p className="muted" style={{ fontSize: 13, marginTop: -6 }}>Required. Used to confirm age eligibility before we text your recipient.</p>
 
             <h3 style={{ marginTop: 8 }}>When should we send it?</h3>
             <input type="date" min={tomorrow} max={status.max_release_at ?? undefined} value={d.release_at} onChange={(e) => set("release_at", e.target.value)} />
@@ -323,6 +328,10 @@ function humanError(reason: string | undefined): string {
       return "Please enter your email.";
     case "recipient_phone_required":
       return "Please enter your recipient's mobile number.";
+    case "recipient_birth_year_required":
+      return "Please enter your recipient's birth year.";
+    case "recipient_birth_year_invalid":
+      return "Please enter a valid birth year.";
     default:
       return reason ? `We could not start checkout (${reason}).` : "We could not start checkout.";
   }
