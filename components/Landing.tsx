@@ -158,16 +158,14 @@ export default function Landing() {
           <div className={s.gateChoices}>
             <button className={s.gateCard} onClick={() => setAudience("parent")}>
               <figure className={s.gateFigure}>
-                <img className={s.gateImg} src="/gate/parent.jpg" width={480} height={384} alt="A multi-generational family, parents and a grandmother gathered around a teenager at sunset (AI-generated image)" />
-                <figcaption className={s.gateAiTag}>AI-generated image</figcaption>
+                <img className={s.gateImg} src="/gate/parent.jpg" width={480} height={384} alt="A multi-generational family, parents and a grandmother gathered around a teenager at sunset" />
               </figure>
               <div className={s.gateCardTitle}>I&rsquo;m a parent or caregiver</div>
               <div className={s.gateCardBody}>Set up and pay for a daily scripture text for your teen.</div>
             </button>
             <button className={s.gateCard} onClick={() => setAudience("teen")}>
               <figure className={s.gateFigure}>
-                <img className={s.gateImg} src="/gate/teen.jpg" width={480} height={320} alt="Two teenagers sitting at a skatepark, smiling at a phone together (AI-generated image)" />
-                <figcaption className={s.gateAiTag}>AI-generated image</figcaption>
+                <img className={s.gateImg} src="/gate/teen.jpg" width={480} height={320} alt="Two teenagers sitting at a skatepark, smiling at a phone together" />
               </figure>
               <div className={s.gateCardTitle}>I&rsquo;m a teen</div>
               <div className={s.gateCardBody}>See what it is, then loop in a parent or guardian to set it up.</div>
@@ -175,8 +173,7 @@ export default function Landing() {
             {CORNERSTONE_ENABLED && (
               <a className={s.gateCard} href="/cornerstone" style={{ textDecoration: "none" }}>
                 <figure className={s.gateFigure}>
-                  <img className={s.gateImg} src="/gate/group.jpg" width={480} height={384} alt="A church youth group and a family bowing their heads together in prayer near a lit cross (AI-generated image)" />
-                  <figcaption className={s.gateAiTag}>AI-generated image</figcaption>
+                  <img className={s.gateImg} src="/gate/group.jpg" width={480} height={384} alt="A church youth group and a family bowing their heads together in prayer near a lit cross" />
                 </figure>
                 <div className={s.gateCardTitle}>I&rsquo;m signing up a group or church</div>
                 <div className={s.gateCardBody}>Bring the daily verse to your whole youth group or congregation.</div>
