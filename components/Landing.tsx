@@ -197,7 +197,11 @@ export default function Landing() {
             <a href="#pricing">Pricing</a>
             <a href="/sample">See a sample</a>
             <a href="/its-okay-to-not-be-okay" className={s.iotnbo}>&#10084; It&rsquo;s okay to not be okay</a>
-            {SPANISH_ENABLED && <a href="/?lang=es" className={s.lang}>Espa&ntilde;ol</a>}
+            {/* Points straight at the one destination that's actually bilingual (the signup
+                wizard) rather than the homepage, which has no i18n and never reads ?lang=es.
+                Labeled as a signup action, not "view this site in Spanish" -- verified
+                2026-09-01 that nothing else on the marketing site translates. */}
+            {SPANISH_ENABLED && <a href="/signup?lang=es" className={s.lang}>Reg&iacute;strate en Espa&ntilde;ol</a>}
             <button className={s.switch} onClick={() => setAudience(audience === "parent" ? "teen" : "parent")}>{c!.switchLabel}</button>
             {audience === "parent"
               ? (SIGNUP_OPEN
