@@ -37,8 +37,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "A contact email is required." }, { status: 400 });
   }
 
-  // The agreed terms VERSION comes from server config, not the client.
-  let termsVersion = "v1-draft";
+  // The agreed terms VERSION comes from server config, not the client. Fallback
+  // matches the live config value (v1, finalized 2026-09-02) so a transient config
+  // read failure can't mis-tag a real application as having agreed to the old draft.
+  let termsVersion = "v1";
   try { termsVersion = (await getConfig()).terms_version; } catch { /* keep default */ }
 
   const toInt = (v: unknown) => {

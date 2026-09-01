@@ -199,7 +199,7 @@ export const PARTS: Part[] = [
         title: "Customer FAQ page (/faq)",
         blocks: [
           { type: "prose", text: "A public, tabbed FAQ covering the basics, plans & pricing, DM from Him, Programs & giving (Cornerstone + the Camp Hardtner promo-code pledge), and managing/opting out. Copy is Iain-approved and locked, verbatim from the 2026-08-31 review session. Don't reword it without a fresh approval pass, same rule as the Cornerstone terms." },
-          { type: "callout", kind: "info", title: "Noindex, no visible banner", text: "Like /terms and /program-terms, /faq ships with robots noindex + an internal draft comment rather than an on-page banner, pending attorney review of the legal/pricing/consent representations it contains." },
+          { type: "callout", kind: "info", title: "Noindex, no visible banner", text: "Like /terms, /faq ships with robots noindex + an internal draft comment rather than an on-page banner, pending attorney review of the legal/pricing/consent representations it contains. /program-terms was FINALIZED 2026-09-02 (Iain reviewed directly, no outside counsel) and is no longer in this group. See the Cornerstone Partner Program entry below." },
         ],
       },
     ],
@@ -230,6 +230,7 @@ export const PARTS: Part[] = [
           { type: "prose", text: "The leaderboard count is deliberately stricter than a church's raw signup number. It counts only teens whose subscription has moved past the free trial and been charged for real. A teen still inside their trial, or one whose first payment failed, does not count yet. So a church can have more signups than leaderboard points, and that gap is trials that have not converted. Only churches that opted into public listing appear, and the page shows the church name and count, nothing else." },
           { type: "prose", text: "Program settings live in cornerstone_config, editable at /admin/cornerstone. The eligible plans are the per-teen church group bands (group_1_50, group_51_150, group_151_300); the certificate prints Ephesians 2:20." },
           { type: "callout", kind: "info", title: "Eligible-plans is informational today", text: "The eligible-plans setting documents which plans the program is meant for, but nothing in the code currently rejects an application on a different plan server-side. Treat it as guidance, not an enforced gate, until enforcement is added." },
+          { type: "callout", kind: "info", title: "Program terms finalized 2026-09-02", text: "/program-terms (which also covers DM from Him and doubles as IGY's consolidated legal/programs page) is no longer draft. cornerstone_config.terms_version is now v1, not v1-draft. Zero real applications exist as of this change, so there's no historical v1-draft acceptance to reconcile; if that ever changes, cornerstone_applications.terms_version_accepted (section 1.9 of the terms) is where a church's accepted version is recorded." },
         ],
       },
       {

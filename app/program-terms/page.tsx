@@ -6,7 +6,6 @@ import { CORNERSTONE_ENABLED, PURCHASES_ENABLED } from "@/lib/flags";
 export const metadata: Metadata = {
   title: "Program Terms | It's God, Yo!™",
   description: "The terms for It's God, Yo!™ programs, the Cornerstone Partner Program and the DM from Him™ add-on, in one place.",
-  robots: { index: false, follow: false }, // pre-launch: not indexed until a program is live
 };
 
 export const dynamic = "force-dynamic";
@@ -14,9 +13,13 @@ export const dynamic = "force-dynamic";
 /**
  * Consolidated legal/programs page — wraps every IGY program's terms in one place
  * (structure follows USN's single-page numbered-section terms; reuses IGY's own
- * LegalPage + legal.module.css). Sponsor terms are intentionally OMITTED (program
- * paused 2026-08-01); a sponsor section can be added at the marked insertion point
- * below without restructuring, and no visible placeholder space is reserved for it.
+ * LegalPage + legal.module.css). This is also the spec's "follow-on task" from
+ * cornerstone_partner_program_prompt_v3.md — inspected live against USN's actual
+ * terms-of-service (numbered per-program sections folded into one page, no anchor
+ * nav) and USN's FAQ (topic navigability) before finalizing on 2026-09-02; no
+ * restructuring needed, the shape already matched. Sponsor terms are NOT included —
+ * the sponsor program is retired, not paused, and is not referenced anywhere on
+ * this page or in future plans for it.
  *
  * GATING (see report/reasoning): this is a pre-launch page — its primary content
  * is Cornerstone terms for a program still behind CORNERSTONE_ENABLED, and the DM
@@ -24,6 +27,13 @@ export const dynamic = "force-dynamic";
  * So the page appears only once EITHER program is live (whichever launches first),
  * keeping the terms in-context with a reachable program rather than describing an
  * invisible one.
+ *
+ * FINALIZED 2026-09-02 (was DRAFT since 2026-08-01): Iain reviewed the full page
+ * content directly (no outside attorney review) and confirmed no wording changes
+ * needed. noindex removed; cornerstone_config.terms_version bumped v1-draft -> v1
+ * via /admin/cornerstone, so every new application from this point records the
+ * final version. See project_igy_cornerstone_outreach_mention.md /
+ * project_igy_cornerstone_partner_program.md in memory for the full review trail.
  */
 export default function ProgramTermsPage() {
   if (!CORNERSTONE_ENABLED && !PURCHASES_ENABLED) notFound();
