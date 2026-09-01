@@ -38,7 +38,9 @@ export async function invokeReviewFn(name: string, payload: Record<string, unkno
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const err = new Error((data as { error?: string })?.error || `${name} failed (${res.status})`);
+    const d = data as { error?: string; detail?: string };
+    const message = [d?.error || `${name} failed (${res.status})`, d?.detail].filter(Boolean).join(": ");
+    const err = new Error(message);
     (err as { status?: number }).status = res.status;
     throw err;
   }
