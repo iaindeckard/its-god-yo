@@ -18,6 +18,9 @@ const REASON_PILL: Record<string, string> = {
 function isApproved(slot: ReviewSlot) {
   return slot.en.status === "approved" || slot.en.status === "sent";
 }
+function isLangApproved(side: ReviewLangSide) {
+  return side.status === "approved" || side.status === "sent";
+}
 
 export default function BatchReview({ result, perms }: { result: BatchResult; perms: Perms }) {
   const router = useRouter();
@@ -77,8 +80,8 @@ export default function BatchReview({ result, perms }: { result: BatchResult; pe
 
       <p className="muted" style={{ marginTop: -8, marginBottom: 14 }}>
         Every scheduled slot for this track — <strong>approved and not-yet-approved alike</strong> — so you can review the
-        whole batch, not just AI-flagged exceptions. Actions apply to the <strong>English</strong> dimension; the Spanish
-        side is shown for visibility only.
+        whole batch, not just AI-flagged exceptions. English and Spanish are approved independently; the progress bar
+        above reflects English only.
       </p>
 
       {/* Filters */}
@@ -147,30 +150,9 @@ function BatchSlotCard({
   onChanged: () => void;
   onError: (m: string) => void;
 }) {
-  const [busy, setBusy] = useState(false);
-  const [rejectMode, setRejectMode] = useState<null | "verse" | "translation">(null);
-  const [category, setCategory] = useState("");
-  const [reason, setReason] = useState("");
-  const [corrected, setCorrected] = useState("");
-
   const approved = isApproved(slot);
-
-  async function call(path: string, payload: Record<string, unknown>) {
-    setBusy(true);
-    try {
-      const res = await fetch(`/api/admin/review/${path}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ daily_slot_id: slot.id, ...payload }),
-      });
-      const data = await res.json();
-      if (!res.ok) { onError(data.error || "Action failed"); return; }
-      setRejectMode(null); setCategory(""); setReason(""); setCorrected("");
-      onChanged();
-    } finally {
-      setBusy(false);
-    }
-  }
+  const esApproved = isLangApproved(slot.es);
+  const esHasContent = slot.es.a || slot.es.b || slot.es.final;
 
   return (
     <div className="card" style={{ marginBottom: 16, opacity: approved ? 0.72 : 1 }}>
@@ -191,58 +173,119 @@ function BatchSlotCard({
 
       {approved ? (
         <div className="muted" style={{ marginTop: 14, fontSize: 13, borderTop: "1px solid var(--igy-line)", paddingTop: 14 }}>
-          ✓ Approved — send-ready. Final: <strong>{slot.en.final ?? "N/A"}</strong>
+          ✓ English approved — send-ready. Final: <strong>{slot.en.final ?? "N/A"}</strong>
         </div>
       ) : (
-        <div style={{ marginTop: 14, borderTop: "1px solid var(--igy-line)", paddingTop: 14 }}>
-          {rejectMode === null ? (
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {perms.approve && (
-                <>
-                  <button className="btn btn-primary" disabled={busy || !slot.en.a} onClick={() => call("approve", { chosen_output: "a" })}>Approve A</button>
-                  <button className="btn btn-primary" disabled={busy || !slot.en.b} onClick={() => call("approve", { chosen_output: "b" })}>Approve B</button>
-                </>
-              )}
-              {perms.rejectTranslation && (
-                <button className="btn btn-ghost" disabled={busy} onClick={() => setRejectMode("translation")}>Reject translation…</button>
-              )}
-              {perms.rejectVerse && (
-                <button className="btn btn-ghost" disabled={busy} onClick={() => setRejectMode("verse")}>Reject verse…</button>
-              )}
-            </div>
-          ) : (
-            <div>
-              <div className="muted" style={{ fontSize: 13, marginBottom: 6 }}>
-                {rejectMode === "verse"
-                  ? "Rejecting the verse regenerates both AI outputs (real AI cost)."
-                  : "Supply the corrected final translation."}
-              </div>
-              {rejectMode === "translation" && (
-                <textarea className="field" style={{ width: "100%", minHeight: 60 }} placeholder="Corrected translation" value={corrected} onChange={(e) => setCorrected(e.target.value)} />
-              )}
-              <select className="field" style={{ width: "100%" }} value={category} onChange={(e) => { setCategory(e.target.value); if (e.target.value !== OTHER_KEY) setReason(""); }}>
-                <option value="">Reason…</option>
-                {reasonsFor(rejectMode).map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
-              </select>
-              {category === OTHER_KEY && (
-                <input className="field" style={{ width: "100%", marginTop: 8 }} placeholder="Reason (required)" value={reason} onChange={(e) => setReason(e.target.value)} />
-              )}
-              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                <button
-                  className="btn btn-primary"
-                  disabled={busy || !category || (category === OTHER_KEY && !reason.trim()) || (rejectMode === "translation" && !corrected.trim())}
-                  onClick={() =>
-                    rejectMode === "verse"
-                      ? call("reject-verse", { category, reason, ...(sessionId ? { review_session_id: sessionId } : {}) })
-                      : call("reject-translation", { corrected_translation: corrected, category, reason })
-                  }
-                >
-                  {busy ? "Working…" : "Confirm"}
-                </button>
-                <button className="btn btn-ghost" disabled={busy} onClick={() => { setRejectMode(null); setCategory(""); setReason(""); setCorrected(""); }}>Cancel</button>
-              </div>
-            </div>
+        <BatchLangActions lang="en" slotId={slot.id} side={slot.en} perms={perms} sessionId={sessionId} onChanged={onChanged} onError={onError} />
+      )}
+
+      {esHasContent && (
+        esApproved ? (
+          <div className="muted" style={{ marginTop: 10, fontSize: 13, borderTop: "1px solid var(--igy-line)", paddingTop: 10 }}>
+            ✓ Spanish approved — send-ready. Final: <strong>{slot.es.final ?? "N/A"}</strong>
+          </div>
+        ) : (
+          <BatchLangActions lang="es" slotId={slot.id} side={slot.es} perms={perms} sessionId={sessionId} onChanged={onChanged} onError={onError} />
+        )
+      )}
+    </div>
+  );
+}
+
+/** Approve / reject-translation actions for one language dimension of a slot. English also gets reject-verse. */
+function BatchLangActions({
+  lang,
+  slotId,
+  side,
+  perms,
+  sessionId,
+  onChanged,
+  onError,
+}: {
+  lang: "en" | "es";
+  slotId: string;
+  side: ReviewLangSide;
+  perms: Perms;
+  sessionId: string | null;
+  onChanged: () => void;
+  onError: (m: string) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [rejectMode, setRejectMode] = useState<null | "verse" | "translation">(null);
+  const [category, setCategory] = useState("");
+  const [reason, setReason] = useState("");
+  const [corrected, setCorrected] = useState("");
+
+  const suffix = lang === "es" ? "-es" : "";
+
+  async function call(path: string, payload: Record<string, unknown>) {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/admin/review/${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ daily_slot_id: slotId, ...payload }),
+      });
+      const data = await res.json();
+      if (!res.ok) { onError(data.error || "Action failed"); return; }
+      setRejectMode(null); setCategory(""); setReason(""); setCorrected("");
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ marginTop: 14, borderTop: "1px solid var(--igy-line)", paddingTop: 14 }}>
+      <div className="muted" style={{ fontSize: 12, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.4 }}>
+        {lang === "es" ? "Spanish" : "English"} actions
+      </div>
+      {rejectMode === null ? (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {perms.approve && (
+            <>
+              <button className="btn btn-primary" disabled={busy || !side.a} onClick={() => call(`approve${suffix}`, { chosen_output: "a" })}>Approve A</button>
+              <button className="btn btn-primary" disabled={busy || !side.b} onClick={() => call(`approve${suffix}`, { chosen_output: "b" })}>Approve B</button>
+            </>
           )}
+          {perms.rejectTranslation && (
+            <button className="btn btn-ghost" disabled={busy} onClick={() => setRejectMode("translation")}>Reject translation…</button>
+          )}
+          {lang === "en" && perms.rejectVerse && (
+            <button className="btn btn-ghost" disabled={busy} onClick={() => setRejectMode("verse")}>Reject verse…</button>
+          )}
+        </div>
+      ) : (
+        <div>
+          <div className="muted" style={{ fontSize: 13, marginBottom: 6 }}>
+            {rejectMode === "verse"
+              ? "Rejecting the verse regenerates both AI outputs (real AI cost)."
+              : "Supply the corrected final translation."}
+          </div>
+          {rejectMode === "translation" && (
+            <textarea className="field" style={{ width: "100%", minHeight: 60 }} placeholder="Corrected translation" value={corrected} onChange={(e) => setCorrected(e.target.value)} />
+          )}
+          <select className="field" style={{ width: "100%" }} value={category} onChange={(e) => { setCategory(e.target.value); if (e.target.value !== OTHER_KEY) setReason(""); }}>
+            <option value="">Reason…</option>
+            {reasonsFor(rejectMode).map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+          </select>
+          {category === OTHER_KEY && (
+            <input className="field" style={{ width: "100%", marginTop: 8 }} placeholder="Reason (required)" value={reason} onChange={(e) => setReason(e.target.value)} />
+          )}
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            <button
+              className="btn btn-primary"
+              disabled={busy || !category || (category === OTHER_KEY && !reason.trim()) || (rejectMode === "translation" && !corrected.trim())}
+              onClick={() =>
+                rejectMode === "verse"
+                  ? call("reject-verse", { category, reason, ...(sessionId ? { review_session_id: sessionId } : {}) })
+                  : call(`reject-translation${suffix}`, { corrected_translation: corrected, category, reason })
+              }
+            >
+              {busy ? "Working…" : "Confirm"}
+            </button>
+            <button className="btn btn-ghost" disabled={busy} onClick={() => { setRejectMode(null); setCategory(""); setReason(""); setCorrected(""); }}>Cancel</button>
+          </div>
         </div>
       )}
     </div>

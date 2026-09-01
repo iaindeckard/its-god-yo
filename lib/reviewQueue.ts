@@ -5,9 +5,10 @@ import { fetchKjvSourceMap } from "./kjvSource";
 /**
  * The review queue reads daily_slots flagged for review on EITHER language.
  * A slot can be flagged on English (status='needs_review'), Spanish
- * (status_es='needs_review'), or both. The existing review Edge Functions only
- * operate on the ENGLISH review dimension, so the UI surfaces the Spanish flag
- * for visibility but marks it not-yet-actionable (no ES review function exists).
+ * (status_es='needs_review'), or both. Each dimension has its own approve /
+ * reject-translation Edge Functions (review-approve[-es], review-reject-
+ * translation[-es]); only "reject verse" is English-only, since verse_ref is
+ * shared across both languages on the row.
  */
 export interface ReviewLangSide {
   flagged: boolean;

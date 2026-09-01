@@ -9,8 +9,9 @@ import type { ReviewSlot } from "./reviewQueue";
  * daily_slot for a track + optional date window, regardless of status — so a
  * reviewer can see and approve the whole upcoming batch, including AI-agreed
  * days the exceptions queue never shows. Reuses the same ReviewSlot shape as the
- * queue so the UI can share rendering; English is the actionable dimension, the
- * Spanish side is shown for visibility only (no ES review function exists).
+ * queue so the UI can share rendering; English and Spanish are each independently
+ * approvable (summary counts below reflect English only — see isLangApproved in
+ * BatchReview.tsx for the Spanish equivalent).
  */
 export interface BatchSummary {
   total: number;
