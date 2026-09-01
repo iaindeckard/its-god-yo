@@ -194,6 +194,14 @@ export const PARTS: Part[] = [
           { type: "prose", text: "/its-okay-to-not-be-okay is a standing safety-resources page. Know it exists and what it's for before you field any support message that touches on a subscriber's wellbeing. See Part 6 for the escalation rule when a message suggests someone may be at risk." },
         ],
       },
+      {
+        id: "faq-page",
+        title: "Customer FAQ page (/faq)",
+        blocks: [
+          { type: "prose", text: "A public, tabbed FAQ covering the basics, plans & pricing, DM from Him, Programs & giving (Cornerstone + the Camp Hardtner promo-code pledge), and managing/opting out. Copy is Iain-approved and locked, verbatim from the 2026-08-31 review session. Don't reword it without a fresh approval pass, same rule as the Cornerstone terms." },
+          { type: "callout", kind: "info", title: "Noindex, no visible banner", text: "Like /terms and /program-terms, /faq ships with robots noindex + an internal draft comment rather than an on-page banner, pending attorney review of the legal/pricing/consent representations it contains." },
+        ],
+      },
     ],
   },
 
