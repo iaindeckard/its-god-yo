@@ -8,14 +8,17 @@
 export const PURCHASES_ENABLED = true;
 
 /**
- * Gates Spanish as a selectable / advertised language until a real reviewed
- * Spanish verse batch exists — same standard we hold English to. While false:
- * the signup language step offers English only and a `?lang=es` param is ignored;
- * the landing hides the "Español" toggle and the "Español / RV1909" marketing
- * badge. Nothing downstream requires Spanish (all `lang === "es"` usage is
- * conditional), so this only removes the option — it doesn't break the flow.
+ * Gates Spanish as a selectable / advertised language. Flipped true 2026-09-01:
+ * 18 of 30 September general-track dates carry a reviewed, approved Spanish
+ * translation (12 remain flagged needs_review and are not approved — those
+ * dates fall back to the no-silence General track at send time, same as any
+ * other gap). While false: the signup language step offers English only and a
+ * `?lang=es` param is ignored; the landing hides the "Español" toggle and the
+ * "Español / RV1909" marketing badge. Nothing downstream requires Spanish (all
+ * `lang === "es"` usage is conditional), so this only removes the option — it
+ * doesn't break the flow.
  */
-export const SPANISH_ENABLED = false;
+export const SPANISH_ENABLED = true;
 
 /**
  * Sponsor Program visibility. DEPRIORITIZED 2026-08-01 in favor of the
