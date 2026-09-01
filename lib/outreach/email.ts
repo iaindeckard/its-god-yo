@@ -133,7 +133,7 @@ I'm Iain, founder of It's God, Yo!, a daily Scripture text devotional built for 
 
 ${personalIntro}${org} has an active youth ministry, and I thought this might be useful for the students you're already working with. You can see how it works and sign up at ${entry}.
 
-One more thing: if ${org} is looking to bring this to your whole youth group or congregation rather than individual families, we're recognizing early churches as founding Cornerstone Partners, permanent recognition and locked-in pricing. More at ${site}/cornerstone.
+One more thing: if ${org} is looking to bring this to your whole youth group or congregation rather than individual families, we're recognizing early churches as founding Cornerstone Partners, with founding-partner recognition and special pricing. More at ${site}/cornerstone.
 
 No pressure here. Share it if it's a fit, ignore it if it's not. If you'd rather not hear from us again, the link below removes ${org} for good.
 
@@ -152,7 +152,7 @@ Unsubscribe (one click): ${link}`;
   <p>Hi ${esc(org)} team,</p>
   <p>I'm Iain, founder of <strong>It's God, Yo!</strong>, a daily Scripture text devotional built for teens, ${SPANISH_ENABLED ? "in English (KJV) and Spanish (Reina-Valera 1909)" : "in English (KJV)"}. Each day pairs one KJV verse with a plain-language slang rendering designed to help teens understand it, plus a link to read the full KJV text. Our review process keeps the language current while protecting the verse's meaning.</p>
   <p>${personalIntro}${esc(org)} has an active youth ministry, and I thought this might be useful for the students you're already working with. You can see how it works and sign up at <a href="${esc(entry)}" style="color:#00ABBC;">${esc(site.replace(/^https?:\/\//, ""))}</a>.</p>
-  <p>One more thing: if ${esc(org)} is looking to bring this to your whole youth group or congregation rather than individual families, we're recognizing early churches as founding Cornerstone Partners, permanent recognition and locked-in pricing. More at <a href="${esc(site)}/cornerstone" style="color:#00ABBC;">${esc(site.replace(/^https?:\/\//, ""))}/cornerstone</a>.</p>
+  <p>One more thing: if ${esc(org)} is looking to bring this to your whole youth group or congregation rather than individual families, we're recognizing early churches as founding Cornerstone Partners, with founding-partner recognition and special pricing. More at <a href="${esc(site)}/cornerstone" style="color:#00ABBC;">${esc(site.replace(/^https?:\/\//, ""))}/cornerstone</a>.</p>
   <p>No pressure here. Share it if it's a fit, ignore it if it's not. If you'd rather not hear from us again, the link below removes ${esc(org)} for good.</p>
   <p style="margin-bottom:2px;">Thanks for helping us get the Word of God to young people every day.</p>
   <p style="margin-bottom:2px;"><strong>Iain Deckard</strong> · It's God, Yo!</p>
@@ -225,7 +225,7 @@ I attended Catholic High in New Iberia, Louisiana for several years, and what's 
 
 And if you sign up today, you can also take advantage of DM from Him, an add-on where your teen can text back and forth about what that day's verse actually means for what they're going through. A verse alone is something to read; DM from Him turns it into a conversation your teen can have in the moment, when it's actually on their mind, not just something they scroll past. It's a small add, and it's the difference between a daily text and something that meets a teen where they are on a hard day.
 
-One more thing: if ${org} would rather bring IGY to your whole school community as an institution instead of leaving it to individual families, we're recognizing early adopters as founding Cornerstone Partners, permanent recognition and locked-in pricing. More at ${site}/cornerstone.
+One more thing: if ${org} would rather bring IGY to your whole school community as an institution instead of leaving it to individual families, we're recognizing early adopters as founding Cornerstone Partners, with founding-partner recognition and special pricing. More at ${site}/cornerstone.
 
 I'd welcome five minutes to talk about it, or I'm happy to send a one-page rundown you can look at whenever it's convenient. Either works for me.
 
@@ -245,7 +245,7 @@ Unsubscribe (one click): ${link}`;
   <p>My name is Iain Deckard. I'm the founder of <strong>It's God, Yo!&trade;</strong> (IGY), a daily Bible verse text service for teens. A short verse matched to a mood or theme, sent by text each day.</p>
   <p>I attended Catholic High in New Iberia, Louisiana for several years, and what's stayed with me longest isn't the academics. It's that the school led with faith every day. That's a big part of why I wanted Catholic school families nationwide, including at ${esc(org)}, to have a discount on IGY: <strong>${pct}% off</strong> an individual annual, family, or gift subscription, using code <strong>${esc(promoCode)}</strong> (valid through December 31, 2026). At checkout, ${esc(promoCode)} asks for a quick attestation that you're a student, caregiver, or faculty/staff at a U.S. Catholic school, nothing more. You can see how it works and sign up at <a href="${esc(entry)}" style="color:#00ABBC;">${esc(siteLabel)}</a>.</p>
   <p>And if you sign up today, you can also take advantage of <strong>DM from Him</strong>, an add-on where your teen can text back and forth about what that day's verse actually means for what they're going through. A verse alone is something to read; DM from Him turns it into a conversation your teen can have in the moment, when it's actually on their mind, not just something they scroll past. It's a small add, and it's the difference between a daily text and something that meets a teen where they are on a hard day.</p>
-  <p>One more thing: if ${esc(org)} would rather bring IGY to your whole school community as an institution instead of leaving it to individual families, we're recognizing early adopters as founding Cornerstone Partners, permanent recognition and locked-in pricing. More at <a href="${esc(site)}/cornerstone" style="color:#00ABBC;">${esc(siteLabel)}/cornerstone</a>.</p>
+  <p>One more thing: if ${esc(org)} would rather bring IGY to your whole school community as an institution instead of leaving it to individual families, we're recognizing early adopters as founding Cornerstone Partners, with founding-partner recognition and special pricing. More at <a href="${esc(site)}/cornerstone" style="color:#00ABBC;">${esc(siteLabel)}/cornerstone</a>.</p>
   <p>I'd welcome five minutes to talk about it, or I'm happy to send a one-page rundown you can look at whenever it's convenient. Either works for me.</p>
   <p style="margin-bottom:2px;">With gratitude,</p>
   <p style="margin-bottom:0;"><strong>Iain Deckard</strong></p>
@@ -322,7 +322,7 @@ ${promoCode} gets you ${pct}% off an individual, family, or gift subscription at
 
 One thing worth knowing: this code is good through ${TOUCH2_EXPIRES_DISPLAY}, so if you've been meaning to pass it along, now's the window. Share it if it helps, ignore it if it's not for you.
 
-Also worth knowing: if you'd rather bring this to the whole congregation instead of individual families, churches that join now can still become founding Cornerstone Partners, permanent recognition and locked-in pricing, at ${site}/cornerstone.
+Also worth knowing: if you'd rather bring this to the whole congregation instead of individual families, churches that join now can still become founding Cornerstone Partners, with founding-partner recognition and special pricing, at ${site}/cornerstone.
 
 This is the last you'll hear from us unless you reach out. The link below removes ${org} for good.
 
@@ -345,7 +345,7 @@ Unsubscribe (one click): ${link}`;
     <strong>${esc(promoCode)}</strong> gets you ${pct}% off an individual, family, or gift subscription at <a href="${esc(entry)}" style="color:#00ABBC;">${esc(site.replace(/^https?:\/\//, ""))}</a>
   </p>
   <p>One thing worth knowing: this code is good through <strong>${TOUCH2_EXPIRES_DISPLAY}</strong>, so if you've been meaning to pass it along, now's the window. Share it if it helps, ignore it if it's not for you.</p>
-  <p>Also worth knowing: if you'd rather bring this to the whole congregation instead of individual families, churches that join now can still become founding Cornerstone Partners, permanent recognition and locked-in pricing, at <a href="${esc(site)}/cornerstone" style="color:#00ABBC;">${esc(site.replace(/^https?:\/\//, ""))}/cornerstone</a>.</p>
+  <p>Also worth knowing: if you'd rather bring this to the whole congregation instead of individual families, churches that join now can still become founding Cornerstone Partners, with founding-partner recognition and special pricing, at <a href="${esc(site)}/cornerstone" style="color:#00ABBC;">${esc(site.replace(/^https?:\/\//, ""))}/cornerstone</a>.</p>
   <p>This is the last you'll hear from us unless you reach out. The link below removes ${esc(org)} for good.</p>
   <p style="margin-bottom:2px;">Thanks for everything you pour into young people.</p>
   <p style="margin-bottom:2px;"><strong>Iain Deckard</strong> · It's God, Yo!</p>
@@ -412,7 +412,7 @@ Two small asks:
 
 That's the whole ask. No cost, no commitment, just getting it in front of families who might be glad to have it. You can see how it works at ${entry}.
 
-One more option worth mentioning: if ${org} would rather bring IGY to your whole school community as an institution instead of relying on individual families, we're still recognizing founding Cornerstone Partners, permanent recognition and locked-in pricing, at ${site}/cornerstone.
+One more option worth mentioning: if ${org} would rather bring IGY to your whole school community as an institution instead of relying on individual families, we're still recognizing founding Cornerstone Partners, with founding-partner recognition and special pricing, at ${site}/cornerstone.
 
 With gratitude,
 Iain Deckard
@@ -439,7 +439,7 @@ Unsubscribe (one click): ${link}`;
     <li>If the newsletter or bulletin is handled by someone other than the front office, a communications coordinator, PTO lead, or the advancement office, could you point me to the right person, or forward this to them? I'd rather reach whoever can actually place it than keep guessing.</li>
   </ol>
   <p>That's the whole ask. No cost, no commitment, just getting it in front of families who might be glad to have it. You can see how it works at <a href="${esc(entry)}" style="color:#00ABBC;">${esc(siteLabel)}</a>.</p>
-  <p>One more option worth mentioning: if ${esc(org)} would rather bring IGY to your whole school community as an institution instead of relying on individual families, we're still recognizing founding Cornerstone Partners, permanent recognition and locked-in pricing, at <a href="${esc(site)}/cornerstone" style="color:#00ABBC;">${esc(siteLabel)}/cornerstone</a>.</p>
+  <p>One more option worth mentioning: if ${esc(org)} would rather bring IGY to your whole school community as an institution instead of relying on individual families, we're still recognizing founding Cornerstone Partners, with founding-partner recognition and special pricing, at <a href="${esc(site)}/cornerstone" style="color:#00ABBC;">${esc(siteLabel)}/cornerstone</a>.</p>
   <p style="margin-bottom:2px;">With gratitude,</p>
   <p style="margin-bottom:0;"><strong>Iain Deckard</strong></p>
   <p style="margin:0;color:#555;">Founder, It's God, Yo!&trade;</p>
