@@ -59,6 +59,16 @@ const AI_TELLS = /[—–‘’“”…]/;
 // KEEP IN SYNC with generate-monthly-batch.
 const DIVINE_NOUN_LOWERCASE = /\b(god|gods|jesus|christ|lord)\b/;
 
+// Spanish counterpart, added 2026-09-01 -- the English-only regex above could
+// never catch a lowercase "dios"/"jesús"/"cristo"/"señor" (confirmed this gap
+// produced a real live defect: 2026-09-30's approved Spanish text came back
+// entirely lowercase, undetected). Matches "jesus"/"señor" without their
+// accent too, since that's the casual-texting error actually seen in real
+// generations. "dioses" (false gods, e.g. "otros dioses") is deliberately
+// included, same as English "gods" -- legitimately lowercase most of the
+// time, still gets a human look.
+const DIVINE_NOUN_LOWERCASE_ES = /\b(dios|dioses|jesus|jesús|cristo|señor|senor)\b/;
+
 // ---- GSM-7 vs UCS-2 SMS segment math (mirrors Twilio's encoding rules) ----
 const GSM7_BASIC = "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ\x1bÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà";
 const GSM7_EXT = "^{}\\[~]|€";
@@ -213,6 +223,22 @@ interface Judgement { faithful: boolean; added_claims: string[]; omitted_core: s
 // Fidelity judge (softened for casual style, strict on real drift + divine-title
 // flattening). Fail-closed: any error/unparseable -> unfaithful (routes to review).
 async function judgeFidelity(apiKey: string, source: string, rendering: string, lang: "en" | "es"): Promise<Judgement> {
+  // Divine-pronoun capitalization instruction, split by language rather than relying
+  // on the model to generalize an English-worded rule onto Spanish text. Added
+  // 2026-09-01: the previous single English-only instruction happened to also catch
+  // Spanish "el" in practice, but that was incidental LLM generalization, not a
+  // deliberate rule -- confirmed unreliable (see DIVINE_NOUN_LOWERCASE_ES comment).
+  // The Spanish word set (el/le/lo/su family) is scoped to the SAME grammatical
+  // category as the English rule -- third-person pronouns/possessives only, not
+  // second-person tu/ti/te (some traditional Spanish religious texts also capitalize
+  // those when addressing God directly, but English's locked house style doesn't
+  // capitalize "You/Your" either, so this stays a faithful mirror of the actual
+  // English scope rather than a broader one). These words (su, lo, le, el) are all
+  // extremely common outside any divine reference, so -- exactly like the English
+  // he/him/his -- this is deliberately judgment-based, not a blind regex.
+  const capitalizationRule = lang === "es"
+    ? `SEPARATELY, check ONE capitalization rule (this does NOT affect the fidelity verdict above): our house style capitalizes third-person pronouns/possessives that refer to God -- "Él" (he/him, including after a preposition: en Él, de Él, por Él), "Le" (indirect-object him), "Lo" (direct-object him), and "Su"/"Sus"/"Suyo"/"Suya"/"Suyos"/"Suyas" (his). In the PARAPHRASE, list every lowercase "el", "le", "lo", "su", "sus", "suyo", "suya", "suyos", or "suyas" whose antecedent in THIS verse is clearly Dios, Jesús, or el Señor. This needs judgment: if it refers to a human figure (a king, a disciple, a person in the story) or is a different word entirely (e.g. "el" as the article "the", "lo" as a neuter "the [thing]"), do NOT list it. If none, return [].`
+    : `SEPARATELY, check ONE capitalization rule (this does NOT affect the fidelity verdict above): our house style capitalizes pronouns that refer to God -- "He", "Him", "His", "Himself". In the PARAPHRASE, list every lowercase "he", "him", "his", or "himself" whose antecedent in THIS verse is clearly God, Jesus, or the Lord. This needs judgment: if a "he/him/his" refers to a human figure (a king, a disciple, a person in the story), do NOT list it. If none, return [].`;
   const prompt = `You check whether a casual, Gen-Z slang paraphrase of a Bible verse stays TRUE to the source's meaning. The informal, texting-style tone is INTENDED and fine — do NOT penalize slang, casual wording, reordering, changed forms of address (e.g. "O my strength" -> "you're my strength"), collapsing poetic/archaic phrasing into plain words, dropping a liturgical marker like "Selah", or conversational filler ("fr", "no cap", "ngl") — as long as the verse's core meaning is preserved.
 
 Mark it UNFAITHFUL only when it clearly:
@@ -224,7 +250,7 @@ Mark it UNFAITHFUL only when it clearly:
 
 Give the paraphrase the benefit of the doubt on style and emphasis; flag ONLY real drift in meaning.
 
-SEPARATELY, check ONE capitalization rule (this does NOT affect the fidelity verdict above): our house style capitalizes pronouns that refer to God -- "He", "Him", "His", "Himself". In the PARAPHRASE, list every lowercase "he", "him", "his", or "himself" whose antecedent in THIS verse is clearly God, Jesus, or the Lord. This needs judgment: if a "he/him/his" refers to a human figure (a king, a disciple, a person in the story), do NOT list it. If none, return [].
+${capitalizationRule}
 
 Source (${lang === "es" ? "Reina-Valera 1909" : "KJV"}): "${source}"
 Paraphrase: "${rendering}"
@@ -269,10 +295,11 @@ function evalOne(label: "A" | "B", text: string, lang: "en" | "es", judge: Judge
   if (sentences > SENTENCE_MAX) flags.push(`${label}:too_long`);
   if (segments > SEGMENT_MAX) flags.push(`${label}:exceeds_sms_budget(${segments}seg)`);
   if (AI_TELLS.test(effective)) flags.push(`${label}:ai_tells`);
-  // Divine-reference capitalization (house style, locked 2026-08-06). Regex catches
-  // lowercase proper nouns; the fidelity judge catches lowercase pronouns referring
-  // to God. Either -> flag for human review under 'divine_capitalization', never auto-fix.
-  const divineNoun = effective.match(DIVINE_NOUN_LOWERCASE);
+  // Divine-reference capitalization (house style, locked 2026-08-06; Spanish parity
+  // added 2026-09-01). Regex catches lowercase proper nouns; the fidelity judge
+  // catches lowercase pronouns referring to God. Either -> flag for human review
+  // under 'divine_capitalization', never auto-fix.
+  const divineNoun = effective.match(lang === "es" ? DIVINE_NOUN_LOWERCASE_ES : DIVINE_NOUN_LOWERCASE);
   if (divineNoun) flags.push(`${label}:divine_capitalization(noun:${divineNoun[0]})`);
   if (judge.divine_lc_pronouns.length > 0) flags.push(`${label}:divine_capitalization(pronoun:${judge.divine_lc_pronouns.join(",")})`);
   const fidelityBad = !judge.faithful || judge.added_claims.length > 0 || judge.omitted_core.length > 0 || judge.drift;
