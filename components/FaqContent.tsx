@@ -15,12 +15,13 @@ import f from "./faq.module.css";
  */
 
 type Item = { q: string; a: ReactNode };
-type TabKey = "basics" | "pricing" | "dm" | "managing";
+type TabKey = "basics" | "pricing" | "dm" | "programs" | "managing";
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: "basics", label: "The basics" },
   { key: "pricing", label: "Plans & pricing" },
   { key: "dm", label: "DM from Him™" },
+  { key: "programs", label: "Programs & giving" },
   { key: "managing", label: "Managing & opting out" },
 ];
 
@@ -66,6 +67,14 @@ const FAQS: Record<TabKey, Item[]> = {
         </p>
       ),
     },
+    {
+      q: "What data do you collect about my teen, and how is it protected?",
+      a: (
+        <p>
+          We collect only what the service needs. About the teen (the recipient): first name, phone number, and birth year - the year only, used for the age-consent check - plus the consent and delivery records the law requires, like the confirmation reply, opt-outs, and their timestamps. From you as the purchaser: your name, email, and payment details, with cards handled directly by Stripe so we never store your full card number. We share information only with Stripe (payments) and Twilio (SMS delivery), we don&rsquo;t sell personal information, and we don&rsquo;t collect government ID. Full details are in our <Link href="/privacy">Privacy Policy</Link>.
+        </p>
+      ),
+    },
   ],
   pricing: [
     {
@@ -100,6 +109,14 @@ const FAQS: Record<TabKey, Item[]> = {
         </p>
       ),
     },
+    {
+      q: "Can I buy It's God, Yo! as a gift?",
+      a: (
+        <p>
+          Yes. A Gift plan is $59/year for one teen, bought on someone else&rsquo;s behalf. The person you&rsquo;re giving it to gets the confirmation text and replies <strong>YES</strong> themselves - we can&rsquo;t start the gift without their own OK, and no messages go out until they do. Seasonally, we also offer a prepaid Christmas gift you can buy now and schedule to be announced to the recipient on a date you choose.
+        </p>
+      ),
+    },
   ],
   dm: [
     {
@@ -123,6 +140,32 @@ const FAQS: Record<TabKey, Item[]> = {
       a: (
         <p>
           By text: reply <strong>DM ON</strong> to add it or <strong>DM OFF</strong> to remove it, any time. That only affects the add-on, not the base subscription.
+        </p>
+      ),
+    },
+  ],
+  programs: [
+    {
+      q: "Is this tied to a particular church or denomination?",
+      a: (
+        <p>
+          No. It&rsquo;s God, Yo! is non-denominational. The daily verses come straight from the King James Version of the Bible (and the Reina-Valera 1909 for Spanish-language sends), in plain, modern language - built for any family that wants Scripture in front of their teen, whatever church (if any) they call home.
+        </p>
+      ),
+    },
+    {
+      q: "Does It's God, Yo! give back?",
+      a: (
+        <p>
+          Yes. Through December 31, 2026, we&rsquo;ve pledged 20% of the net proceeds from every annual subscription that includes the DM from Him&trade; add-on and is purchased with promo code <strong>igy_episcopal</strong> or <strong>igy_hardtner</strong> to Camp Hardtner.
+        </p>
+      ),
+    },
+    {
+      q: "What is the Cornerstone Partner Program?",
+      a: (
+        <p>
+          It&rsquo;s our program for churches and youth groups that want to bring the daily verse to their whole congregation, with recognition for partnering churches - a certificate, a badge, and a listing in our public partner directory. <Link href="/cornerstone">Learn more about becoming a Cornerstone Partner</Link>.
         </p>
       ),
     },
@@ -219,6 +262,13 @@ export default function FaqContent() {
             <h2>About the daily verses</h2>
             <p>
               We use AI to help select and translate the daily verses, and we review the messages personally before they go out. Even so, something might occasionally slip through. We are not responsible for any harm, whether real or perceived, that this might cause. You can opt out at any time by replying STOP.
+            </p>
+          </section>
+
+          <section className={f.disclaimer} aria-label="AI and content generation">
+            <h2>Does It&rsquo;s God, Yo! use AI to generate content?</h2>
+            <p>
+              Yes. We use AI to help generate illustrative images that show how It&rsquo;s God, Yo! fits into your family&rsquo;s life, and to help gather and organize verse selections from the King James Version (and the Reina-Valera 1909 for Spanish-language sends). Every message is reviewed by a real person before it goes out.
             </p>
           </section>
         </div>
