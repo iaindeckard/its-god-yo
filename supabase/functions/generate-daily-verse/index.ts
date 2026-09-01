@@ -173,6 +173,41 @@ async function callOpenAI(apiKey: string, prompt: string): Promise<string> {
   return text.trim();
 }
 
+// True when a provider error means the ACCOUNT is out of credits/quota (as
+// opposed to a transient error, which should surface normally rather than
+// silently degrade output diversity). Same signal set as the outreach
+// discovery failover (lib/outreach/discovery-core.ts) for consistency.
+function isCreditExhausted(e: unknown): boolean {
+  const msg = (e instanceof Error ? e.message : String(e ?? "")).toLowerCase();
+  return (
+    msg.includes("insufficient_quota") ||
+    msg.includes("credit_balance_exhausted") ||
+    msg.includes("billing_hard_limit_reached") ||
+    msg.includes("credit balance is too low")
+  );
+}
+
+// Output B is normally GPT-4o, deliberately a different model family from
+// output A (Claude) so the dual-AI-agreement pattern has real diversity. If
+// OpenAI is unavailable (no key configured) or the account is out of credits,
+// fall back to a second independent Claude sample instead of failing the
+// whole generation -- ai_disagreement is informational only (never a gate;
+// see evaluate()), so losing cross-provider diversity doesn't weaken any of
+// the real quality gates (sentence bounds, SMS budget, fidelity judge), it
+// only means A/B are less likely to disagree. A non-quota OpenAI error (bad
+// request, transient 5xx, etc.) still surfaces normally rather than masking
+// a real problem.
+async function getDualOutputs(anthropicKey: string, openaiKey: string | undefined, prompt: string): Promise<[string, string]> {
+  const outputA = callClaude(anthropicKey, prompt);
+  if (!openaiKey) return [await outputA, await callClaude(anthropicKey, prompt)];
+  try {
+    return await Promise.all([outputA, callOpenAI(openaiKey, prompt)]);
+  } catch (e) {
+    if (isCreditExhausted(e)) return [await outputA, await callClaude(anthropicKey, prompt)];
+    throw e;
+  }
+}
+
 interface Judgement { faithful: boolean; added_claims: string[]; omitted_core: string[]; drift: boolean; divine_lc_pronouns: string[]; }
 
 // Fidelity judge (softened for casual style, strict on real drift + divine-title
@@ -280,9 +315,10 @@ Deno.serve(async (req: Request) => {
   const themeTrack = body.theme_track || "general";
 
   const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
-  const openaiKey = Deno.env.get("OPENAI_API_KEY");
+  // OPENAI_API_KEY is optional -- getDualOutputs falls back to a second Claude
+  // sample when it's missing or the account is out of credits (see comment there).
+  const openaiKey = Deno.env.get("OPENAI_API_KEY") || undefined;
   if (!anthropicKey) return json(500, { error: "server_not_configured", detail: "ANTHROPIC_API_KEY not set" });
-  if (!openaiKey) return json(500, { error: "server_not_configured", detail: "OPENAI_API_KEY not set" });
 
   const supa = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 
@@ -311,7 +347,7 @@ Deno.serve(async (req: Request) => {
 
     const prompt = buildPromptEs(verseRef, esVerse.text);
     let outputA: string, outputB: string;
-    try { [outputA, outputB] = await Promise.all([callClaude(anthropicKey, prompt), callOpenAI(openaiKey, prompt)]); }
+    try { [outputA, outputB] = await getDualOutputs(anthropicKey, openaiKey, prompt); }
     catch (e) { return json(502, { error: "generation_failed", detail: String((e as Error)?.message ?? e) }); }
 
     const ev = await evaluate(anthropicKey, esVerse.text, outputA, outputB, "es", citationFromRef(verseRef));
@@ -352,7 +388,7 @@ Deno.serve(async (req: Request) => {
   const verseRef = `${verseRow!.book} ${verseRow!.chapter}:${verseRow!.verse}`;
   const prompt = buildPromptEn(verseRef, verseRow!.text);
   let outputA: string, outputB: string;
-  try { [outputA, outputB] = await Promise.all([callClaude(anthropicKey, prompt), callOpenAI(openaiKey, prompt)]); }
+  try { [outputA, outputB] = await getDualOutputs(anthropicKey, openaiKey, prompt); }
   catch (e) { return json(502, { error: "generation_failed", detail: String((e as Error)?.message ?? e) }); }
 
   const ev = await evaluate(anthropicKey, verseRow!.text, outputA, outputB, "en", citationFromRef(verseRef));
