@@ -255,6 +255,17 @@ export async function GET(req: Request) {
       }
       if (!dryRun) {
         try {
+          // NOTE — the "gaps_over_grace>0 AND backfilled=0" signature. upsert uses
+          // ON CONFLICT (balance_transaction_id) DO NOTHING and counts only true
+          // inserts. If a concurrent writer (e.g. a Stripe webhook retry) has an
+          // in-flight, uncommitted insert of this same bt at this instant, DO NOTHING
+          // does NOT wait — it no-ops (inserted=false) and defers to that writer. If
+          // that writer then fails/rolls back (the exact livemode-guard failure mode),
+          // this run logs the gap but writes nothing, and the row stays missing until
+          // the NEXT run re-inserts it (no race the second time → self-heals). Seen
+          // 2026-08-13 (bt txn_3U3Hfy…UixBIVp). So a run with gaps_over_grace>0 and
+          // backfilled=0 means "detected, deferred to a concurrent write that didn't
+          // land" — NOT "the safety net can't write." If this recurs, that's why.
           const { inserted } = await upsertSubscriptionPayment(admin, m.cap);
           if (inserted) backfilled++;
         } catch (e) {
