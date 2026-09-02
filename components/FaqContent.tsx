@@ -277,7 +277,7 @@ export default function FaqContent() {
           <section className={f.disclaimer} aria-label="About the daily verses">
             <h2>About the daily verses</h2>
             <p>
-              We use AI to help select and translate the daily verses, and we review the messages personally before they go out. Even so, something might occasionally slip through. We are not responsible for any harm, whether real or perceived, that this might cause. You can opt out at any time by replying STOP.
+              Messages come from our approved content pool, grounded in the King James Version. Even so, something might occasionally slip through, and we are not responsible for any harm, whether real or perceived, that this might cause. You can opt out at any time by replying STOP.
             </p>
           </section>
 
