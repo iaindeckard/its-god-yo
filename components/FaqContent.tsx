@@ -36,6 +36,22 @@ const FAQS: Record<TabKey, Item[]> = {
       ),
     },
     {
+      q: "Why It's God, Yo! exists",
+      a: (
+        <>
+          <p>
+            I was born in 1974, and I grew up without a phone in my pocket. When I wanted to talk to someone, it was in person or it wasn&rsquo;t at all. That&rsquo;s just how things worked back then. What shaped me most in those years was the Episcopal Church, starting as a kid at Church of the Epiphany in New Iberia and growing into an acolyte and eventually a lay minister there. I logged enough time serving at the altar that I could get through the incense and bells in a Rite II service without needing to read along in the Book of Common Prayer. Any Episcopalian reading this probably knows exactly what I mean, and I&rsquo;d guess a fair number of Catholics do too. Alongside that, I spent my summers as a camper and then staff at Camp Hardtner, and those years at church and at camp are where my faith actually took root. Looking back, I&rsquo;d call them some of the most important years of my life.
+          </p>
+          <p>
+            Today&rsquo;s teens are growing up in a completely different world. Their phones are constantly putting things in front of them, and a lot of it isn&rsquo;t good. I wanted to find a way to put something good there too, even if it&rsquo;s just one message a day.
+          </p>
+          <p>
+            It&rsquo;s God, Yo! isn&rsquo;t meant to replace a parent, a grandparent, a caregiver, a youth minister, or a church leader. It&rsquo;s meant to give them a simple way to do their part. If you&rsquo;re one of those people in a teen&rsquo;s life, this is a tool that lets you know you showed up for their faith today, even on the days you can&rsquo;t be there in person. My hope is that it helps some young person build the same kind of relationship with God that Camp Hardtner and my church gave me.
+          </p>
+        </>
+      ),
+    },
+    {
       q: "How does the daily text work?",
       a: (
         <p>
