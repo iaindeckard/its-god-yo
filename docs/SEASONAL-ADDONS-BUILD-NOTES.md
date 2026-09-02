@@ -115,3 +115,29 @@ calendar. NOT a live dependency or scraper — the engine stays the source of tr
 (verified vs 17 real years + two-algorithm agreement 1583–2600 + invariants). This is
 a cheap annual insurance policy against an edge case the original verification missed.
 Nothing to build now; it belongs in the Phase F checklist as a recurring manual step.
+
+## Go-live checklist (added 2026-09-02 — feature is dormant, NOT live)
+
+Seasons ship fully built but fail closed at every layer while `SEASONS_ENABLED = false`
+(`lib/flags.ts`): the `/seasons/manage` toggle UI 404s, `toggleSeasonAction` returns
+`seasons_disabled`, `setSeasonEnrollment` throws, and the 4 season crons no-op. This is
+prep only. To actually flip it live, in order:
+
+1. **Confirm base-product sequencing is satisfied** (it is, as of Sep 2026): Twilio
+   toll-free delivery live → daily-send verified → `PURCHASES_ENABLED=true`.
+2. **Set `SEASON_LINK_SECRET` in prod** (Vercel, Production scope). Without it,
+   `verifySeasonManageToken` cannot mint/verify the no-login manage links, so no
+   customer can reach the toggle UI. Currently UNSET in prod.
+3. **Confirm the season prices.** `lib/seasons/catalog.ts` falls back to baked-in live
+   price IDs (`price_1U0NM…`), so pricing works without env — but if you want to point
+   at different prices, set `STRIPE_PRICE_SEASON_{CHRISTMASTIDE,ADVENT,EASTERTIDE,LENT}`
+   (Production). Currently UNSET (fallbacks in use).
+4. **Wire a real entry point** into the tokenized `/seasons/manage` flow (e.g. a link in
+   the welcome/account surface that mints a `SEASON_LINK_SECRET` token per customer).
+   There is intentionally no public link today.
+5. **Flip `SEASONS_ENABLED = true`** in `lib/flags.ts` (code change + deploy — it is a
+   constant, not an env var).
+6. **Verify end-to-end** on a real (or test-mode) customer: manage link opens → toggle a
+   season on → pre-season billing cron charges the default card → seasonal/climax sends
+   fire on the right liturgical dates. Confirm `PURCHASES_ENABLED` state explicitly at
+   this step; never assume it.

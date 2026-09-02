@@ -69,10 +69,15 @@ export const DAILY_SEND_ENABLED = true;
 
 /**
  * Holy Season add-on products (Christmastide / Advent / Eastertide / Lent). While
- * false: the season purchase/toggle UI is hidden, and the moving-date billing cron
- * and the seasonal/climax send paths no-op. Kept off until go-live inherits the same
- * hard sequencing as the base product (Twilio toll-free delivery live → daily-send
- * verified → PURCHASES_ENABLED → then this). Dormant-but-built by design.
+ * false, the feature fails closed at every layer:
+ *   - the /seasons/manage toggle UI 404s (notFound), even with a valid token;
+ *   - the enrollment/toggle path is blocked (toggleSeasonAction returns
+ *     seasons_disabled; setSeasonEnrollment throws) — not just the crons;
+ *   - the moving-date billing cron and the seasonal/climax send paths no-op.
+ * Kept off until go-live inherits the same hard sequencing as the base product
+ * (Twilio toll-free delivery live → daily-send verified → PURCHASES_ENABLED → then
+ * this) AND SEASON_LINK_SECRET + the STRIPE_PRICE_SEASON_* prices are set in prod
+ * (see docs/SEASONAL-ADDONS-BUILD-NOTES.md go-live checklist). Dormant-but-built.
  */
 export const SEASONS_ENABLED = false;
 

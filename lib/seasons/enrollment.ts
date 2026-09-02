@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { SeasonKey } from "./liturgical";
 import { SEASON_KEYS } from "./catalog";
+import { SEASONS_ENABLED } from "../flags";
 
 /**
  * Phase E — season enrollment (purchase) + toggle. Whole-family only (no per-child
@@ -30,6 +31,11 @@ export async function setSeasonEnrollment(
     paymentMethodId?: string | null;
   },
 ): Promise<SeasonEnrollmentRow> {
+  // Hard gate (defense in depth): the enrollment WRITE path must fail closed while
+  // seasons are dark, not just the billing/send crons. This is the deepest layer;
+  // the manage page and toggle action gate too, but any future caller of this
+  // writer is also blocked until go-live flips SEASONS_ENABLED.
+  if (!SEASONS_ENABLED) throw new Error("seasons_disabled: SEASONS_ENABLED is false");
   if (!SEASON_KEYS.includes(args.seasonKey)) throw new Error(`unknown season ${args.seasonKey}`);
   const now = new Date().toISOString();
   const row: Record<string, unknown> = {
