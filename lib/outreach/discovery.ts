@@ -474,6 +474,28 @@ export async function continueCampaignDiscovery(campaign: Campaign): Promise<Dis
   try {
     const remaining = Math.max(1, run.target_count - run.found_count);
     const roundTarget = Math.min(LEADS_PER_ROUND, remaining);
+    // This round's lane, prompt, and system prompt — shared by both providers so
+    // whichever runs searches the exact same sources with the same rules. Computed
+    // up front (before the poll/start split) because it is deterministic from the
+    // run's round_count + discovered_names snapshot, and the OpenAI background-
+    // failure failover below needs it even on a POLL invocation (which never enters
+    // the start-a-lane branch). All pure computation — no network.
+    const churchLane = school ? null : discoverySourceLane(run.round_count, campaign.denomination_filter);
+    const laneLabel = school
+      ? schoolSourceLane(run.round_count, campaign.state_code).label
+      : churchLane!.label;
+    const roundPrompt = school
+      ? schoolUserPrompt(campaign.state_code, roundTarget, run.discovered_names, laneLabel)
+      : campaignPrompt(campaign, roundTarget, run.discovered_names, laneLabel);
+    const roundSystem = school
+      ? schoolDiscoverySystem(campaign.state_code)
+      : discoverySystem(churchLane?.directory ?? null);
+    const directory = churchLane?.directory ?? null;
+    // church lanes use the directory-based default system inside the request body;
+    // school lanes pass the school system prompt explicitly.
+    const openaiSystem = school ? roundSystem : undefined;
+    const context = `campaign ${campaign.id} run ${run.id} round ${run.round_count}`;
+    const baseKey = `outreach_discovery:${run.id}:round:${run.round_count}`;
     let providerResponse: OpenAIResponse | null = null;
     // Set when this lane ran on a SYNCHRONOUS provider — its already-policy-applied
     // leads, produced inline in this same invocation. Anthropic has no background/
@@ -487,25 +509,6 @@ export async function continueCampaignDiscovery(campaign: Campaign): Promise<Dis
       providerResponse = await retrieveBackgroundLeadRequest(openaiKey, run.provider_response_id);
       run = await patchRun(run.id, { provider_status: providerResponse.status ?? null });
     } else {
-      // This round's lane, prompt, and system prompt — shared by both providers so
-      // whichever runs searches the exact same sources with the same rules.
-      const churchLane = school ? null : discoverySourceLane(run.round_count, campaign.denomination_filter);
-      const laneLabel = school
-        ? schoolSourceLane(run.round_count, campaign.state_code).label
-        : churchLane!.label;
-      const roundPrompt = school
-        ? schoolUserPrompt(campaign.state_code, roundTarget, run.discovered_names, laneLabel)
-        : campaignPrompt(campaign, roundTarget, run.discovered_names, laneLabel);
-      const roundSystem = school
-        ? schoolDiscoverySystem(campaign.state_code)
-        : discoverySystem(churchLane?.directory ?? null);
-      const directory = churchLane?.directory ?? null;
-      // church lanes use the directory-based default system inside the request body;
-      // school lanes pass the school system prompt explicitly.
-      const openaiSystem = school ? roundSystem : undefined;
-      const context = `campaign ${campaign.id} run ${run.id} round ${run.round_count}`;
-      const baseKey = `outreach_discovery:${run.id}:round:${run.round_count}`;
-
       if (primary === "openai") {
         // OpenAI primary: durable background start/poll. Reserve = Anthropic (sync).
         const usageEvent = await reserveAiUsage({ feature: "outreach_discovery", requestKey: baseKey, model: OUTREACH.openaiDiscoveryModel, maxCostMicrousd: DISCOVERY_ROUND_MAX_COST_MICROUSD, metadata: { campaign_id: campaign.id, run_id: run.id, round: run.round_count, provider: "openai" } });
@@ -562,17 +565,34 @@ export async function continueCampaignDiscovery(campaign: Campaign): Promise<Dis
         });
       }
       if (phase === "failed") {
-        const detail = resp.error?.message
-          ?? resp.error?.code
-          ?? resp.incomplete_details?.reason
-          ?? resp.status
-          ?? "unknown";
+        // Keep the code AND message so both isCreditExhaustedError() and a human
+        // reading last_error can see what drained. OpenAI reports credit exhaustion
+        // as an async background failure whose message is "You have no credits
+        // remaining…", frequently with no separate type/code field.
+        const detail = [resp.error?.code, resp.error?.message].filter(Boolean).join(": ")
+          || resp.incomplete_details?.reason
+          || resp.status
+          || "unknown";
         const providerError = new Error(`openai_background_${detail}`);
-        if (run.provider_response_id) await failAiUsageByProviderResponse(run.provider_response_id, providerError);
-        throw providerError;
+        if (run.provider_response_id) await failAiUsageByProviderResponse(run.provider_response_id, providerError).catch(() => {});
+        // A background job can drain OpenAI credits AFTER the POST was accepted, so
+        // the synchronous start-time failover (above) never sees it. Fail over HERE
+        // too: rerun this exact lane on Anthropic instead of hard-stopping the run.
+        if (isCreditExhaustedError(providerError) && anthropicDiscoveryAvailable()) {
+          await alertFailover("openai", "anthropic", laneLabel, context);
+          // Drop the dead OpenAI response id so no later poll re-polls a failed job.
+          run = await patchRun(run.id, { provider_response_id: null, provider_status: null });
+          batch = await anthropicLane({
+            system: roundSystem, prompt: roundPrompt, maxLeads: roundTarget, school,
+            requestKey: `${baseKey}:bgfailover:anthropic`, maxCostMicrousd: DISCOVERY_ROUND_MAX_COST_MICROUSD,
+          });
+        } else {
+          throw providerError;
+        }
+      } else {
+        if (resp.id) await completeAiUsageByProviderResponse(resp.id, resp);
+        batch = parseResponseLeads(resp, LEADS_PER_ROUND, school);
       }
-      if (resp.id) await completeAiUsageByProviderResponse(resp.id, resp);
-      batch = parseResponseLeads(resp, LEADS_PER_ROUND, school);
     }
     let found = run.found_count, inserted = run.inserted_count, skipped = run.skipped_count;
     let outOfRadius = run.out_of_radius_count, added = 0;

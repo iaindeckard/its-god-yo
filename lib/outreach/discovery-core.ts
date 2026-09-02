@@ -64,7 +64,10 @@ export function providerResponsePhase(status: string | null | undefined): "pendi
  * to an ordinary rate limit, which should NOT trigger failover). Matches the
  * specific signals each provider uses:
  *   - OpenAI: type "insufficient_quota" / code "credit_balance_exhausted"
- *     (also "billing_hard_limit_reached")
+ *     (also "billing_hard_limit_reached"). A prepaid-credit account instead returns
+ *     the bare message "You have no credits remaining. Add credits to continue…"
+ *     with NO type/code — and an OpenAI *background* job surfaces only that message,
+ *     so we match the message text too, not just the structured code.
  *   - Anthropic: HTTP 400 with "credit balance is too low"
  * This is the ONLY error class the discovery failover reacts to — a plain 429
  * rate limit (retry-after) is left to the provider's own backoff, not failed over.
@@ -91,7 +94,9 @@ export function isCreditExhaustedError(error: unknown): boolean {
     msg.includes("insufficient_quota") ||
     msg.includes("credit_balance_exhausted") ||
     msg.includes("billing_hard_limit_reached") ||
-    msg.includes("credit balance is too low") ||
-    msg.includes("credit balance is too low to")
+    msg.includes("no credits remaining") ||
+    msg.includes("add credits to continue") ||
+    msg.includes("exceeded your current quota") ||
+    msg.includes("credit balance is too low")
   );
 }
