@@ -93,7 +93,7 @@ export default function ApplicationForm() {
         <p className="strong" style={{ color: "var(--igy-blue)", letterSpacing: ".08em", fontSize: 13, marginBottom: 8 }}>FOR CHURCHES &amp; YOUTH GROUPS</p>
         <h1 style={{ fontSize: 36, lineHeight: 1.15, marginBottom: 12 }}>Keep Scripture present between Sundays.</h1>
         <p className="muted" style={{ fontSize: 17, lineHeight: 1.65, marginBottom: 20 }}>
-          Give every participating teen one short, human-reviewed Scripture message each day. No app to download,
+          Give every participating teen one short, KJV-grounded Scripture message each day. No app to download,
           and every recipient confirms for themselves before anything begins.
         </p>
         <a className="btn btn-primary" href="#apply">Talk with us about your group</a>

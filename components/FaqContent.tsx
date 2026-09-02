@@ -268,7 +268,7 @@ export default function FaqContent() {
           <section className={f.disclaimer} aria-label="AI and content generation">
             <h2>Does It&rsquo;s God, Yo! use AI to generate content?</h2>
             <p>
-              Yes. We use AI to help generate illustrative images that show how It&rsquo;s God, Yo! fits into your family&rsquo;s life, and to help gather and organize verse selections from the King James Version (and the Reina-Valera 1909 for Spanish-language sends). Every message is reviewed by a real person before it goes out.
+              Yes. We use AI to help generate illustrative images that show how It&rsquo;s God, Yo! fits into your family&rsquo;s life, and to help gather and organize verse selections from the King James Version (and the Reina-Valera 1909 for Spanish-language sends). Every message comes from an approved content pool grounded in those texts.
             </p>
           </section>
         </div>
