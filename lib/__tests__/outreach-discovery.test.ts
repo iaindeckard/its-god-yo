@@ -145,6 +145,17 @@ describe("isCreditExhaustedError (failover trigger)", () => {
       'openai_429: {"error":{"message":"You have no credits remaining.","type":"insufficient_quota","code":"credit_balance_exhausted"}}',
     ))).toBe(true);
   });
+  it("matches OpenAI's bare prepaid message with NO type/code (async background failure)", () => {
+    // This is the exact shape a drained background job surfaces: only the message
+    // text, no insufficient_quota/credit_balance_exhausted to key off. Regression
+    // guard for the hard-stop bug — before the fix this returned false.
+    expect(isCreditExhaustedError(new Error(
+      "openai_background_You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.",
+    ))).toBe(true);
+    expect(isCreditExhaustedError(new Error(
+      "openai_background_You exceeded your current quota, please check your plan and billing details.",
+    ))).toBe(true);
+  });
   it("matches Anthropic 'credit balance is too low'", () => {
     expect(isCreditExhaustedError(new Error(
       'anthropic_400: {"type":"error","error":{"type":"invalid_request_error","message":"Your credit balance is too low to access the Anthropic API."}}',
