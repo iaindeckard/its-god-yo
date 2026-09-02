@@ -1,4 +1,6 @@
+import { notFound } from "next/navigation";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+import { SEASONS_ENABLED } from "@/lib/flags";
 import { verifySeasonManageToken } from "@/lib/seasons/token";
 import { getCustomerEnrollments } from "@/lib/seasons/enrollment";
 import SeasonAddOns from "@/components/SeasonAddOns";
@@ -8,6 +10,9 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Holy Season add-ons" };
 
 export default async function SeasonsManagePage({ searchParams }: { searchParams: Promise<{ c?: string; t?: string }> }) {
+  // While seasons are dark the toggle UI must not render at all (the flag comment
+  // promises this). notFound() keeps the page invisible even with a valid token.
+  if (!SEASONS_ENABLED) notFound();
   const { c, t } = await searchParams;
   if (!c || !t || !verifySeasonManageToken(c, t)) {
     return (
