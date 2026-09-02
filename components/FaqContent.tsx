@@ -287,6 +287,23 @@ export default function FaqContent() {
               Yes. We use AI to help generate illustrative images that show how It&rsquo;s God, Yo! fits into your family&rsquo;s life, and to help gather and organize verse selections from the King James Version (and the Reina-Valera 1909 for Spanish-language sends). Every message comes from an approved content pool grounded in those texts.
             </p>
           </section>
+
+          <section className={f.disclaimer} aria-label="A note on translation">
+            <h2>A note on translation</h2>
+            <p>
+              We&rsquo;ve done our best to translate It&rsquo;s God, Yo! into Spanish, including our pages and the daily Bible verses. No translation is perfect, whether it&rsquo;s done by a person or with the help of translation tools. If something reads a little off, that&rsquo;s honest human error, not intent. Some pages may still be in English while we keep expanding our Spanish coverage.
+            </p>
+            <p>
+              If you spot a translation issue in a specific daily verse, tell us at <Link href="/report">itsgodyo.com/report</Link>. We reward the first confirmed report with account credit, per our standing policy.
+            </p>
+            <h2 style={{ marginTop: 22 }}>Una nota sobre la traducci&oacute;n</h2>
+            <p>
+              Hemos hecho todo lo posible por traducir It&rsquo;s God, Yo! al espa&ntilde;ol, incluyendo nuestras p&aacute;ginas y los vers&iacute;culos b&iacute;blicos diarios. Ninguna traducci&oacute;n es perfecta, ya sea hecha por una persona o con ayuda de herramientas de traducci&oacute;n. Si algo se lee un poco raro, es un error humano honesto, no intenci&oacute;n. Es posible que algunas p&aacute;ginas todav&iacute;a est&eacute;n en ingl&eacute;s mientras seguimos ampliando nuestra cobertura en espa&ntilde;ol.
+            </p>
+            <p>
+              Si detectas un problema de traducci&oacute;n en un vers&iacute;culo diario espec&iacute;fico, av&iacute;sanos en <Link href="/report">itsgodyo.com/report</Link>. Recompensamos con cr&eacute;dito en la cuenta al primer reporte confirmado, seg&uacute;n nuestra pol&iacute;tica vigente.
+            </p>
+          </section>
         </div>
 
         <div className={s.foot}>

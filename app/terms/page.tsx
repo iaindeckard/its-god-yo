@@ -90,21 +90,26 @@ export default function TermsPage() {
         It is our intentional editorial practice to capitalize pronouns and titles referring to God, including &ldquo;He,&rdquo; &ldquo;Him,&rdquo; &ldquo;His,&rdquo; &ldquo;God,&rdquo; &ldquo;Lord,&rdquo; &ldquo;Jesus,&rdquo; and &ldquo;Christ,&rdquo; throughout our content, including messages produced with the assistance of automated translation tools. We review content before it is sent, but this process is not infallible, and an occasional message may not follow this style due to human or automated error. Any such instance is unintentional, reflects no change in meaning, and is not a statement of doctrine. If you notice an instance where this style was not followed, please let us know at <a href="mailto:support@itsgodyo.com">support@itsgodyo.com</a> so we can correct it.
       </p>
 
-      {/* ⚠️ DRAFT — §9d is pending attorney review (added 2026-08-31); ATTORNEY REVIEW
-          REQUIRED. Describes the seasonal Christmas Scheduled Gift plan variant. Noindex
-          per the draft convention above. Do not treat as final legal language. */}
-      <h2>9d. Christmas Scheduled Gift (seasonal)</h2>
+      {/* ⚠️ DRAFT — §9d rewritten 2026-09-02: generalized from the Christmas-specific
+          Scheduled Gift variant to cover all seasonal/promotional gift offerings. Still
+          pending attorney review; not final legal language. Noindex per the draft
+          convention above. */}
+      <h2>9d. Seasonal Gift and Promotional Offerings</h2>
       <p>
-        During our Christmas Scheduled Gift promotion, you may purchase a prepaid one-year gift subscription for another person and choose a future date on which we will text that person to confirm. This plan variant differs from our standard plans as follows.
+        From time to time, we may offer seasonal or promotional plan variants tied to particular occasions or times of year, such as Advent, Christmastide, Lent, or Eastertide. Each seasonal offering has its own rules, pricing, and eligibility requirements, as described at the time that offering is available, and these may differ from one offering to the next.
+      </p>
+      <p>
+        Where a seasonal offering includes a prepaid gift subscription with delivery scheduled for a future date, the following applies unless the specific offering states otherwise:
       </p>
       <ul>
-        <li><strong>Charged today, no free trial.</strong> Your payment is collected in full at the time of purchase. The standard free trial does not apply to this purchase.</li>
-        <li><strong>Delivery is scheduled.</strong> On the date you choose, we text your recipient to ask them to confirm. Their one year of daily messages begins only after they personally reply YES, and we measure the year from that confirmation, not from your purchase or the scheduled date.</li>
+        <li><strong>Charged today, no free trial.</strong> Your payment is collected in full at the time of purchase. The standard free trial does not apply.</li>
+        <li><strong>Delivery is scheduled.</strong> On the date you choose, we text your recipient to ask them to confirm. Their year of daily messages begins only after they personally reply YES, and we measure the year from that confirmation, not from your purchase or the scheduled date.</li>
         <li><strong>Not eligible for a cash refund.</strong> If your recipient never confirms, or does not meet the age or consent requirements for their country, your payment converts to It&rsquo;s God, Yo! account credit rather than being refunded. Account credit may be applied to a future purchase or your own subscription.</li>
-        <li><strong>Seasonal bonuses.</strong> Purchases made within advertised promotional windows may include a complimentary DM from Him content style for the recipient&rsquo;s gifted year at no additional charge, and purchases made during an advertised flash-sale window may receive a discounted price. Eligibility and any applicable dates are as stated at checkout at the time of purchase.</li>
-        <li><strong>No automatic renewal.</strong> This gift is exactly one year of service. It does not automatically renew, and no recurring billing is created.</li>
-        <li><strong>Temporary referral change.</strong> During advertised promotional windows, the referral reward associated with a qualifying Scheduled Gift purchase may differ from our standard referral reward, as described at the time of the promotion. Our standard referral program terms otherwise continue to apply.</li>
+        <li><strong>No automatic renewal.</strong> A seasonal gift is exactly one year of service. It does not automatically renew, and no recurring billing is created.</li>
       </ul>
+      <p>
+        Pricing, discounts, and referral rewards offered as part of a given seasonal or promotional offering apply only to that offering, as described at checkout at the time of purchase. We may offer a different price, discount, or referral reward at another time, including to another customer, and offering a particular price or discount at one time does not entitle you to that same price or discount at any other time.
+      </p>
 
       <h2>10. Limitation of liability</h2>
       <p>
