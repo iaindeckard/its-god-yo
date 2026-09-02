@@ -12,6 +12,11 @@ export interface OfficialChurchDirectory {
   // directory, used only when a campaign's search_language is "es" (it is kept out
   // of the default English lane rotation).
   language?: SearchLanguage;
+  // A third-party (non-denominational) aggregator directory rather than a national
+  // church body's own locator. Candidates from it are capped at "medium"
+  // confidence, the same tier as the secondary-web fallback (see
+  // applyDirectorySourcePolicy).
+  thirdParty?: boolean;
 }
 
 /**
@@ -81,6 +86,7 @@ export const OFFICIAL_CHURCH_DIRECTORIES: readonly OfficialChurchDirectory[] = [
     entryUrl: "https://www.churchdirectoryusa.com/spanish-speaking-churches",
     domains: ["churchdirectoryusa.com"],
     language: "es",
+    thirdParty: true,
   },
 ] as const;
 
@@ -194,7 +200,9 @@ export function discoverySourceLane(
 /**
  * Convert the model's role-specific citations into the existing source_urls
  * evidence trail. A false "official_directory" claim is downgraded rather than
- * trusted, and secondary-web candidates can never be high confidence.
+ * trusted, and secondary-web candidates can never be high confidence. Third-party
+ * (non-denominational) aggregator directories are capped at the same "medium"
+ * tier as secondary web, since they are not a church body's own locator.
  */
 export function applyDirectorySourcePolicy(lead: DiscoveredLead): DiscoveredLead | null {
   const directory = officialDirectoryForUrl(lead.directory_source_url);
@@ -209,7 +217,10 @@ export function applyDirectorySourcePolicy(lead: DiscoveredLead): DiscoveredLead
   const sourceUrls = [contact, youth, lead.directory_source_url, ...(lead.source_urls ?? [])]
     .filter((value): value is string => Boolean(value && hostname(value)));
   const uniqueSources = [...new Set(sourceUrls)];
-  const confidence = method === "secondary_web" && lead.discovery_confidence === "high"
+  // Cap at "medium" for the secondary-web fallback AND for third-party aggregator
+  // directories (e.g. the Spanish directory) — neither is a denomination's own locator.
+  const capMedium = method === "secondary_web" || Boolean(directory?.thirdParty);
+  const confidence = capMedium && lead.discovery_confidence === "high"
     ? "medium"
     : lead.discovery_confidence;
 

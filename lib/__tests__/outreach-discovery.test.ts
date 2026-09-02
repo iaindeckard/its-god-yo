@@ -163,6 +163,21 @@ describe("outreach discovery core", () => {
       youth_source_url: null,
     })).toBeNull();
   });
+
+  it("caps the third-party Spanish directory at medium confidence (like secondary web)", () => {
+    const lead = applyDirectorySourcePolicy({
+      org_name: "Iglesia Ejemplo",
+      contact_email: "info@ejemplo.example",
+      directory_source_url: "https://www.churchdirectoryusa.com/spanish-speaking-churches/ejemplo",
+      contact_source_url: "https://ejemplo.example/contacto",
+      youth_source_url: "https://ejemplo.example/jovenes",
+      discovery_method: "official_directory",
+      discovery_confidence: "high",
+    });
+    // Provenance is kept (it IS a recognized directory) but confidence is capped.
+    expect(lead?.directory_source_url).toContain("churchdirectoryusa.com");
+    expect(lead?.discovery_confidence).toBe("medium");
+  });
 });
 
 describe("isCreditExhaustedError (failover trigger)", () => {
