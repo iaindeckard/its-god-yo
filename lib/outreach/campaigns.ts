@@ -14,6 +14,9 @@ import { geocodeAddress, type LatLng } from "../geocode";
 
 export type SizeBucket = "small" | "medium" | "large" | "mega" | "unknown";
 export type CampaignStatus = "draft" | "discovering" | "ready" | "scheduled" | "sending" | "active" | "completed" | "paused" | "archived";
+/** Discovery language for a campaign. "es" scopes discovery to Spanish-speaking
+ *  churches (Spanish directory lane + a Spanish-language requirement in the prompt). */
+export type SearchLanguage = "en" | "es";
 
 export interface Campaign {
   id: string;
@@ -26,6 +29,7 @@ export interface Campaign {
   state_code: string | null;
   size_filter: string[] | null;
   denomination_filter: string[] | null;
+  search_language: SearchLanguage;
   discovery_target_count: number | null;
   discount_percent: number;
   message_variant: string | null;
@@ -84,6 +88,7 @@ export interface CreateCampaignInput {
   stateCode?: string | null;
   sizeFilter?: string[] | null;
   denominationFilter?: string[] | null;
+  searchLanguage?: SearchLanguage;
   discoveryTargetCount?: number | null;
   createdBy?: string | null;
   // When the map picker already resolved coordinates, pass them to skip the
@@ -115,6 +120,7 @@ export async function createCampaign(input: CreateCampaignInput): Promise<Campai
     state_code: input.geographyType === "state" ? input.stateCode?.toUpperCase() ?? null : null,
     size_filter: input.sizeFilter ?? null,
     denomination_filter: input.denominationFilter?.length ? input.denominationFilter : null,
+    search_language: input.searchLanguage ?? "en",
     discovery_target_count: input.discoveryTargetCount ?? null,
     created_by: input.createdBy ?? null,
   };
@@ -145,6 +151,7 @@ export interface CampaignPatch {
   radius_miles?: number;
   geography_type?: "radius" | "state";
   state_code?: string | null;
+  search_language?: SearchLanguage;
   center_label?: string;
   center_lat?: number | null;
   center_lng?: number | null;

@@ -43,6 +43,7 @@ export async function POST(req: Request) {
       radiusMiles,
       sizeFilter: Array.isArray(body.size_filter) ? body.size_filter : null,
       denominationFilter: Array.isArray(body.denomination_filter) ? validDirectoryIds(body.denomination_filter) : null,
+      searchLanguage: body.search_language === "es" ? "es" : "en",
       geographyType,
       stateCode,
       createdBy: staff?.userId ?? null,
