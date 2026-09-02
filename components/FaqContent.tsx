@@ -129,7 +129,7 @@ const FAQS: Record<TabKey, Item[]> = {
       q: "Can I buy It's God, Yo! as a gift?",
       a: (
         <p>
-          Yes. A Gift plan is $59/year for one teen, bought on someone else&rsquo;s behalf. The person you&rsquo;re giving it to gets the confirmation text and replies <strong>YES</strong> themselves - we can&rsquo;t start the gift without their own OK, and no messages go out until they do. Seasonally, we also offer a prepaid Christmas gift you can buy now and schedule to be announced to the recipient on a date you choose.
+          Yes. A Gift plan is $59/year for one teen, bought on someone else&rsquo;s behalf. The person you&rsquo;re giving it to gets the confirmation text and replies <strong>YES</strong> themselves. We can&rsquo;t start the gift without their own OK, and no messages go out until they do. We also run seasonal offerings during different times of year, including a prepaid Christmas gift you can buy now and schedule to be announced to the recipient on a date you choose. Check back throughout the year to see what we&rsquo;re currently offering.
         </p>
       ),
     },

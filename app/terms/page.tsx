@@ -96,7 +96,7 @@ export default function TermsPage() {
           convention above. */}
       <h2>9d. Seasonal Gift and Promotional Offerings</h2>
       <p>
-        From time to time, we may offer seasonal or promotional plan variants tied to particular occasions or times of year, such as Advent, Christmastide, Lent, or Eastertide. Each seasonal offering has its own rules, pricing, and eligibility requirements, as described at the time that offering is available, and these may differ from one offering to the next.
+        From time to time, we may offer seasonal or promotional plan variants tied to particular occasions or times of year, such as Advent, Christmastide, Lent, or Eastertide. Our current seasonal offering is a Christmas gift subscription, described below; future seasonal offerings will have their own terms, described at checkout when available. Each seasonal offering has its own rules, pricing, and eligibility requirements, as described at the time that offering is available, and these may differ from one offering to the next.
       </p>
       <p>
         Where a seasonal offering includes a prepaid gift subscription with delivery scheduled for a future date, the following applies unless the specific offering states otherwise:

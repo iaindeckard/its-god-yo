@@ -173,7 +173,7 @@ export default function ChristmasGiftPage() {
     return (
       <main className="container" style={{ maxWidth: 640 }}>
         <h1>Christmas Gift</h1>
-        <p className="muted">The Christmas gift campaign is not open right now. Please check back soon.</p>
+        <p className="muted">This Christmas gift offering isn&apos;t open right now. It&apos;s one of several seasonal offerings we run throughout the year. Check back soon.</p>
       </main>
     );
   }
@@ -181,7 +181,7 @@ export default function ChristmasGiftPage() {
   return (
     <main className="container" style={{ maxWidth: 640 }}>
       <h1>Give a Christmas Gift</h1>
-      <p className="muted">A full prepaid year of daily Scripture texts, scheduled to arrive whenever you choose.</p>
+      <p className="muted">A full prepaid year of daily Scripture texts, scheduled to arrive whenever you choose. This is one of our seasonal offerings; we run others throughout the year.</p>
 
       {step === "details" && (
         <>
@@ -318,9 +318,9 @@ function humanError(reason: string | undefined): string {
   switch (reason) {
     case "campaign_inactive":
     case "sale_not_open":
-      return "The Christmas gift campaign is not open right now.";
+      return "This Christmas gift offering isn't open right now.";
     case "campaign_closed":
-      return "The Christmas gift campaign has closed for this year.";
+      return "This Christmas gift offering has closed for this year. We'll have more seasonal offerings throughout the year.";
     case "release_date_not_future":
       return "Please choose a send date in the future.";
     case "release_date_after_max":
