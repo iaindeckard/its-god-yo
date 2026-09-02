@@ -265,3 +265,20 @@
   .gateReceived { align-self: center; }
   .gateReceived :global(.wordmark) { font-size: 40px; }
 }
+
+/* Phones: the gate content is taller than the viewport, so justify-content:center
+   (from .gate) pushed the top up and shoved the audience choices below the fold —
+   a first-time visitor saw the headline + "Who's here today?" + a photo, but the
+   actual tappable choices required a scroll. Top-anchor the gate and tighten the
+   vertical rhythm so the first card's title/body and the top of "I'm a teen" clear
+   the fold. Spacing only; same content, same order. */
+@media (max-width: 600px) {
+  .gate { justify-content: flex-start; padding-top: 74px; }
+  .gateReceived { margin-bottom: 18px; padding: 14px 22px; }
+  .gateReceived :global(.wordmark) { font-size: 32px; }
+  .gateHeadline { font-size: 26px; margin-bottom: 12px; }
+  .gateQuestion { font-size: 21px; }
+  .gateSub { margin-bottom: 22px; }
+  .gateChoices { gap: 14px; }
+  .gateImg { height: 104px; }
+}
