@@ -72,7 +72,16 @@ export default function ApplicationForm() {
             Thank you. We&rsquo;ve received your church&rsquo;s Cornerstone Partner application. Our team reviews each
             one personally and will follow up at the email you provided.
           </p>
-          <a className="btn btn-ghost" href="/" style={{ marginTop: 16 }}>Back home</a>
+          <div style={{ borderTop: "1px solid var(--igy-border, rgba(0,0,0,.1))", margin: "20px 0 16px" }} />
+          <p className="strong" style={{ fontSize: 16, marginBottom: 4 }}>Want to start today, for yourself?</p>
+          <p className="muted" style={{ marginBottom: 16 }}>
+            You don&rsquo;t have to wait for us. You can set up a daily scripture text for your own teen right now,
+            separate from your church&rsquo;s partnership.
+          </p>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <a className="btn btn-primary" href="/signup">Get It&rsquo;s God, Yo! today</a>
+            <a className="btn btn-ghost" href="/">Back home</a>
+          </div>
         </div>
       </main>
     );
@@ -210,6 +219,14 @@ export default function ApplicationForm() {
         </button>
         <p className="hint" style={{ marginTop: 10 }}>Fields marked * are required.</p>
       </div>
+      </div>
+
+      <div className="card" style={{ maxWidth: 620, margin: "28px auto 0", textAlign: "center", padding: 24 }}>
+        <p className="strong" style={{ fontSize: 18, marginBottom: 6 }}>Just want it for your own teen?</p>
+        <p className="muted" style={{ marginBottom: 16 }}>
+          You don&rsquo;t need a church partnership to get started. Set up a daily scripture text for your own family today.
+        </p>
+        <a className="btn btn-primary" href="/signup">Get It&rsquo;s God, Yo! today</a>
       </div>
     </main>
   );
