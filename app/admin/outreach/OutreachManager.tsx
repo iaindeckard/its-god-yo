@@ -48,6 +48,7 @@ interface Campaign {
   center_lat: number | null; center_lng: number | null;
   radius_miles: number; size_filter: string[] | null;
   denomination_filter: string[] | null;
+  search_language: "en" | "es";
   discovery_target_count: number | null;
   geography_type: "radius" | "state"; state_code: string | null;
   status: string; created_at: string;
@@ -336,6 +337,7 @@ export default function OutreachManager({
   const [createName, setCreateName] = useState("");
   const [createGeographyType, setCreateGeographyType] = useState<"radius" | "state">("radius");
   const [createStateCode, setCreateStateCode] = useState("FL");
+  const [createLanguage, setCreateLanguage] = useState<"en" | "es">("en");
   const [createDenominations, setCreateDenominations] = useState<string[]>([]);
   const [createDraft, setCreateDraft] = useState<CampaignMapChange | null>(null);
   const [detailDraft, setDetailDraft] = useState<CampaignMapChange | null>(null);
@@ -378,7 +380,7 @@ export default function OutreachManager({
     setSelected(null); setLeads([]); setDiscoveryRun(null); setReport(null);
     setViewBucket("all"); setPromoteSel(new Set()); setAudienceSel(new Set());
     setDetailDraft(null); setOfferDraft(null); setError(null);
-    setCreateName(""); setCreateDraft(null); setCreateGeographyType("radius"); setCreateStateCode("FL"); setCreateDenominations([]); setDenominationDraft([]); setContactEdit(null);
+    setCreateName(""); setCreateDraft(null); setCreateGeographyType("radius"); setCreateStateCode("FL"); setCreateLanguage("en"); setCreateDenominations([]); setDenominationDraft([]); setContactEdit(null);
   }
 
   async function createCampaign() {
@@ -400,11 +402,12 @@ export default function OutreachManager({
           geography_type: createGeographyType,
           state_code: createGeographyType === "state" ? createStateCode : null,
           denomination_filter: createDenominations,
+          search_language: createLanguage,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "create failed");
-      setCreateName(""); setCreateDraft(null); setCreateGeographyType("radius"); setCreateStateCode("FL"); setCreateDenominations([]);
+      setCreateName(""); setCreateDraft(null); setCreateGeographyType("radius"); setCreateStateCode("FL"); setCreateLanguage("en"); setCreateDenominations([]);
       await refreshCampaigns();
       await openCampaign(data.campaign);
     } catch (e) { setError(e instanceof Error ? e.message : "create failed"); }
@@ -428,6 +431,22 @@ export default function OutreachManager({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "save failed");
       setDetailDraft(null);
+      await refreshCampaigns();
+      await openCampaign(data.campaign);
+    } catch (e) { setError(e instanceof Error ? e.message : "save failed"); }
+    finally { setBusy(null); }
+  }
+
+  async function changeLanguage(lang: "en" | "es") {
+    if (!selected || lang === selected.search_language) return;
+    setError(null); setBusy("save-language");
+    try {
+      const res = await fetch(`/api/admin/outreach/campaigns/${selected.id}`, {
+        method: "PATCH", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ search_language: lang }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "save failed");
       await refreshCampaigns();
       await openCampaign(data.campaign);
     } catch (e) { setError(e instanceof Error ? e.message : "save failed"); }
@@ -750,7 +769,7 @@ export default function OutreachManager({
         <h3>1 · Define area</h3>
         {!selected
           ? <p className="muted">Draw a search area for a new campaign: name it, then click the map, drag the pin, or search a place to set the center, and use the slider for the radius.</p>
-          : <p className="muted">{selected.center_label}{selected.geography_type === "radius" ? ` · ${Number(selected.radius_miles)}mi` : " · statewide"} · target {selected.discovery_target_count ?? 35} verified contacts · {leads.length} leads · <span className={statusPill(selected.status)}>{selected.status}</span></p>}
+          : <p className="muted">{selected.center_label}{selected.geography_type === "radius" ? ` · ${Number(selected.radius_miles)}mi` : " · statewide"} · target {selected.discovery_target_count ?? 35} verified contacts · {selected.search_language === "es" ? "Spanish" : "English"} · {leads.length} leads · <span className={statusPill(selected.status)}>{selected.status}</span></p>}
 
         {!selected && canManage && (
           <>
@@ -773,12 +792,31 @@ export default function OutreachManager({
                 </select>
               </div>
             )}
+            <div className="field" style={{ maxWidth: 360 }}>
+              <label>Discovery language</label>
+              <select value={createLanguage} onChange={(event) => setCreateLanguage(event.target.value as "en" | "es")}>
+                <option value="en">English</option>
+                <option value="es">Spanish (español)</option>
+              </select>
+              {createLanguage === "es" && <span className="hint">Seeds from a Spanish-speaking-church directory and only returns churches with a public Spanish-language service or Hispanic ministry.</span>}
+            </div>
             <DenominationPicker value={createDenominations} onChange={setCreateDenominations} />
           </>
         )}
 
         {selected && canManage && (
           <DenominationPicker value={denominationDraft} onChange={setDenominationDraft} disabled={!!discoveryRun} />
+        )}
+        {selected && canManage && (
+          <div className="field" style={{ maxWidth: 240, marginTop: 8 }}>
+            <label>Discovery language</label>
+            <select value={selected.search_language} disabled={busy === "save-language"}
+              onChange={(e) => changeLanguage(e.target.value as "en" | "es")}>
+              <option value="en">English</option>
+              <option value="es">Spanish (español)</option>
+            </select>
+            <span className="hint">Applies to the next discovery round.</span>
+          </div>
         )}
         {selected && discoveryRun && <p className="hint">Denomination targeting is locked after discovery begins so one campaign cannot mix targeting rules.</p>}
 
@@ -814,6 +852,7 @@ export default function OutreachManager({
           <div className="card">
             <h3>2 · Discover</h3>
             <p className="muted">Search the selected denominations' official directories first, then confirm the public general email and active youth ministry on congregation-owned pages. General web search is used only when no denomination is selected. Discovered leads land staged (found, not yet in the send pipeline) and are auto-verified.</p>
+            {selected.search_language === "es" && <p className="hint">Spanish campaign: discovery seeds from the Spanish-speaking-church directory and only returns churches with a public Spanish-language service or Hispanic ministry.</p>}
             <p className="hint">Size is checked against the live <a href="https://outreach100.com/largest-churches-in-america" target="_blank" rel="noreferrer">Outreach 100</a> profiles. <a href="https://hirr.hartfordinternational.edu/research/megachurch-database/" target="_blank" rel="noreferrer">Hartford's Megachurch Database</a> is linked for research only and is not copied into IGY under its published use restriction.</p>
             {discoveryRun && <p className="hint" role="status">
               {discoveryRun.status === "completed"

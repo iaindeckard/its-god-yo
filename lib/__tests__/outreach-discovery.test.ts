@@ -98,6 +98,32 @@ describe("outreach discovery core", () => {
     expect(discoverySourceLane(0, ["episcopal"]).label).toContain("episcopalchurch.org");
   });
 
+  it("keeps the Spanish directory out of the default English rotation", () => {
+    // English default lanes = general directories + a secondary-web fallback; the
+    // Spanish-scoped directory never appears.
+    const englishIds = Array.from({ length: discoverySourceLaneCount(null) }, (_, i) =>
+      discoverySourceLane(i, null).directory?.id ?? "secondary");
+    expect(englishIds).not.toContain("cdusa-spanish");
+    expect(englishIds).toContain("secondary");
+  });
+
+  it("leads a Spanish campaign with the Spanish directory + secondary fallback only", () => {
+    // No denomination filter: Spanish directory, then secondary web. Two lanes.
+    expect(discoverySourceLaneCount(null, "es")).toBe(2);
+    expect(discoverySourceLane(0, null, "es").directory?.id).toBe("cdusa-spanish");
+    expect(discoverySourceLane(0, null, "es").label).toContain("churchdirectoryusa.com");
+    expect(discoverySourceLane(1, null, "es").directory).toBeNull();
+    expect(discoverySourceLane(2, null, "es").directory?.id).toBe("cdusa-spanish"); // cycles
+  });
+
+  it("folds an explicitly selected denomination into a Spanish campaign (Catholic + Spanish)", () => {
+    // Spanish directory first, then the campaign's chosen USCCB lane, then secondary.
+    expect(discoverySourceLaneCount(["usccb"], "es")).toBe(3);
+    expect(discoverySourceLane(0, ["usccb"], "es").directory?.id).toBe("cdusa-spanish");
+    expect(discoverySourceLane(1, ["usccb"], "es").directory?.id).toBe("usccb");
+    expect(discoverySourceLane(2, ["usccb"], "es").directory).toBeNull();
+  });
+
   it("preserves truthful contact-first evidence plus official-directory provenance", () => {
     const lead = applyDirectorySourcePolicy({
       org_name: "First Church",

@@ -61,6 +61,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (body.center_lat !== undefined) patch.center_lat = body.center_lat === null ? null : Number(body.center_lat);
     if (body.center_lng !== undefined) patch.center_lng = body.center_lng === null ? null : Number(body.center_lng);
     if (typeof body.center_label === "string") patch.center_label = body.center_label.trim();
+    if (body.search_language !== undefined) {
+      if (body.search_language !== "en" && body.search_language !== "es") {
+        return NextResponse.json({ error: "search_language must be 'en' or 'es'" }, { status: 400 });
+      }
+      patch.search_language = body.search_language;
+    }
     // Offer (Phase 4a): discount is clamped to a valid Stripe percent; the message
     // variant must be an APPROVED key (free text is rejected, never stored) so a
     // campaign can never carry unreviewed copy.

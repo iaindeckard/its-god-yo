@@ -3,7 +3,7 @@ import { OUTREACH } from "./config";
 import { insertDiscovered, type DiscoveredLead } from "./leads";
 import { verifyLeads } from "./verify";
 import { geocodeAddress } from "../geocode";
-import { haversineMiles, sizeBucket, updateCampaign, type Campaign } from "./campaigns";
+import { haversineMiles, sizeBucket, updateCampaign, type Campaign, type SearchLanguage } from "./campaigns";
 import { getSupabaseAdmin } from "../supabaseAdmin";
 import {
   boundedDiscoveryMaxRounds,
@@ -54,12 +54,16 @@ import { DISCOVERY_LEGACY_MAX_COST_MICROUSD, DISCOVERY_ROUND_MAX_COST_MICROUSD, 
  * needs_review and refuses to resurrect any already-known (incl. suppressed) org.
  */
 
-function discoverySystem(directory: OfficialChurchDirectory | null | undefined): string {
+function discoverySystem(directory: OfficialChurchDirectory | null | undefined, language: SearchLanguage = "en"): string {
   const sourceInstructions = directory
     ? `THIS REQUEST'S ONLY CANDIDATE DIRECTORY:\n- ${directory.denomination}: ${directory.entryUrl}\nSearch this directory only for candidates. Do not search the other national directories in this request.`
     : directory === null
       ? "THIS REQUEST IS THE SECONDARY-WEB FALLBACK. Find candidates from traditions not covered by the configured national directories. Set directory_source_url to null and discovery_method to secondary_web."
       : `OFFICIAL DIRECTORY STARTING POINTS:\n${directorySourcePrompt()}`;
+  // Spanish campaigns add a language requirement on top of every rule below.
+  const languageRule = language === "es"
+    ? `\n\n10. LANGUAGE (Spanish-speaking-church campaign): ONLY include a congregation that PUBLICLY serves Spanish-speaking members — e.g. a regular Spanish-language ("en espanol") worship service, or a Hispanic/Latino ministry ("iglesia hispana", "ministerio hispano"). This must be evident on a public congregation-owned page you cite (in youth_source_url, contact_source_url, or source_urls). A single one-off event in Spanish is NOT sufficient. The public office email and the youth-ministry signal may be posted in Spanish or English.`
+    : "";
   return `You are a careful research assistant building an outreach lead list of churches and youth organizations. You must follow these NON-NEGOTIABLE rules:
 
 1. Only include an organization that has BOTH (a) a publicly posted, currently-active youth or student ministry, AND (b) a publicly posted GENERAL/OFFICE contact email (e.g. info@, office@, church@). NEVER a personal or individual staff member's email. NEVER an email you guessed or inferred from a pattern — it must appear verbatim on a public page or a search result snippet.
@@ -70,7 +74,7 @@ function discoverySystem(directory: OfficialChurchDirectory | null | undefined):
 6. Do NOT use purchased, scraped, aggregator, map/review, or third-party contact-list data. Respect robots.txt. If a congregation blocks automated access, use only its search-indexed snippet and lower confidence.
 7. Every lead MUST cite the specific pages actually used. No un-sourced entries.
 8. Prefer quality over quantity. It is correct to return fewer, well-sourced leads than to pad the list. If youth-ministry evidence is weak, stale, or only inferred, mark confidence "low" and say why in youth_ministry_signal.
-9. Church SIZE: use the size-source rules below. Capture a stated weekly attendance / average worship-service size as estimated_attendance (an integer) and cite the exact page as attendance_source_url. NEVER guess or infer attendance from building size, staff count, denomination, ranking, or the fact that a church appears on a list. If no numeric public figure is stated, return estimated_attendance: null and attendance_source_url: null.
+9. Church SIZE: use the size-source rules below. Capture a stated weekly attendance / average worship-service size as estimated_attendance (an integer) and cite the exact page as attendance_source_url. NEVER guess or infer attendance from building size, staff count, denomination, ranking, or the fact that a church appears on a list. If no numeric public figure is stated, return estimated_attendance: null and attendance_source_url: null.${languageRule}
 
 ${sizeSourcePrompt()}
 
@@ -95,7 +99,10 @@ function campaignPrompt(campaign: Campaign, target: number, exclude: string[], s
   const geography = campaign.geography_type === "state"
     ? `in the state of ${campaign.center_label} (${campaign.state_code})`
     : `within ${campaign.radius_miles} miles of ${campaign.center_label}`;
-  return `Find up to ${target} churches or youth organizations located ${geography}. Use only this candidate source lane: ${sourceLabel}. Qualify each candidate on congregation-owned sources. Follow every rule and return every required evidence field.${excludeLine}`;
+  const languageNote = campaign.search_language === "es"
+    ? " Only include Spanish-speaking churches (a public Spanish-language service or Hispanic ministry); apply the Spanish-language rule."
+    : "";
+  return `Find up to ${target} churches or youth organizations located ${geography}.${languageNote} Use only this candidate source lane: ${sourceLabel}. Qualify each candidate on congregation-owned sources. Follow every rule and return every required evidence field.${excludeLine}`;
 }
 
 interface OpenAIResponse {
@@ -418,7 +425,7 @@ async function createDiscoveryRun(campaign: Campaign): Promise<DiscoveryRun> {
   if (prior && ["running", "processing"].includes(prior.status)) return prior;
   const sourceLaneCount = isSchoolVariant(campaign.message_variant)
     ? schoolSourceLaneCount(campaign.state_code)
-    : discoverySourceLaneCount(campaign.denomination_filter);
+    : discoverySourceLaneCount(campaign.denomination_filter, campaign.search_language);
   const targetCount = campaign.discovery_target_count ?? OUTREACH.discoveryTarget;
   const { data, error } = await admin.from(RUNS_TABLE).insert({
     campaign_id: campaign.id,
@@ -480,7 +487,7 @@ export async function continueCampaignDiscovery(campaign: Campaign): Promise<Dis
     // run's round_count + discovered_names snapshot, and the OpenAI background-
     // failure failover below needs it even on a POLL invocation (which never enters
     // the start-a-lane branch). All pure computation — no network.
-    const churchLane = school ? null : discoverySourceLane(run.round_count, campaign.denomination_filter);
+    const churchLane = school ? null : discoverySourceLane(run.round_count, campaign.denomination_filter, campaign.search_language);
     const laneLabel = school
       ? schoolSourceLane(run.round_count, campaign.state_code).label
       : churchLane!.label;
@@ -489,7 +496,7 @@ export async function continueCampaignDiscovery(campaign: Campaign): Promise<Dis
       : campaignPrompt(campaign, roundTarget, run.discovered_names, laneLabel);
     const roundSystem = school
       ? schoolDiscoverySystem(campaign.state_code)
-      : discoverySystem(churchLane?.directory ?? null);
+      : discoverySystem(churchLane?.directory ?? null, campaign.search_language);
     const directory = churchLane?.directory ?? null;
     // church lanes use the directory-based default system inside the request body;
     // school lanes pass the school system prompt explicitly.
@@ -625,7 +632,7 @@ export async function continueCampaignDiscovery(campaign: Campaign): Promise<Dis
       emptyStreak,
       emptyStreakLimit: school
         ? schoolSourceLaneCount(campaign.state_code)
-        : discoverySourceLaneCount(campaign.denomination_filter),
+        : discoverySourceLaneCount(campaign.denomination_filter, campaign.search_language),
     });
     run = await patchRun(run.id, {
       status: done ? "completed" : "running", round_count: round, found_count: found,
