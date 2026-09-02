@@ -110,7 +110,9 @@ export default function Landing() {
 
   const c = audience ? CONTENT[audience] : null;
 
-  const shareUrl = "https://its-god-yo.vercel.app";
+  // Always hand parents the canonical production domain. The previous Vercel URL
+  // fragmented trust, attribution, and any future campaign measurement.
+  const shareUrl = "https://itsgodyo.com";
   const shareText = "Check out It's God, Yo, a daily scripture text in language that actually lands. A parent sets it up:";
   const smsHref = `sms:?&body=${encodeURIComponent(`${shareText} ${shareUrl}`)}`;
   const mailHref = `mailto:?subject=${encodeURIComponent("It's God, Yo, daily scripture text")}&body=${encodeURIComponent(`${shareText}\n\n${shareUrl}`)}`;

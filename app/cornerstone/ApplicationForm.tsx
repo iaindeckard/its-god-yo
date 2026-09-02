@@ -79,11 +79,45 @@ export default function ApplicationForm() {
   }
 
   return (
-    <main style={{ maxWidth: 620, margin: "0 auto", padding: "48px 24px" }}>
-      <h1 style={{ fontSize: 28, marginBottom: 8 }}>Become a Cornerstone Partner&trade;</h1>
+    <main style={{ maxWidth: 860, margin: "0 auto", padding: "48px 24px" }}>
+      <div style={{ maxWidth: 700, margin: "0 auto 36px", textAlign: "center" }}>
+        <p className="strong" style={{ color: "var(--igy-blue)", letterSpacing: ".08em", fontSize: 13, marginBottom: 8 }}>FOR CHURCHES &amp; YOUTH GROUPS</p>
+        <h1 style={{ fontSize: 36, lineHeight: 1.15, marginBottom: 12 }}>Keep Scripture present between Sundays.</h1>
+        <p className="muted" style={{ fontSize: 17, lineHeight: 1.65, marginBottom: 20 }}>
+          Give every participating teen one short, human-reviewed Scripture message each day. No app to download,
+          and every recipient confirms for themselves before anything begins.
+        </p>
+        <a className="btn btn-primary" href="#apply">Talk with us about your group</a>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 14, marginBottom: 28 }}>
+        {[
+          ["Simple enrollment", "Your church receives an attributed enrollment link. Families and teens complete the required consent flow directly."],
+          ["Human-reviewed content", "Every public message comes from the approved content pool and remains grounded in the King James Version."],
+          ["No app required", "Messages arrive by text, so participation does not depend on another login, download, or notification setting."],
+        ].map(([title, body]) => (
+          <div className="card" key={title} style={{ padding: 20 }}>
+            <h2 style={{ fontSize: 17, marginBottom: 8 }}>{title}</h2>
+            <p className="muted" style={{ fontSize: 14, lineHeight: 1.55 }}>{body}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="card" style={{ maxWidth: 700, margin: "0 auto 38px", padding: 22 }}>
+        <h2 style={{ fontSize: 20, marginBottom: 8 }}>Group pricing</h2>
+        <p className="muted" style={{ marginBottom: 12 }}>Annual price per participating teen. Start with the group you have; there is no need to enroll the whole congregation.</p>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
+          <div><strong>1–50 teens</strong><br /><span className="muted">$28 / teen / year</span></div>
+          <div><strong>51–150 teens</strong><br /><span className="muted">$32 / teen / year</span></div>
+          <div><strong>151–300 teens</strong><br /><span className="muted">$36 / teen / year</span></div>
+          <div><strong>301+</strong><br /><span className="muted">Let&rsquo;s design the rollout</span></div>
+        </div>
+      </div>
+
+      <div id="apply" style={{ maxWidth: 620, margin: "0 auto" }}>
+      <h2 style={{ fontSize: 28, marginBottom: 8 }}>Start the conversation</h2>
       <p className="muted" style={{ marginBottom: 24 }}>
-        Churches that join during the founding stage of It&rsquo;s God, Yo&trade; are permanently recognized as Cornerstone
-        Partners. Tell us about your church and we&rsquo;ll take it from there.
+        Send the essentials first. We&rsquo;ll review your note personally and follow up about enrollment, recognition, and rollout.
       </p>
 
       {error && <div className="error" style={{ marginBottom: 16 }}>{error}</div>}
@@ -103,42 +137,40 @@ export default function ApplicationForm() {
           <input value={f.church_name} onChange={(e) => set("church_name", e.target.value)} placeholder="Grace Episcopal Church" />
         </div>
         <div className="field">
-          <label>Church website</label>
-          <input value={f.website} onChange={(e) => set("website", e.target.value)} placeholder="https://…" />
-        </div>
-        <div className="field">
-          <label>Address</label>
-          <input value={f.address} onChange={(e) => set("address", e.target.value)} placeholder="123 Main St" />
-          <p className="hint">Used only to show your church&rsquo;s approximate location on our public partner map. Never sold, never used to mail you.</p>
-        </div>
-        <div className="row">
-          <div className="field"><label>City</label><input value={f.city} onChange={(e) => set("city", e.target.value)} /></div>
-          <div className="field"><label>State / province</label><input value={f.state_province} onChange={(e) => set("state_province", e.target.value)} /></div>
-        </div>
-        <div className="row">
-          <div className="field"><label>Postal code</label><input value={f.postal_code} onChange={(e) => set("postal_code", e.target.value)} /></div>
-          <div className="field"><label>Country</label><input value={f.country} onChange={(e) => set("country", e.target.value)} placeholder="United States" /></div>
-        </div>
-        <div className="row">
-          <div className="field"><label>Denomination (optional)</label><input value={f.denomination} onChange={(e) => set("denomination", e.target.value)} /></div>
-          <div className="field"><label>Estimated attendance (optional)</label><input type="number" min={0} value={f.estimated_attendance} onChange={(e) => set("estimated_attendance", e.target.value)} /></div>
-        </div>
-        <div className="field">
           <label>Estimated youth group size</label>
           <input type="number" min={0} value={f.estimated_youth_group_size} onChange={(e) => set("estimated_youth_group_size", e.target.value)} />
         </div>
+
+        <details style={{ marginBottom: 20 }}>
+          <summary style={{ cursor: "pointer", fontSize: 14, color: "var(--igy-muted)" }}>Add optional church details</summary>
+          <div style={{ marginTop: 14 }}>
+            <div className="field"><label>Church website</label><input value={f.website} onChange={(e) => set("website", e.target.value)} placeholder="https://…" /></div>
+            <div className="field"><label>Address</label><input value={f.address} onChange={(e) => set("address", e.target.value)} placeholder="123 Main St" /><p className="hint">Used only to show your church&rsquo;s approximate location on our public partner map. Never sold, never used to mail you.</p></div>
+            <div className="row">
+              <div className="field"><label>City</label><input value={f.city} onChange={(e) => set("city", e.target.value)} /></div>
+              <div className="field"><label>State / province</label><input value={f.state_province} onChange={(e) => set("state_province", e.target.value)} /></div>
+            </div>
+            <div className="row">
+              <div className="field"><label>Postal code</label><input value={f.postal_code} onChange={(e) => set("postal_code", e.target.value)} /></div>
+              <div className="field"><label>Country</label><input value={f.country} onChange={(e) => set("country", e.target.value)} placeholder="United States" /></div>
+            </div>
+            <div className="row">
+              <div className="field"><label>Denomination</label><input value={f.denomination} onChange={(e) => set("denomination", e.target.value)} /></div>
+              <div className="field"><label>Estimated attendance</label><input type="number" min={0} value={f.estimated_attendance} onChange={(e) => set("estimated_attendance", e.target.value)} /></div>
+            </div>
+          </div>
+        </details>
 
         <h2 style={{ fontSize: 16, margin: "20px 0 12px" }}>Primary contact</h2>
         <div className="row">
           <div className="field"><label>Contact name *</label><input value={f.contact_name} onChange={(e) => set("contact_name", e.target.value)} /></div>
           <div className="field"><label>Role / title</label><input value={f.contact_title} onChange={(e) => set("contact_title", e.target.value)} placeholder="Youth Pastor" /></div>
-          <SalutationSelect
-            lang="en"
-            value={contactSalutation}
-            onChange={setContactSalutation}
-            label="Salutation / honorific(s)"
-            hint="Optional. How this contact should be addressed. Combine if needed (e.g. Rev. Dr.). Separate from their role above."
-          />
+          <details style={{ width: "100%" }}>
+            <summary style={{ cursor: "pointer", fontSize: 14, color: "var(--igy-muted)" }}>Add a salutation (optional)</summary>
+            <div style={{ marginTop: 12 }}>
+              <SalutationSelect lang="en" value={contactSalutation} onChange={setContactSalutation} label="Salutation / honorific(s)" hint="Combine titles if needed (e.g. Rev. Dr.)." />
+            </div>
+          </details>
         </div>
         <div className="row">
           <div className="field"><label>Email *</label><input type="email" value={f.contact_email} onChange={(e) => set("contact_email", e.target.value)} placeholder="you@church.org" /></div>
@@ -177,6 +209,7 @@ export default function ApplicationForm() {
           {busy ? "Submitting…" : "Submit application"}
         </button>
         <p className="hint" style={{ marginTop: 10 }}>Fields marked * are required.</p>
+      </div>
       </div>
     </main>
   );
