@@ -102,7 +102,7 @@ export default function ApplicationForm() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 14, marginBottom: 28 }}>
         {[
           ["Simple enrollment", "Your church receives an attributed enrollment link. Families and teens complete the required consent flow directly."],
-          ["Human-reviewed content", "Every public message comes from the approved content pool and remains grounded in the King James Version."],
+          ["Approved content only", "Messages are aggregated into a content pool grounded in the King James Version."],
           ["No app required", "Messages arrive by text, so participation does not depend on another login, download, or notification setting."],
         ].map(([title, body]) => (
           <div className="card" key={title} style={{ padding: 20 }}>
