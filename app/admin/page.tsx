@@ -6,6 +6,7 @@ import { listOpenActionItems } from "@/lib/actionItems";
 import { getReviewQueue } from "@/lib/reviewQueue";
 import AttentionReview from "./AttentionReview";
 import AttentionActionItems from "./AttentionActionItems";
+import ActiveIncidents from "./ActiveIncidents";
 
 export const dynamic = "force-dynamic";
 
@@ -62,20 +63,7 @@ export default async function AdminHome() {
 
       {/* ---------- Active incidents (only when present) ---------- */}
       {incidents.length > 0 && (
-        <div className="incidents">
-          <div className="incidents-head">🚨 Active incidents ({incidents.length})</div>
-          {incidents.map((i) => (
-            <div key={`${i.alert_type}:${i.entity_key}`} className="incident-row">
-              <div>
-                <span className="incident-type">{i.alert_type.replace(/[-_]/g, " ")}</span>
-                {i.last_message && <span className="incident-msg"> — {i.last_message}</span>}
-              </div>
-              <span className="incident-meta">
-                fired {i.fire_count}×{i.last_fired_at ? ` · ${new Date(i.last_fired_at).toLocaleString()}` : ""}
-              </span>
-            </div>
-          ))}
-        </div>
+        <ActiveIncidents incidents={incidents} canAck={perms.has("admin.roles.manage")} />
       )}
 
       {/* ---------- Needs your attention ---------- */}
