@@ -61,16 +61,21 @@ const DISCLOSURE: Record<string, (name: string) => string> = {
 
 // ---- Locked "DM from Him" confirmation-SMS templates (EN/ES), version-pinned
 // with the consent copy above. The lead-in is the SUBJECT of "thought you could
-// use..." and has three modes, in priority order:
+// use..." and names WHO signed the teen up, so the first text doesn't read as
+// spam. Modes, in priority order:
+//   0) purchaser named    -> "[Purchaser first]"                e.g. "Sarah"
 //   1) honorific present  -> "[Honorific] [Gifter first]"      e.g. "Fr. Michael"
 //   2) relationship only  -> "Your [Relationship] [Gifter first]" e.g. "Your Grandmother Linda"
 //   3) neither            -> "Someone who cares about you"
-// The primary subscriber carries no gifter data, so it always resolves to mode 3
-// (by design -- the locked spec's "neither" fallback covers exactly this case).
+// The main signup flow supplies the purchaser's first name, so it resolves to
+// mode 0. When no purchaser name was captured we fall back to the generic mode 3.
 // STOP/HELP stay in English in BOTH languages (carrier keyword requirement, not
 // a translation gap). Twilio is still not wired, so we compose the real body and
 // LOG it (stubbed delivery) rather than sending -- but the copy is now final.
-function smsLeadIn(lang: "en" | "es", gifter?: { honorific?: string; first?: string; relationship?: string }): string {
+function smsLeadIn(lang: "en" | "es", opts?: { purchaserName?: string; gifter?: { honorific?: string; first?: string; relationship?: string } }): string {
+  const purchaserName = opts?.purchaserName?.trim();
+  if (purchaserName) return purchaserName;                                       // mode 0: named purchaser
+  const gifter = opts?.gifter;
   const honorific = gifter?.honorific?.trim();
   const relationship = gifter?.relationship?.trim();
   const first = gifter?.first?.trim();
@@ -81,8 +86,8 @@ function smsLeadIn(lang: "en" | "es", gifter?: { honorific?: string; first?: str
   }
   return lang === "es" ? "Alguien que se preocupa por ti" : "Someone who cares about you"; // mode 3
 }
-function confirmationSms(lang: "en" | "es", recipientName: string, kind: "primary" | "plus_one", gifter?: { honorific?: string; first?: string; relationship?: string }): string {
-  const leadIn = smsLeadIn(lang, kind === "plus_one" ? gifter : undefined);
+function confirmationSms(lang: "en" | "es", recipientName: string, kind: "primary" | "plus_one", purchaserName?: string): string {
+  const leadIn = smsLeadIn(lang, { purchaserName });
   const body = lang === "es"
     ? `¡Hola ${recipientName}! ${leadIn} piensa que te vendrían bien unas Buenas Nuevas cada día. Responde SÍ para recibir mensajes diarios de It's God, Yo! Aplican tarifas de mensajes y datos. Responde STOP para cancelar, HELP para ayuda.`
     : `Hey ${recipientName}! ${leadIn} thought you could use some Good News every day. Reply YES to get daily texts from It's God, Yo! Msg & data rates may apply. Reply STOP to cancel, HELP for help.`;
@@ -294,7 +299,7 @@ Deno.serve(async (req: Request) => {
       if (gate.decision === "block") return json(403, { error: "age_consent_blocked", who: `family_teens[${i}]`, country: gate.country, computed_age: gate.age, min_age: gate.minAge });
       if (gate.decision === "enhanced" && teens[i].enhanced_consent_ack !== true) return json(422, { error: "enhanced_consent_required", who: `family_teens[${i}]`, country: gate.country, threshold: gate.minAge });
       const phoneE164 = toE164(teens[i].phone!.trim(), gate.country); // canonical form for storage + Twilio
-      const sms = confirmationSms(lang, name, "primary");
+      const sms = confirmationSms(lang, name, "primary", p.purchaser_first_name?.trim() || undefined);
       const { data: row, error: cErr } = await supa.from("consent_log").insert({
         recipient_phone: phoneE164, recipient_first_name: name, language: lang,
         consent_type: "family_teen", teen_index: i + 1,
@@ -417,7 +422,7 @@ Deno.serve(async (req: Request) => {
 
   // 1) primary subscriber consent row (the teen)
   const teenPhoneE164 = toE164(p.teen!.phone!.trim(), teenGate.country); // canonical for storage + Twilio
-  const teenSms = confirmationSms(lang, teenName, "primary");
+  const teenSms = confirmationSms(lang, teenName, "primary", p.purchaser_first_name?.trim() || undefined);
   stubs.push({ kind: "primary", to: teenPhoneE164, body: teenSms });
   const { data: teenRow, error: teenErr } = await supa.from("consent_log").insert({
     recipient_phone: teenPhoneE164,
